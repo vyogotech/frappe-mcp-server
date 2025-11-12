@@ -34,7 +34,6 @@ type Client struct {
 	httpClient  *http.Client
 	rateLimiter *rate.Limiter
 	retryConfig config.RetryConfig
-	mu          sync.RWMutex
 	cache       sync.Map // Simple in-memory cache
 }
 

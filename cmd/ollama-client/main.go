@@ -909,12 +909,12 @@ func main() {
 		}
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("ok"))
+			_, _ = w.Write([]byte("ok"))
 		})
 		mux.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				w.WriteHeader(http.StatusMethodNotAllowed)
-				w.Write([]byte("Method not allowed"))
+				_, _ = w.Write([]byte("Method not allowed"))
 				return
 			}
 			var req struct {
@@ -923,14 +923,14 @@ func main() {
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Invalid request body"))
+				_, _ = w.Write([]byte("Invalid request body"))
 				return
 			}
 			ctx := context.Background()
 			intent, entities, llmInput, llmOutput, err := client.preprocessUserInput(ctx, req.Message)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error(), "llm_input": llmInput, "llm_output": llmOutput})
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error(), "llm_input": llmInput, "llm_output": llmOutput})
 				return
 			}
 			log.Printf("[NLP] Intent: %s, Entities: %+v", intent, entities)
@@ -977,7 +977,7 @@ func main() {
 				ollamaInput, ollamaResp, err = client.ChatWithOllama(ctx, req.Message)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
 						"error":         err.Error(),
 						"ollama_input":  ollamaInput,
 						"ollama_output": ollamaResp,
@@ -987,7 +987,7 @@ func main() {
 				finalResp, err = client.ProcessOllamaResponse(ollamaResp, req.Message)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
 					return
 				}
 			}
@@ -999,7 +999,7 @@ func main() {
 				toolResult, err = client.CallTool(toolName, toolArgs)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
 						"error": fmt.Sprintf("Error calling tool %s: %v", toolName, err),
 					})
 					return
@@ -1033,7 +1033,7 @@ Be precise and accurate. Your response will be verified against the actual data.
 				_, finalResp, err = client.ChatWithOllama(ctx, llmPrompt)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
 						"error":        fmt.Sprintf("LLM error: %v", err),
 						"ollama_input": ollamaInput,
 					})
@@ -1042,7 +1042,7 @@ Be precise and accurate. Your response will be verified against the actual data.
 			}
 			w.Header().Set("Content-Type", "application/json")
 			if req.Raw || debugMode {
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"response":      finalResp,
 					"llm_input":     llmInput,
 					"llm_output":    llmOutput,
@@ -1052,7 +1052,7 @@ Be precise and accurate. Your response will be verified against the actual data.
 					"entities":      entities,
 				})
 			} else {
-				json.NewEncoder(w).Encode(map[string]string{"response": finalResp})
+				_ = json.NewEncoder(w).Encode(map[string]string{"response": finalResp})
 			}
 		})
 		fmt.Println("🌐 API server running on :8080 ...")
