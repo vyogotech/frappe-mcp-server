@@ -278,7 +278,7 @@ func (c *TestClient) testHealth() {
 		fmt.Printf("❌ Error making request: %v\n", err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -326,7 +326,7 @@ func (c *TestClient) callTool(toolName string, params map[string]interface{}) *M
 		fmt.Printf("❌ Error making request: %v\n", err)
 		return &MCPToolResponse{Error: &[]string{err.Error()}[0]}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -383,7 +383,7 @@ func (c *TestClient) testHealthCheck() error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("health check failed with status %d", resp.StatusCode)

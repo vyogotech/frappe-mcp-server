@@ -93,7 +93,7 @@ func (c *OpenAICompatibleClient) Generate(ctx context.Context, prompt string) (s
 	if err != nil {
 		return "", fmt.Errorf("failed to call OpenAI API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

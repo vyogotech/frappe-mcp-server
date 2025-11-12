@@ -48,20 +48,20 @@ performance:
 	// Write config to temporary file
 	tmpFile, err := os.CreateTemp("", "config-*.yaml")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	_, err = tmpFile.WriteString(configContent)
 	require.NoError(t, err)
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	// Set environment variable to use our test config
 	originalConfigFile := os.Getenv("CONFIG_FILE")
-	os.Setenv("CONFIG_FILE", tmpFile.Name())
+	_ = os.Setenv("CONFIG_FILE", tmpFile.Name())
 	defer func() {
 		if originalConfigFile == "" {
-			os.Unsetenv("CONFIG_FILE")
+			_ = os.Unsetenv("CONFIG_FILE")
 		} else {
-			os.Setenv("CONFIG_FILE", originalConfigFile)
+			_ = os.Setenv("CONFIG_FILE", originalConfigFile)
 		}
 	}()
 
@@ -119,11 +119,11 @@ erpnext:
 
 	tmpFile, err := os.CreateTemp("", "config-*.yaml")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	_, err = tmpFile.WriteString(configContent)
 	require.NoError(t, err)
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	// Set environment variables
 	originalVars := map[string]string{
@@ -137,21 +137,21 @@ erpnext:
 	}
 
 	// Set test environment variables
-	os.Setenv("CONFIG_FILE", tmpFile.Name())
-	os.Setenv("ERPNEXT_BASE_URL", "https://env.erpnext.com")
-	os.Setenv("ERPNEXT_API_KEY", "env_key")
-	os.Setenv("ERPNEXT_API_SECRET", "env_secret")
-	os.Setenv("SERVER_HOST", "env_host")
-	os.Setenv("SERVER_PORT", "9090")
-	os.Setenv("LOG_LEVEL", "debug")
+	_ = os.Setenv("CONFIG_FILE", tmpFile.Name())
+	_ = os.Setenv("ERPNEXT_BASE_URL", "https://env.erpnext.com")
+	_ = os.Setenv("ERPNEXT_API_KEY", "env_key")
+	_ = os.Setenv("ERPNEXT_API_SECRET", "env_secret")
+	_ = os.Setenv("SERVER_HOST", "env_host")
+	_ = os.Setenv("SERVER_PORT", "9090")
+	_ = os.Setenv("LOG_LEVEL", "debug")
 
 	// Restore environment variables after test
 	defer func() {
 		for key, value := range originalVars {
 			if value == "" {
-				os.Unsetenv(key)
+				_ = os.Unsetenv(key)
 			} else {
-				os.Setenv(key, value)
+				_ = os.Setenv(key, value)
 			}
 		}
 	}()
@@ -268,12 +268,12 @@ func TestValidation(t *testing.T) {
 func TestLoadMissingFile(t *testing.T) {
 	// Set environment variable to non-existent file
 	originalConfigFile := os.Getenv("CONFIG_FILE")
-	os.Setenv("CONFIG_FILE", "/non/existent/file.yaml")
+	_ = os.Setenv("CONFIG_FILE", "/non/existent/file.yaml")
 	defer func() {
 		if originalConfigFile == "" {
-			os.Unsetenv("CONFIG_FILE")
+			_ = os.Unsetenv("CONFIG_FILE")
 		} else {
-			os.Setenv("CONFIG_FILE", originalConfigFile)
+			_ = os.Setenv("CONFIG_FILE", originalConfigFile)
 		}
 	}()
 
@@ -298,19 +298,19 @@ erpnext:
 
 	tmpFile, err := os.CreateTemp("", "config-*.yaml")
 	require.NoError(b, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	_, err = tmpFile.WriteString(configContent)
 	require.NoError(b, err)
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	originalConfigFile := os.Getenv("CONFIG_FILE")
-	os.Setenv("CONFIG_FILE", tmpFile.Name())
+	_ = os.Setenv("CONFIG_FILE", tmpFile.Name())
 	defer func() {
 		if originalConfigFile == "" {
-			os.Unsetenv("CONFIG_FILE")
+			_ = os.Unsetenv("CONFIG_FILE")
 		} else {
-			os.Setenv("CONFIG_FILE", originalConfigFile)
+			_ = os.Setenv("CONFIG_FILE", originalConfigFile)
 		}
 	}()
 
