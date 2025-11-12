@@ -1,0 +1,59 @@
+# Dockerfile specifically for Ollama MCP Client
+FROM golang:1.24-alpine AS builder
+
+# Install git and ca-certificates
+RUN apk add --no-cache git ca-certificates
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the Ollama client
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/ollama-client ./cmd/ollama-client/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/frappe-mcp-server-stdio ./cmd/mcp-stdio/main.go
+
+# Runtime stage
+FROM alpine:latest
+
+# Install ca-certificates for HTTPS requests
+RUN apk --no-cache add ca-certificates curl
+
+WORKDIR /app
+
+# Copy binaries from builder
+COPY --from=builder /app/bin/ollama-client /app/bin/ollama-client
+COPY --from=builder /app/bin/frappe-mcp-server-stdio /app/bin/frappe-mcp-server-stdio
+
+# Copy configuration
+COPY config.yaml /app/config.yaml
+
+# Make binaries executable
+RUN chmod +x /app/bin/ollama-client /app/bin/frappe-mcp-server-stdio
+
+# Create non-root user
+RUN addgroup -g 1001 appgroup && \
+    adduser -D -u 1001 -G appgroup appuser
+
+# Change ownership
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+# Expose port for API mode
+EXPOSE 8080
+
+# Environment variables
+ENV MODE=api
+ENV PORT=8080
+ENV OLLAMA_MODEL=llama3.2:1b
+
+# Default command (CLI mode)
+CMD ["/app/bin/ollama-client", "--model", "llama3.2:1b"]

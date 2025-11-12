@@ -1,0 +1,96 @@
+# ERPNext MCP Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 8080
+  timeout: "30s"
+  max_connections: 100
+
+erpnext:
+  base_url: "http://localhost:8000"
+  api_key: "your_api_key_here"
+  api_secret: "your_api_secret_here"
+  timeout: "30s"
+  rate_limit:
+    requests_per_second: 10
+    burst: 20
+  retry:
+    max_attempts: 5
+    initial_delay: "500ms"
+    max_delay: "5s"
+
+logging:
+  level: "info"
+  format: "json"
+
+# LLM Provider Configuration - Generic and Flexible!
+# Works with ANY OpenAI-compatible API: Ollama, OpenAI, Together.ai, Groq, etc.
+llm:
+  # Provider type: "openai-compatible" (default), "anthropic", or "azure"
+  provider_type: "openai-compatible"
+  
+  # Generic configuration (works for all providers)
+  base_url: "http://localhost:11434/v1"  # API endpoint
+  api_key: ""                             # API key (if required)
+  model: "llama3.2:1b"                    # Model name/ID
+  timeout: "60s"                          # Request timeout
+  max_tokens: 500                         # Max tokens in response
+  temperature: 0.7                        # Temperature (0.0-2.0)
+  
+  # Azure-specific (only if provider_type is "azure")
+  # azure_deployment: "gpt-4"
+  # azure_api_version: "2024-02-01"
+
+# Examples - Just change base_url, api_key, and model:
+#
+# Ollama (local, free, private):
+#   base_url: "http://localhost:11434/v1"
+#   api_key: ""
+#   model: "llama3.2:1b"
+#
+# OpenAI:
+#   base_url: "https://api.openai.com/v1"
+#   api_key: "${LLM_API_KEY}"
+#   model: "gpt-4o-mini"
+#
+# Together.ai (150+ open-source models):
+#   base_url: "https://api.together.xyz/v1"
+#   api_key: "${LLM_API_KEY}"
+#   model: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
+#
+# Groq (ultra-fast inference):
+#   base_url: "https://api.groq.com/openai/v1"
+#   api_key: "${LLM_API_KEY}"
+#   model: "llama-3.1-70b-versatile"
+#
+# OpenRouter (200+ models):
+#   base_url: "https://openrouter.ai/api/v1"
+#   api_key: "${LLM_API_KEY}"
+#   model: "anthropic/claude-3.5-sonnet"
+#
+# LocalAI (self-hosted):
+#   base_url: "http://localhost:8080/v1"
+#   api_key: ""
+#   model: "llama-3"
+#
+# Anthropic Claude (different API):
+#   provider_type: "anthropic"
+#   base_url: "https://api.anthropic.com/v1"
+#   api_key: "${LLM_API_KEY}"
+#   model: "claude-3-5-sonnet-20241022"
+#
+# Azure OpenAI:
+#   provider_type: "azure"
+#   base_url: "https://your-resource.openai.azure.com"
+#   api_key: "${LLM_API_KEY}"
+#   model: "gpt-4"
+#   azure_deployment: "gpt-4"
+#   azure_api_version: "2024-02-01"
+
+cache:
+  ttl: "300s"
+  max_size: 1000
+
+performance:
+  worker_pool_size: 10
+  batch_size: 50
+  enable_compression: true

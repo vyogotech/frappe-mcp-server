@@ -1,0 +1,133 @@
+# ERPNext MCP Server - Main Compose File
+# Usage: docker compose up -d
+
+services:
+  # ERPNext MCP Server (HTTP API + AI)
+  frappe-mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${MCP_PORT:-8080}:8080"
+    environment:
+      # ERPNext Configuration
+      ERPNEXT_BASE_URL: ${ERPNEXT_BASE_URL:-http://localhost:8000}
+      ERPNEXT_API_KEY: ${ERPNEXT_API_KEY}
+      ERPNEXT_API_SECRET: ${ERPNEXT_API_SECRET}
+      
+      # Ollama Configuration (for AI features)
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      
+      # Server Configuration
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - mcp_logs:/app/logs
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - erpnext-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Ollama (Local AI Models)
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_ORIGINS: "*"
+      OLLAMA_KEEP_ALIVE: "5m"
+    networks:
+      - erpnext-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Open WebUI (Web Interface for AI Chat)
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    ports:
+      - "${WEBUI_PORT:-3000}:8080"
+    volumes:
+      - open_webui_data:/app/backend/data
+      - ./open_webui_functions:/app/backend/functions:ro
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:-change-this-secret-key}
+      ENABLE_SIGNUP: ${ENABLE_SIGNUP:-true}
+      DEFAULT_USER_ROLE: user
+      WEBUI_NAME: "ERPNext AI Assistant"
+      ENABLE_RAG_HYBRID_SEARCH: true
+    depends_on:
+      ollama:
+        condition: service_healthy
+      frappe-mcp-server:
+        condition: service_healthy
+    networks:
+      - erpnext-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ERPNext (Optional - only if you want to run ERPNext locally)
+  # Remove this if you have ERPNext running elsewhere
+  erpnext:
+    image: frappe/erpnext:latest
+    profiles:
+      - full-stack  # Only start with: docker compose --profile full-stack up
+    restart: unless-stopped
+    ports:
+      - "${ERPNEXT_PORT:-8000}:8000"
+    environment:
+      SITES: erpnext.local
+      SITE_NAME: erpnext.local
+      ADMIN_PASSWORD: ${ERPNEXT_ADMIN_PASSWORD:-admin}
+      DEVELOPER_MODE: ${ERPNEXT_DEV_MODE:-1}
+    volumes:
+      - erpnext_data:/home/frappe/frappe-bench/sites
+      - erpnext_logs:/home/frappe/frappe-bench/logs
+    networks:
+      - erpnext-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+networks:
+  erpnext-network:
+    driver: bridge
+
+volumes:
+  ollama_data:
+    driver: local
+  open_webui_data:
+    driver: local
+  mcp_logs:
+    driver: local
+  erpnext_data:
+    driver: local
+  erpnext_logs:
+    driver: local
