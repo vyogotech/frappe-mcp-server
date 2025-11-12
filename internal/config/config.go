@@ -1,0 +1,195 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/joho/godotenv"
+	"gopkg.in/yaml.v3"
+)
+
+// Config represents the application configuration
+type Config struct {
+	Server      ServerConfig      `yaml:"server"`
+	ERPNext     ERPNextConfig     `yaml:"erpnext"`
+	Logging     LoggingConfig     `yaml:"logging"`
+	LLM         LLMConfig         `yaml:"llm"`
+	Cache       CacheConfig       `yaml:"cache"`
+	Performance PerformanceConfig `yaml:"performance"`
+}
+
+// ServerConfig represents server configuration
+type ServerConfig struct {
+	Host           string        `yaml:"host"`
+	Port           int           `yaml:"port"`
+	Timeout        time.Duration `yaml:"timeout"`
+	MaxConnections int           `yaml:"max_connections"`
+}
+
+// ERPNextConfig represents ERPNext client configuration
+type ERPNextConfig struct {
+	BaseURL   string          `yaml:"base_url"`
+	APIKey    string          `yaml:"api_key"`
+	APISecret string          `yaml:"api_secret"`
+	Timeout   time.Duration   `yaml:"timeout"`
+	RateLimit RateLimitConfig `yaml:"rate_limit"`
+	Retry     RetryConfig     `yaml:"retry"`
+}
+
+// RateLimitConfig represents rate limiting configuration
+type RateLimitConfig struct {
+	RequestsPerSecond int `yaml:"requests_per_second"`
+	Burst             int `yaml:"burst"`
+}
+
+// RetryConfig represents retry configuration
+type RetryConfig struct {
+	MaxAttempts  int           `yaml:"max_attempts"`
+	InitialDelay time.Duration `yaml:"initial_delay"`
+	MaxDelay     time.Duration `yaml:"max_delay"`
+}
+
+// LoggingConfig represents logging configuration
+type LoggingConfig struct {
+	Level  string `yaml:"level"`
+	Format string `yaml:"format"`
+}
+
+// LLMConfig represents generic LLM provider configuration
+type LLMConfig struct {
+	// Provider type: "openai-compatible", "anthropic", "azure"
+	// "openai-compatible" works with: OpenAI, Together.ai, Groq, Ollama, LocalAI, etc.
+	ProviderType string `yaml:"provider_type"`
+	
+	// Generic configuration
+	BaseURL     string        `yaml:"base_url"`      // API endpoint URL
+	APIKey      string        `yaml:"api_key"`       // API key (can be from env)
+	Model       string        `yaml:"model"`         // Model name/ID
+	Timeout     time.Duration `yaml:"timeout"`       // Request timeout
+	MaxTokens   int           `yaml:"max_tokens"`    // Max tokens in response
+	Temperature float64       `yaml:"temperature"`   // Temperature (0.0-2.0)
+	
+	// Azure-specific fields (only needed if provider_type is "azure")
+	AzureDeployment string `yaml:"azure_deployment,omitempty"` // Azure deployment name
+	AzureAPIVersion string `yaml:"azure_api_version,omitempty"` // Azure API version
+}
+
+// CacheConfig represents caching configuration
+type CacheConfig struct {
+	TTL     time.Duration `yaml:"ttl"`
+	MaxSize int           `yaml:"max_size"`
+}
+
+// PerformanceConfig represents performance tuning configuration
+type PerformanceConfig struct {
+	WorkerPoolSize    int  `yaml:"worker_pool_size"`
+	BatchSize         int  `yaml:"batch_size"`
+	EnableCompression bool `yaml:"enable_compression"`
+}
+
+// Load loads configuration from config.yaml and environment variables
+func Load() (*Config, error) {
+	// Load .env file if it exists
+	if err := godotenv.Load(); err != nil {
+		// .env file might not exist, which is fine
+	}
+
+	// Load from YAML file
+	configFile := "config.yaml"
+	if envFile := os.Getenv("CONFIG_FILE"); envFile != "" {
+		configFile = envFile
+	}
+
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var config Config
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Override with environment variables
+	if err := config.loadFromEnv(); err != nil {
+		return nil, fmt.Errorf("failed to load from environment: %w", err)
+	}
+
+	// Validate configuration
+	if err := config.validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	return &config, nil
+}
+
+// loadFromEnv loads configuration from environment variables
+func (c *Config) loadFromEnv() error {
+	// ERPNext configuration
+	if baseURL := os.Getenv("ERPNEXT_BASE_URL"); baseURL != "" {
+		c.ERPNext.BaseURL = baseURL
+	}
+	if apiKey := os.Getenv("ERPNEXT_API_KEY"); apiKey != "" {
+		c.ERPNext.APIKey = apiKey
+	}
+	if apiSecret := os.Getenv("ERPNEXT_API_SECRET"); apiSecret != "" {
+		c.ERPNext.APISecret = apiSecret
+	}
+
+	// Server configuration
+	if host := os.Getenv("SERVER_HOST"); host != "" {
+		c.Server.Host = host
+	}
+	if port := os.Getenv("SERVER_PORT"); port != "" {
+		// Parse port from string
+		var portInt int
+		if _, err := fmt.Sscanf(port, "%d", &portInt); err == nil {
+			c.Server.Port = portInt
+		}
+	}
+
+	// Logging configuration
+	if level := os.Getenv("LOG_LEVEL"); level != "" {
+		c.Logging.Level = level
+	}
+
+	// LLM Provider configuration
+	if providerType := os.Getenv("LLM_PROVIDER_TYPE"); providerType != "" {
+		c.LLM.ProviderType = providerType
+	}
+	if baseURL := os.Getenv("LLM_BASE_URL"); baseURL != "" {
+		c.LLM.BaseURL = baseURL
+	}
+	if apiKey := os.Getenv("LLM_API_KEY"); apiKey != "" {
+		c.LLM.APIKey = apiKey
+	}
+	if model := os.Getenv("LLM_MODEL"); model != "" {
+		c.LLM.Model = model
+	}
+	if azureDeployment := os.Getenv("LLM_AZURE_DEPLOYMENT"); azureDeployment != "" {
+		c.LLM.AzureDeployment = azureDeployment
+	}
+	if azureAPIVersion := os.Getenv("LLM_AZURE_API_VERSION"); azureAPIVersion != "" {
+		c.LLM.AzureAPIVersion = azureAPIVersion
+	}
+
+	return nil
+}
+
+// validate validates the configuration
+func (c *Config) validate() error {
+	if c.ERPNext.BaseURL == "" {
+		return fmt.Errorf("ERPNext base URL is required")
+	}
+	if c.ERPNext.APIKey == "" {
+		return fmt.Errorf("ERPNext API key is required")
+	}
+	if c.ERPNext.APISecret == "" {
+		return fmt.Errorf("ERPNext API secret is required")
+	}
+	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		return fmt.Errorf("invalid server port: %d", c.Server.Port)
+	}
+	return nil
+}

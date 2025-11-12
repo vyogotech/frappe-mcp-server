@@ -1,0 +1,27 @@
+title: ERPNext MCP Server
+description: AI-powered Model Context Protocol server for ERPNext integration
+theme: jekyll-theme-minimal
+repository: varkrish/frappe-mcp-server
+
+# Navigation
+nav:
+  - title: Home
+    url: /
+  - title: Quick Start
+    url: /quick-start
+  - title: Configuration
+    url: /configuration
+  - title: AI Features
+    url: /ai-features
+  - title: API Reference
+    url: /api-reference
+  - title: Development
+    url: /development
+
+# GitHub Pages settings
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: true
+

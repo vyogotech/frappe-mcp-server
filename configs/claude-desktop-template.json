@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "erpnext": {
+      "command": "/Users/varkrish/personal/frappista_sne_apps/frappe-mcp-server/bin/frappe-mcp-server-stdio",
+      "env": {
+        "ERPNEXT_BASE_URL": "https://YOUR_ERPNEXT_DOMAIN.com",
+        "ERPNEXT_API_KEY": "YOUR_API_KEY",
+        "ERPNEXT_API_SECRET": "YOUR_API_SECRET"
+      }
+    }
+  }
+}
