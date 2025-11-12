@@ -50,6 +50,10 @@ func FuzzyMatch(a, b string) bool {
 		if isVowelSwapOrTransposition(runesA, runesB) {
 			return true
 		}
+		// Special case: common phonetic substitutions (ph->f, etc.)
+		if isPhoneticMatch(a, b) {
+			return true
+		}
 		// Subsequence fallback for short words
 		if isSubsequence(runesA, runesB) || isSubsequence(runesB, runesA) {
 			return true
@@ -77,6 +81,27 @@ func FuzzyMatch(a, b string) bool {
 			if LevenshteinDistanceRunes(rA, rB) <= maxDist {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// isPhoneticMatch returns true if two words are phonetically similar
+func isPhoneticMatch(a, b string) bool {
+	// Common phonetic substitutions
+	phoneticPairs := []struct{ pattern, replacement string }{
+		{"ph", "f"},
+		{"f", "ph"},
+	}
+	
+	for _, pair := range phoneticPairs {
+		normalized := strings.ReplaceAll(a, pair.pattern, pair.replacement)
+		if normalized == b {
+			return true
+		}
+		normalized = strings.ReplaceAll(b, pair.pattern, pair.replacement)
+		if normalized == a {
+			return true
 		}
 	}
 	return false

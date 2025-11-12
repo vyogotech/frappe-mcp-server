@@ -130,7 +130,7 @@ func (s *MCPStdioServer) Run(ctx context.Context) error {
 			var partialMsg struct {
 				ID interface{} `json:"id"`
 			}
-			json.Unmarshal([]byte(line), &partialMsg)
+			_ = json.Unmarshal([]byte(line), &partialMsg)
 			
 			// Use a default ID if we couldn't extract one
 			msgID := partialMsg.ID
@@ -148,7 +148,7 @@ func (s *MCPStdioServer) Run(ctx context.Context) error {
 					Data:    err.Error(),
 				},
 			}
-			s.encoder.Encode(errorResp)
+			_ = s.encoder.Encode(errorResp)
 		}
 		}
 	}
