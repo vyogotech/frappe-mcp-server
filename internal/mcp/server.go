@@ -158,7 +158,7 @@ func (s *Server) handleToolsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleToolCall handles direct tool calls via HTTP
@@ -181,7 +181,7 @@ func (s *Server) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	response := s.executeToolRequest(r.Context(), request)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleResourcesList returns a list of available resources
@@ -200,7 +200,7 @@ func (s *Server) handleResourcesList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // executeToolRequest executes a tool request
