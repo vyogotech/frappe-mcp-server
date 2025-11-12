@@ -1,0 +1,161 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build STDIO binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          BINARY_NAME="frappe-mcp-server-stdio-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+          
+          go build -v \
+            -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" \
+            -o "dist/${BINARY_NAME}" \
+            ./cmd/mcp-stdio/main.go
+
+      - name: Create package
+        run: |
+          cd dist
+          BINARY_NAME=$(ls frappe-mcp-server-stdio-*)
+          PACKAGE_NAME="${BINARY_NAME%.*}"
+          
+          # Create directory structure
+          mkdir -p "${PACKAGE_NAME}"
+          mv "${BINARY_NAME}" "${PACKAGE_NAME}/"
+          
+          # Copy configuration template
+          cp ../env.example "${PACKAGE_NAME}/"
+          
+          # Create README for the package
+          cat > "${PACKAGE_NAME}/README.md" << 'EOF'
+          # Frappe MCP Server
+          
+          AI-powered Model Context Protocol server for Frappe/ERPNext.
+          
+          ## Quick Start
+          
+          1. Copy `env.example` to `.env` and configure your Frappe credentials
+          2. Add to your MCP client configuration (Cursor or Claude Desktop)
+          3. Start using natural language queries!
+          
+          See full documentation at: https://github.com/varkrish/frappe-mcp-server
+          EOF
+          
+          # Create archive
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip -r "${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"
+            echo "ASSET_PATH=dist/${PACKAGE_NAME}.zip" >> $GITHUB_ENV
+            echo "ASSET_NAME=${PACKAGE_NAME}.zip" >> $GITHUB_ENV
+          else
+            tar czf "${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
+            echo "ASSET_PATH=dist/${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
+            echo "ASSET_NAME=${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
+          fi
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.ASSET_PATH }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-checksums:
+    name: Create Checksums
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all release assets
+        uses: robinraju/release-downloader@v1.9
+        with:
+          tag: ${{ github.ref_name }}
+          fileName: "*"
+          out-file-path: "downloads"
+
+      - name: Generate checksums
+        run: |
+          cd downloads
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload checksums
+        uses: softprops/action-gh-release@v1
+        with:
+          files: downloads/SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-install-script:
+    name: Update Install Script
+    needs: create-checksums
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update version in install.sh
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          sed -i "s/VERSION=\".*\"/VERSION=\"${VERSION}\"/" install.sh
+          echo "Updated version to ${VERSION}"
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add install.sh
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update install.sh to version ${GITHUB_REF#refs/tags/v}" && git push)
