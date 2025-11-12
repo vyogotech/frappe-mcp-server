@@ -62,7 +62,7 @@ func handleGetProject(w http.ResponseWriter, r *http.Request) {
 		"data": project,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleProjectList handles GET requests for project list
@@ -93,7 +93,7 @@ func handleProjectList(w http.ResponseWriter, r *http.Request) {
 		"data": projects,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleTaskList handles GET requests for task list
@@ -130,7 +130,7 @@ func handleTaskList(w http.ResponseWriter, r *http.Request) {
 		"data": tasks,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleCustomerList handles GET requests for customer list
@@ -159,7 +159,7 @@ func handleCustomerList(w http.ResponseWriter, r *http.Request) {
 		"data": customers,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleEmployeeList handles GET requests for employee list
@@ -190,7 +190,7 @@ func handleEmployeeList(w http.ResponseWriter, r *http.Request) {
 		"data": employees,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleDefault handles default responses
@@ -202,7 +202,7 @@ func handleDefault(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNotFound)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // handleSearch handles search requests
@@ -237,7 +237,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		"message": results,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // CreateTestProject creates a test project document
