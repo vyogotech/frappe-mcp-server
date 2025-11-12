@@ -1056,6 +1056,8 @@ Be precise and accurate. Your response will be verified against the actual data.
 			}
 		})
 		fmt.Println("🌐 API server running on :8080 ...")
-		http.ListenAndServe(":8080", mux)
+		if err := http.ListenAndServe(":8080", mux); err != nil {
+			log.Fatal(err)
+		}
 	}
 }

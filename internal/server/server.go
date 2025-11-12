@@ -159,7 +159,9 @@ func (s *MCPServer) healthCheck(w http.ResponseWriter, r *http.Request) {
 
 	// Simple health check - could be enhanced to check ERPNext connectivity
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"healthy","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`))
+	if _, err := w.Write([]byte(`{"status":"healthy","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`)); err != nil {
+		slog.Error("Failed to write health response", "error", err)
+	}
 	slog.Info("/health response sent")
 }
 
@@ -171,7 +173,9 @@ func (s *MCPServer) metrics(w http.ResponseWriter, r *http.Request) {
 	metrics := fmt.Sprintf(`{\n\t"uptime": "%s",\n\t"timestamp": "%s",\n\t"version": "1.0.0"\n}`, time.Since(time.Now()).String(), time.Now().Format(time.RFC3339))
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(metrics))
+	if _, err := w.Write([]byte(metrics)); err != nil {
+		slog.Error("Failed to write metrics response", "error", err)
+	}
 	slog.Info("/metrics response sent")
 }
 
@@ -364,7 +368,9 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.Error("Failed to encode tools response", "error", err)
+	}
 	slog.Info("/tools response sent", "count", len(tools))
 }
 
@@ -461,7 +467,9 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("Tool executed successfully", "tool", toolName, "request_id", request.ID, "erpnext_result", result)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		slog.Error("Failed to encode tool response", "error", err)
+	}
 	slog.Info("/tool/ response sent", "tool", toolName, "request_id", request.ID)
 }
 
@@ -499,7 +507,9 @@ func (s *MCPServer) listResources(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.Error("Failed to encode resources response", "error", err)
+	}
 	slog.Info("/resources response sent", "count", len(resources))
 }
 
@@ -629,7 +639,9 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.Error("Failed to encode chat response", "error", err)
+	}
 	slog.Info("Chat response sent", "data_size", response["data_size"])
 }
 
@@ -979,123 +991,6 @@ func (s *MCPServer) executeTool(ctx context.Context, toolName string, params jso
 	}
 }
 
-// routeQuery analyzes the query and routes to appropriate tool with entity extraction
-// DEPRECATED: This function is kept for backward compatibility, use extractQueryIntent instead
-func (s *MCPServer) routeQuery(query string) (string, json.RawMessage) {
-	lowerQuery := strings.ToLower(query)
-	
-	// Extract entity name from query (handles quotes, "titled", "named", "called", etc.)
-	entityName := extractEntityName(query)
-	
-	// Portfolio/Dashboard queries (no specific entity)
-	if strings.Contains(lowerQuery, "portfolio") || strings.Contains(lowerQuery, "dashboard") {
-		return "portfolio_dashboard", json.RawMessage(`{}`)
-	}
-	
-	// Specific Project queries with entity extraction
-	if strings.Contains(lowerQuery, "project") && entityName != "" {
-		// Specific project requested - need to search first
-		if strings.Contains(lowerQuery, "status") {
-			return "search_for_specific", createSearchParams("Project", entityName, "get_project_status")
-		}
-		if strings.Contains(lowerQuery, "timeline") {
-			return "search_for_specific", createSearchParams("Project", entityName, "analyze_project_timeline")
-		}
-		if strings.Contains(lowerQuery, "metrics") {
-			return "search_for_specific", createSearchParams("Project", entityName, "calculate_project_metrics")
-		}
-		if strings.Contains(lowerQuery, "risk") {
-			return "search_for_specific", createSearchParams("Project", entityName, "project_risk_assessment")
-		}
-		// Generic project query - search and get details
-		return "search_for_specific", createSearchParams("Project", entityName, "get_document")
-	}
-	
-	// Specific Customer queries
-	if strings.Contains(lowerQuery, "customer") && entityName != "" {
-		return "search_for_specific", createSearchParams("Customer", entityName, "get_document")
-	}
-	
-	// Specific Item queries
-	if strings.Contains(lowerQuery, "item") && entityName != "" {
-		return "search_for_specific", createSearchParams("Item", entityName, "get_document")
-	}
-	
-	// Specific Task queries
-	if strings.Contains(lowerQuery, "task") && entityName != "" {
-		return "search_for_specific", createSearchParams("Task", entityName, "get_document")
-	}
-	
-	// Specific Employee queries
-	if strings.Contains(lowerQuery, "employee") && entityName != "" {
-		return "search_for_specific", createSearchParams("Employee", entityName, "get_document")
-	}
-	
-	// List queries (no specific entity, show all)
-	if strings.Contains(lowerQuery, "list") || strings.Contains(lowerQuery, "show all") {
-		doctype := "Project" // default
-		if strings.Contains(lowerQuery, "task") {
-			doctype = "Task"
-		} else if strings.Contains(lowerQuery, "customer") {
-			doctype = "Customer"
-		} else if strings.Contains(lowerQuery, "item") {
-			doctype = "Item"
-		} else if strings.Contains(lowerQuery, "employee") {
-			doctype = "Employee"
-		}
-		
-		params := map[string]interface{}{
-			"doctype":   doctype,
-			"page_size": 20,
-		}
-		paramsJSON, _ := json.Marshal(params)
-		return "list_documents", json.RawMessage(paramsJSON)
-	}
-	
-	// General search queries
-	if strings.Contains(lowerQuery, "search") || strings.Contains(lowerQuery, "find") {
-		doctype := "Project"
-		searchTerm := entityName
-		
-		if searchTerm == "" {
-			// Extract search term if no entity name found
-			words := strings.Fields(query)
-			if len(words) > 1 {
-				searchTerm = words[len(words)-1]
-			}
-		}
-		
-		if strings.Contains(lowerQuery, "customer") {
-			doctype = "Customer"
-		} else if strings.Contains(lowerQuery, "item") {
-			doctype = "Item"
-		} else if strings.Contains(lowerQuery, "task") {
-			doctype = "Task"
-		}
-		
-		params := map[string]interface{}{
-			"doctype":   doctype,
-			"search":    searchTerm,
-			"page_size": 20,
-		}
-		paramsJSON, _ := json.Marshal(params)
-		return "search_documents", json.RawMessage(paramsJSON)
-	}
-	
-	// Resource analysis
-	if strings.Contains(lowerQuery, "resource") {
-		return "resource_utilization_analysis", json.RawMessage(`{}`)
-	}
-	
-	// Budget analysis
-	if strings.Contains(lowerQuery, "budget") {
-		return "budget_variance_analysis", json.RawMessage(`{}`)
-	}
-	
-	// Default to portfolio dashboard
-	return "portfolio_dashboard", json.RawMessage(`{}`)
-}
-
 // extractEntityName extracts entity names from queries using multiple patterns
 func extractEntityName(query string) string {
 	// Pattern 1: Text in quotes "Entity Name" or 'Entity Name'
@@ -1142,18 +1037,6 @@ func extractEntityName(query string) string {
 	}
 	
 	return ""
-}
-
-// createSearchParams creates parameters for a search-first query
-func createSearchParams(doctype, searchTerm, nextTool string) json.RawMessage {
-	params := map[string]interface{}{
-		"doctype":   doctype,
-		"search":    searchTerm,
-		"next_tool": nextTool,
-		"page_size": 5, // Limit to top 5 results
-	}
-	paramsJSON, _ := json.Marshal(params)
-	return json.RawMessage(paramsJSON)
 }
 
 // handleOpenAPI provides OpenAPI specification
@@ -1223,6 +1106,8 @@ func (s *MCPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(spec)
+	if err := json.NewEncoder(w).Encode(spec); err != nil {
+		slog.Error("Failed to encode OpenAPI spec", "error", err)
+	}
 	slog.Info("OpenAPI spec sent")
 }

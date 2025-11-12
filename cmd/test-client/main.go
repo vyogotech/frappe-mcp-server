@@ -199,7 +199,7 @@ func (c *TestClient) runDemo() {
 		fmt.Printf("\n📋 Scenario %d: %s\n", i+1, scenario.name)
 		fmt.Printf("   %s\n", scenario.description)
 		fmt.Print("   Press Enter to continue...")
-		bufio.NewReader(os.Stdin).ReadBytes('\n')
+		_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
 		scenario.fn()
 	}
 }
