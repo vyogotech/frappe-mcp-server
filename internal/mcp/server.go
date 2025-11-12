@@ -125,7 +125,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		slog.Error("WebSocket upgrade failed", "error", err)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	slog.Info("WebSocket connection established")
 

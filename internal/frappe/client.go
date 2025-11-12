@@ -369,7 +369,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {

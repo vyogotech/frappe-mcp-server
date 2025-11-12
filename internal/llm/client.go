@@ -62,7 +62,7 @@ func NewClient(cfg config.LLMConfig) (Client, error) {
 			return nil, fmt.Errorf("API key is required for Azure")
 		}
 		if cfg.AzureDeployment == "" {
-			return nil, fmt.Errorf("Azure deployment is required")
+			return nil, fmt.Errorf("azure deployment is required")
 		}
 		return NewAzureClient(cfg)
 		

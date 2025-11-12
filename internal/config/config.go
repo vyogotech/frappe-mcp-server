@@ -90,10 +90,8 @@ type PerformanceConfig struct {
 
 // Load loads configuration from config.yaml and environment variables
 func Load() (*Config, error) {
-	// Load .env file if it exists
-	if err := godotenv.Load(); err != nil {
-		// .env file might not exist, which is fine
-	}
+	// Load .env file if it exists (ignore errors as .env file might not exist)
+	_ = godotenv.Load()
 
 	// Load from YAML file
 	configFile := "config.yaml"

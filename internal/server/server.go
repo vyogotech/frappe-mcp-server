@@ -914,20 +914,19 @@ func (s *MCPServer) executeToolWithEntity(ctx context.Context, toolName, doctype
 	
 	// Build parameters based on the tool
 	// New generic tools use doctype + name
-	if toolName == "analyze_document" || toolName == "get_document" {
+	switch toolName {
+	case "analyze_document", "get_document":
 		params = map[string]interface{}{
 			"doctype":         doctype,
 			"name":            entityName,
 			"include_related": true, // Fetch related docs for richer analysis
 		}
-	} else if toolName == "get_project_status" || toolName == "analyze_project_timeline" || 
-		toolName == "calculate_project_metrics" || toolName == "project_risk_assessment" || 
-		toolName == "generate_project_report" {
+	case "get_project_status", "analyze_project_timeline", "calculate_project_metrics", "project_risk_assessment", "generate_project_report":
 		// Legacy project-specific tools
 		params = map[string]interface{}{
 			"project_name": entityName,
 		}
-	} else {
+	default:
 		// Default generic approach
 		params = map[string]interface{}{
 			"doctype": doctype,

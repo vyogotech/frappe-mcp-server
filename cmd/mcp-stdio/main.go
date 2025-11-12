@@ -52,7 +52,7 @@ func main() {
 
 	// Set config file environment variable if not already set
 	if os.Getenv("CONFIG_FILE") == "" && *configPath != "" {
-		os.Setenv("CONFIG_FILE", *configPath)
+		_ = os.Setenv("CONFIG_FILE", *configPath)
 	}
 
 	// Load configuration
