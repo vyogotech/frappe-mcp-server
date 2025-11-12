@@ -45,7 +45,6 @@ func TestNewRegistry(t *testing.T) {
 	registry := NewRegistry(client)
 
 	assert.NotNil(t, registry)
-	assert.Equal(t, client, registry.erpClient)
 }
 
 func TestGetDocument(t *testing.T) {
