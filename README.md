@@ -24,7 +24,7 @@ Connect ERPNext and other Frappe-based apps with AI assistants through natural l
 
 ```bash
 # Install the STDIO binary for MCP clients (Cursor, Claude Desktop)
-curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 ```
 
 This installs the MCP server binary to `~/.local/bin/frappe-mcp-server-stdio`
@@ -33,10 +33,10 @@ This installs the MCP server binary to `~/.local/bin/frappe-mcp-server-stdio`
 
 ```bash
 # 1. Download pre-built binary from releases
-# Visit: https://github.com/varkrish/frappe-mcp-server/releases/latest
+# Visit: https://github.com/vyogotech/frappe-mcp-server/releases/latest
 
 # 2. Or build from source
-git clone https://github.com/varkrish/frappe-mcp-server
+git clone https://github.com/vyogotech/frappe-mcp-server
 cd frappe-mcp-server
 make build-stdio
 
@@ -47,14 +47,14 @@ cp config.yaml.example config.yaml
 
 ## 📖 Documentation
 
-**Complete documentation:** [https://varkrish.github.io/frappe-mcp-server/](https://varkrish.github.io/frappe-mcp-server/)
+**Complete documentation:** [https://vyogotech.github.io/frappe-mcp-server/](https://vyogotech.github.io/frappe-mcp-server/)
 
 **Key guides:**
-- [Quick Start](https://varkrish.github.io/frappe-mcp-server/quick-start) - Get running in 5 minutes
-- [Generic LLM Config](https://varkrish.github.io/frappe-mcp-server/generic-llm-config) - Simple 3-field config
-- [LLM Providers](https://varkrish.github.io/frappe-mcp-server/llm-providers) - Ollama, OpenAI, Together.ai, Groq, etc.
-- [Docker Deployment](https://varkrish.github.io/frappe-mcp-server/docker) - Deploy with Docker Compose
-- [API Reference](https://varkrish.github.io/frappe-mcp-server/api-reference) - Complete API docs
+- [Quick Start](https://vyogotech.github.io/frappe-mcp-server/quick-start) - Get running in 5 minutes
+- [Generic LLM Config](https://vyogotech.github.io/frappe-mcp-server/generic-llm-config) - Simple 3-field config
+- [LLM Providers](https://vyogotech.github.io/frappe-mcp-server/llm-providers) - Ollama, OpenAI, Together.ai, Groq, etc.
+- [Docker Deployment](https://vyogotech.github.io/frappe-mcp-server/docker) - Deploy with Docker Compose
+- [API Reference](https://vyogotech.github.io/frappe-mcp-server/api-reference) - Complete API docs
 
 ## 💡 Usage Examples
 
@@ -125,7 +125,7 @@ Add to `claude_desktop_config.json`:
 
 ## 🤝 Contributing
 
-Contributions welcome! See [Development Guide](https://varkrish.github.io/frappe-mcp-server/development).
+Contributions welcome! See [Development Guide](https://vyogotech.github.io/frappe-mcp-server/development).
 
 1. Fork the repository
 2. Create a feature branch
@@ -146,9 +146,9 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 📞 Support
 
-- **Documentation**: [GitHub Pages](https://varkrish.github.io/frappe-mcp-server/)
-- **Issues**: [GitHub Issues](https://github.com/varkrish/frappe-mcp-server/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/varkrish/frappe-mcp-server/discussions)
+- **Documentation**: [GitHub Pages](https://vyogotech.github.io/frappe-mcp-server/)
+- **Issues**: [GitHub Issues](https://github.com/vyogotech/frappe-mcp-server/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/vyogotech/frappe-mcp-server/discussions)
 
 ---
 
