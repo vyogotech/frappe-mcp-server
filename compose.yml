@@ -16,9 +16,9 @@ services:
       FRAPPE_API_KEY: ${FRAPPE_API_KEY}
       FRAPPE_API_SECRET: ${FRAPPE_API_SECRET}
       
-      # LLM Configuration (for AI features)
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
-      LLM_MODEL: ${LLM_MODEL:-llama3.2:1b}
+      # LLM Configuration (for AI features) - Configured via config.yaml instead
+      # LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
+      # LLM_MODEL: ${LLM_MODEL:-llama3.2:1b}
       
       # Server Configuration
       SERVER_HOST: 0.0.0.0
