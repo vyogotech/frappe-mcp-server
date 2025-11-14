@@ -190,9 +190,9 @@ show_next_steps() {
     echo "         \"command\": \"${INSTALL_DIR}/${BINARY_NAME}\","
     echo '         "args": ["--config", "/path/to/your/config.yaml"],'
     echo '         "env": {'
-    echo '           "ERPNEXT_BASE_URL": "https://your-frappe-instance.com",'
-    echo '           "ERPNEXT_API_KEY": "your_api_key",'
-    echo '           "ERPNEXT_API_SECRET": "your_api_secret"'
+    echo '           "FRAPPE_BASE_URL": "https://your-frappe-instance.com",'
+    echo '           "FRAPPE_API_KEY": "your_api_key",'
+    echo '           "FRAPPE_API_SECRET": "your_api_secret"'
     echo '         }'
     echo '       }'
     echo '     }'

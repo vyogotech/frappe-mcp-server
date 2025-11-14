@@ -2,7 +2,29 @@
 
 All notable changes to ERPNext MCP Server.
 
-## [Unreleased] - 2025-11-12
+## [Unreleased] - 2025-11-13
+
+### Added
+- **OAuth2 Authentication** - Standard OAuth2 security implementation
+  - Bearer token validation with Frappe OAuth2 server
+  - In-memory token caching (configurable TTL, default 5 minutes)
+  - Support for Client Credentials Grant (backend-to-backend)
+  - Support for Authorization Code Grant (user authentication)
+  - Trusted client support for user context delegation
+  - Optional vs required authentication modes (backward compatible)
+  - User context propagation via `context.Context`
+  - Comprehensive test coverage (18 unit tests, all passing)
+  - Full documentation with quick start guide
+  - Environment variable configuration support
+  - Production-ready with proper error handling
+- **Authentication Documentation** - Complete guides for OAuth2 setup
+  - Full authentication guide (`docs/authentication.md`)
+  - 5-minute quick start guide (`docs/auth-quickstart.md`)
+  - Configuration examples and best practices
+  - Troubleshooting guide and common scenarios
+  - Migration path for gradual adoption
+
+## [Previous] - 2025-11-12
 
 ### Added
 - **Generic LLM Configuration** - Simplified 3-field config for ANY provider
@@ -134,13 +156,13 @@ docker compose up -d
 Before:
 ```yaml
 # compose.yml
-ERPNEXT_API_KEY: 0d9f1b19563768b
+FRAPPE_API_KEY: 0d9f1b19563768b
 ```
 
 After:
 ```bash
 # .env file
-ERPNEXT_API_KEY=0d9f1b19563768b
+FRAPPE_API_KEY=0d9f1b19563768b
 ```
 
 **From Multiple Compose Files to Single File**:

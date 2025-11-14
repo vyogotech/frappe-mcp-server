@@ -42,9 +42,9 @@ Configuration can be overridden using environment variables:
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `CONFIG_FILE` | Path to config file | `/etc/erpnext-mcp/config.yaml` |
-| `ERPNEXT_BASE_URL` | ERPNext URL | `https://erp.company.com` |
-| `ERPNEXT_API_KEY` | API key | `abc123...` |
-| `ERPNEXT_API_SECRET` | API secret | `xyz789...` |
+| `FRAPPE_BASE_URL` | Frappe URL | `https://erp.company.com` |
+| `FRAPPE_API_KEY` | API key | `abc123...` |
+| `FRAPPE_API_SECRET` | API secret | `xyz789...` |
 | `OLLAMA_URL` | Ollama endpoint | `http://localhost:11434` |
 | `OLLAMA_MODEL` | Ollama model name | `llama3.2:1b` |
 | `SERVER_PORT` | HTTP port | `8080` |
@@ -163,8 +163,8 @@ ollama:
 chmod 600 config.yaml
 
 # Or use environment variables
-export ERPNEXT_API_KEY="..."
-export ERPNEXT_API_SECRET="..."
+export FRAPPE_API_KEY="..."
+export FRAPPE_API_SECRET="..."
 ```
 
 ### 2. Use HTTPS

@@ -17,6 +17,7 @@ type Config struct {
 	LLM         LLMConfig         `yaml:"llm"`
 	Cache       CacheConfig       `yaml:"cache"`
 	Performance PerformanceConfig `yaml:"performance"`
+	Auth        AuthConfig        `yaml:"auth"`
 }
 
 // ServerConfig represents server configuration
@@ -27,7 +28,8 @@ type ServerConfig struct {
 	MaxConnections int           `yaml:"max_connections"`
 }
 
-// ERPNextConfig represents ERPNext client configuration
+// ERPNextConfig represents Frappe instance client configuration
+// Named ERPNextConfig for backward compatibility, but works with any Frappe app
 type ERPNextConfig struct {
 	BaseURL   string          `yaml:"base_url"`
 	APIKey    string          `yaml:"api_key"`
@@ -88,6 +90,36 @@ type PerformanceConfig struct {
 	EnableCompression bool `yaml:"enable_compression"`
 }
 
+// AuthConfig represents authentication configuration
+type AuthConfig struct {
+	Enabled     bool         `yaml:"enabled"`
+	RequireAuth bool         `yaml:"require_auth"`
+	OAuth2      OAuth2Config `yaml:"oauth2"`
+	TokenCache  TokenCacheConfig `yaml:"token_cache"`
+}
+
+// OAuth2Config represents OAuth2 configuration
+type OAuth2Config struct {
+	// Frappe OAuth endpoints
+	TokenInfoURL string `yaml:"token_info_url"`
+	IssuerURL    string `yaml:"issuer_url"`
+	
+	// Trusted backend clients (can provide user context headers)
+	TrustedClients []string `yaml:"trusted_clients"`
+	
+	// Token validation
+	ValidateRemote bool `yaml:"validate_remote"`
+	
+	// HTTP client timeout
+	Timeout time.Duration `yaml:"timeout"`
+}
+
+// TokenCacheConfig represents token cache configuration
+type TokenCacheConfig struct {
+	TTL             time.Duration `yaml:"ttl"`
+	CleanupInterval time.Duration `yaml:"cleanup_interval"`
+}
+
 // Load loads configuration from config.yaml and environment variables
 func Load() (*Config, error) {
 	// Load .env file if it exists (ignore errors as .env file might not exist)
@@ -124,14 +156,14 @@ func Load() (*Config, error) {
 
 // loadFromEnv loads configuration from environment variables
 func (c *Config) loadFromEnv() error {
-	// ERPNext configuration
-	if baseURL := os.Getenv("ERPNEXT_BASE_URL"); baseURL != "" {
+	// Frappe instance configuration
+	if baseURL := os.Getenv("FRAPPE_BASE_URL"); baseURL != "" {
 		c.ERPNext.BaseURL = baseURL
 	}
-	if apiKey := os.Getenv("ERPNEXT_API_KEY"); apiKey != "" {
+	if apiKey := os.Getenv("FRAPPE_API_KEY"); apiKey != "" {
 		c.ERPNext.APIKey = apiKey
 	}
-	if apiSecret := os.Getenv("ERPNEXT_API_SECRET"); apiSecret != "" {
+	if apiSecret := os.Getenv("FRAPPE_API_SECRET"); apiSecret != "" {
 		c.ERPNext.APISecret = apiSecret
 	}
 
@@ -172,22 +204,76 @@ func (c *Config) loadFromEnv() error {
 		c.LLM.AzureAPIVersion = azureAPIVersion
 	}
 
+	// Auth configuration
+	if enabled := os.Getenv("AUTH_ENABLED"); enabled != "" {
+		c.Auth.Enabled = enabled == "true"
+	}
+	if requireAuth := os.Getenv("AUTH_REQUIRE_AUTH"); requireAuth != "" {
+		c.Auth.RequireAuth = requireAuth == "true"
+	}
+	if tokenInfoURL := os.Getenv("OAUTH_TOKEN_INFO_URL"); tokenInfoURL != "" {
+		c.Auth.OAuth2.TokenInfoURL = tokenInfoURL
+	}
+	if issuerURL := os.Getenv("OAUTH_ISSUER_URL"); issuerURL != "" {
+		c.Auth.OAuth2.IssuerURL = issuerURL
+	}
+	if timeout := os.Getenv("OAUTH_TIMEOUT"); timeout != "" {
+		if duration, err := time.ParseDuration(timeout); err == nil {
+			c.Auth.OAuth2.Timeout = duration
+		}
+	}
+	if cacheTTL := os.Getenv("CACHE_TTL"); cacheTTL != "" {
+		if duration, err := time.ParseDuration(cacheTTL); err == nil {
+			c.Auth.TokenCache.TTL = duration
+		}
+	}
+	if cleanupInterval := os.Getenv("CACHE_CLEANUP_INTERVAL"); cleanupInterval != "" {
+		if duration, err := time.ParseDuration(cleanupInterval); err == nil {
+			c.Auth.TokenCache.CleanupInterval = duration
+		}
+	}
+
 	return nil
 }
 
 // validate validates the configuration
 func (c *Config) validate() error {
 	if c.ERPNext.BaseURL == "" {
-		return fmt.Errorf("ERPNext base URL is required")
+		return fmt.Errorf("frappe instance base URL is required")
 	}
-	if c.ERPNext.APIKey == "" {
-		return fmt.Errorf("ERPNext API key is required")
+	
+	// API key and secret are optional if OAuth2 is enabled and required
+	// In that case, we'll use user OAuth2 tokens for authentication
+	if !c.Auth.Enabled || !c.Auth.RequireAuth {
+		// If auth is not enabled or not required, we need API key/secret
+		if c.ERPNext.APIKey == "" {
+			return fmt.Errorf("frappe API key is required when auth is disabled")
+		}
+		if c.ERPNext.APISecret == "" {
+			return fmt.Errorf("frappe API secret is required when auth is disabled")
+		}
+	} else {
+		// Auth is enabled and required - API key/secret is optional but warn if missing
+		if c.ERPNext.APIKey == "" || c.ERPNext.APISecret == "" {
+			// This is valid - we'll use user OAuth2 tokens
+			// But log a warning for clarity
+			fmt.Println("INFO: API key/secret not provided. Will use OAuth2 token pass-through for user-level permissions.")
+		}
 	}
-	if c.ERPNext.APISecret == "" {
-		return fmt.Errorf("ERPNext API secret is required")
-	}
+	
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
 	}
+	
+	// Validate OAuth2 config if auth is enabled
+	if c.Auth.Enabled {
+		if c.Auth.OAuth2.TokenInfoURL == "" {
+			return fmt.Errorf("OAuth2 token_info_url is required when auth is enabled")
+		}
+		if c.Auth.OAuth2.IssuerURL == "" {
+			return fmt.Errorf("OAuth2 issuer_url is required when auth is enabled")
+		}
+	}
+	
 	return nil
 }

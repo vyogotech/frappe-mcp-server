@@ -16,9 +16,9 @@ nano .env
 
 Required variables in `.env`:
 ```bash
-ERPNEXT_BASE_URL=http://your-erpnext-instance:8000
-ERPNEXT_API_KEY=your_api_key
-ERPNEXT_API_SECRET=your_api_secret
+FRAPPE_BASE_URL=http://your-frappe-instance:8000
+FRAPPE_API_KEY=your_api_key
+FRAPPE_API_SECRET=your_api_secret
 ```
 
 ### 2. Start Services
@@ -67,9 +67,9 @@ docker compose exec ollama ollama list
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ERPNEXT_BASE_URL` | `http://localhost:8000` | ERPNext instance URL |
-| `ERPNEXT_API_KEY` | - | ERPNext API key (required) |
-| `ERPNEXT_API_SECRET` | - | ERPNext API secret (required) |
+| `FRAPPE_BASE_URL` | `http://localhost:8000` | Frappe instance URL |
+| `FRAPPE_API_KEY` | - | Frappe API key (required) |
+| `FRAPPE_API_SECRET` | - | Frappe API secret (required) |
 | `OLLAMA_URL` | `http://ollama:11434` | Ollama service URL |
 | `OLLAMA_MODEL` | `llama3.2:1b` | AI model to use |
 | `MCP_PORT` | `8080` | MCP server port |
@@ -282,7 +282,7 @@ services:
 Remove the `erpnext` service and set:
 
 ```bash
-ERPNEXT_BASE_URL=https://your-erpnext.com
+FRAPPE_BASE_URL=https://your-frappe.com
 ```
 
 ### Using External Ollama

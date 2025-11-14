@@ -137,9 +137,9 @@ Add to your MCP client configuration (`~/.cursor/mcp.json` or Claude Desktop con
     "frappe": {
       "command": "/path/to/frappe-mcp-server-stdio",
       "env": {
-        "ERPNEXT_BASE_URL": "https://your-frappe-instance.com",
-        "ERPNEXT_API_KEY": "your_api_key",
-        "ERPNEXT_API_SECRET": "your_api_secret",
+        "FRAPPE_BASE_URL": "https://your-frappe-instance.com",
+        "FRAPPE_API_KEY": "your_api_key",
+        "FRAPPE_API_SECRET": "your_api_secret",
         "LLM_PROVIDER_TYPE": "openai-compatible",
         "LLM_BASE_URL": "http://localhost:11434/v1",
         "LLM_MODEL": "llama3.2:1b"
