@@ -23,6 +23,17 @@ Ask questions in plain English - the AI extracts intent, doctype, and entities.
 "Find projects for customer ABC Corp"
 "Show invoices from last month"
 "List pending tasks for John"
+
+# Analytics queries 🆕
+"Show me top 5 customers by revenue"
+"What are total sales by item?"
+"Which products sold the most?"
+"Average order value by customer"
+
+# Report queries 🆕
+"Run Sales Analytics report"
+"Execute Customer Ledger Summary"
+"Show Stock Balance report"
 ```
 
 ## How It Works
@@ -61,6 +72,8 @@ The server uses carefully crafted prompts to extract:
 - `list` - Get all documents
 - `search` - Find documents by criteria
 - `analyze` - Deep analysis with related docs
+- `aggregate` - 🆕 Perform aggregations (SUM, COUNT, AVG, TOP N)
+- `report` - 🆕 Execute ERPNext reports
 - `create`, `update`, `delete` - CRUD operations
 
 ### 2. **DocType** (What entity)
@@ -201,6 +214,56 @@ Delete a document.
   "name": "TASK-001"
 }
 ```
+
+### Analytics & Reporting 🆕
+
+#### `aggregate_documents`
+Perform SQL-like aggregations on ERPNext data.
+
+```json
+{
+  "doctype": "Sales Invoice",
+  "fields": ["customer", "SUM(grand_total) as total_revenue"],
+  "group_by": "customer",
+  "order_by": "total_revenue desc",
+  "limit": 5,
+  "filters": {"status": "Paid"}
+}
+```
+
+**Use Cases:**
+- **Top N queries**: "top 10 customers by revenue"
+- **Aggregation**: "total sales by item"
+- **Counting**: "number of orders by status"
+- **Rankings**: "highest selling products"
+
+**Supported Functions:**
+- `SUM(field)` - Sum values
+- `COUNT(*)` or `COUNT(field)` - Count records
+- `AVG(field)` - Calculate average
+- `MAX(field)` - Find maximum
+- `MIN(field)` - Find minimum
+
+#### `run_report`
+Execute standard or custom Frappe/ERPNext reports.
+
+```json
+{
+  "report_name": "Sales Analytics",
+  "filters": {
+    "company": "My Company",
+    "from_date": "2024-01-01",
+    "to_date": "2024-12-31"
+  }
+}
+```
+
+**Common Reports:**
+- **Sales**: Sales Analytics, Sales Register, Sales Order Analysis
+- **Purchase**: Purchase Register, Purchase Analytics
+- **Accounting**: Customer Ledger Summary, General Ledger
+- **Inventory**: Stock Balance, Stock Ledger
+- **Financial**: Profit and Loss, Balance Sheet
 
 ### Advanced Analysis
 

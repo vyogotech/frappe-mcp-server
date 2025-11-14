@@ -1,11 +1,17 @@
 {
   "mcpServers": {
-    "erpnext": {
-      "command": "/Users/varkrish/personal/frappista_sne_apps/frappe-mcp-server/bin/frappe-mcp-server-stdio",
+    "frappe": {
+      "command": "/path/to/frappe-mcp-server/bin/frappe-mcp-server-stdio",
+      "args": [
+        "--config",
+        "/path/to/config.yaml"
+      ],
       "env": {
-        "ERPNEXT_BASE_URL": "https://YOUR_ERPNEXT_DOMAIN.com",
-        "ERPNEXT_API_KEY": "YOUR_API_KEY",
-        "ERPNEXT_API_SECRET": "YOUR_API_SECRET"
+        "FRAPPE_BASE_URL": "https://YOUR_FRAPPE_DOMAIN.com",
+        "FRAPPE_API_KEY": "YOUR_API_KEY",
+        "FRAPPE_API_SECRET": "YOUR_API_SECRET",
+        "LLM_BASE_URL": "http://localhost:11434/v1",
+        "LLM_MODEL": "llama3.2:1b"
       }
     }
   }

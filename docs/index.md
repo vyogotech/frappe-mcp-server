@@ -11,6 +11,8 @@ ERPNext MCP Server bridges ERPNext and other Frappe-based applications with AI a
 - 🤖 **AI-Powered Query Processing** - Natural language understanding using local LLM (Ollama)
 - 🔌 **MCP Protocol Support** - STDIO and HTTP interfaces for AI tool integration
 - 📊 **Generic Document Tools** - Works with ANY ERPNext doctype (standard or custom)
+- 📈 **Advanced Analytics** - Aggregation queries (SUM, COUNT, AVG, TOP N) and report execution
+- 🔐 **OAuth2 Authentication** - Standard OAuth2 security with token caching
 - 🔒 **Privacy-Focused** - All AI processing runs locally via Ollama
 - 🚀 **Production-Ready** - Built with Go for performance and reliability
 
@@ -20,6 +22,11 @@ ERPNext MCP Server bridges ERPNext and other Frappe-based applications with AI a
 - **[Installation Guide](installation.md)** - Complete installation options
 - [Quick Start Guide](quick-start.md) - Get up and running in 5 minutes
 - [Configuration](configuration.md) - Setup and customize your server
+
+### Security (NEW!)
+- **[OAuth2 Authentication](authentication.md)** - 🔐 Complete OAuth2 authentication guide
+- [Auth Quick Start](auth-quickstart.md) - Set up authentication in 5 minutes
+- [Implementation Details](oauth2-implementation.md) - Technical implementation deep dive
 
 ### LLM Configuration
 - [Generic LLM Config](generic-llm-config.md) - Simple 3-field config for ANY provider
@@ -31,6 +38,7 @@ ERPNext MCP Server bridges ERPNext and other Frappe-based applications with AI a
 
 ### Usage & Development
 - [AI Features](ai-features.md) - Learn about NLP and AI capabilities
+- [Analytics & Reporting](analytics-features.md) - 🆕 Aggregations and report execution
 - [API Reference](api-reference.md) - Complete API documentation
 - [Development](development.md) - Contributing and extending
 - [Implementation Details](llm-implementation.md) - Technical architecture deep dive
@@ -49,7 +57,14 @@ Natural conversations with your ERPNext data:
 - Generate reports
 - Query any document type
 
-### 3. **Automation & Integration**
+### 3. **Business Analytics** 🆕
+Ask complex analytical questions:
+- *"Show me top 5 customers by revenue"*
+- *"What are total sales by item this month?"*
+- *"Run Sales Analytics report"*
+- *"Which products sold the most?"*
+
+### 4. **Automation & Integration**
 Build custom workflows and integrations using MCP tools.
 
 ## Architecture

@@ -922,3 +922,94 @@ func inferDocTypeFromField(fieldName string) string {
 	
 	return ""
 }
+
+// AggregateDocuments performs aggregation queries on ERPNext data
+func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
+	var params types.AggregationRequest
+
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters: %w", err)
+	}
+
+	if params.DocType == "" {
+		return nil, fmt.Errorf("doctype is required")
+	}
+
+	// Execute aggregation query
+	results, err := t.frappeClient.RunAggregationQuery(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to run aggregation query: %w", err)
+	}
+
+	// Build response
+	resultJSON, err := json.Marshal(map[string]interface{}{
+		"doctype":   params.DocType,
+		"group_by":  params.GroupBy,
+		"results":   results,
+		"count":     len(results),
+		"fields":    params.Fields,
+		"filters":   params.Filters,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal results: %w", err)
+	}
+
+	return &mcp.ToolResponse{
+		ID: request.ID,
+		Content: []mcp.Content{
+			{
+				Type: "text",
+				Text: fmt.Sprintf("Aggregation query on %s returned %d result(s)", params.DocType, len(results)),
+			},
+			{
+				Type: "text",
+				Text: string(resultJSON),
+			},
+		},
+	}, nil
+}
+
+// RunReport executes a Frappe report and returns formatted results
+func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
+	var params types.ReportRequest
+
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters: %w", err)
+	}
+
+	if params.ReportName == "" {
+		return nil, fmt.Errorf("report_name is required")
+	}
+
+	// Execute report
+	reportData, err := t.frappeClient.RunReport(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to run report: %w", err)
+	}
+
+	// Format the response
+	resultJSON, err := json.Marshal(map[string]interface{}{
+		"report_name": params.ReportName,
+		"columns":     reportData.Columns,
+		"data":        reportData.Data,
+		"row_count":   len(reportData.Data),
+		"filters":     params.Filters,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal report data: %w", err)
+	}
+
+	return &mcp.ToolResponse{
+		ID: request.ID,
+		Content: []mcp.Content{
+			{
+				Type: "text",
+				Text: fmt.Sprintf("Report '%s' executed successfully with %d row(s)", params.ReportName, len(reportData.Data)),
+			},
+			{
+				Type: "text",
+				Text: string(resultJSON),
+			},
+		},
+	}, nil
+}

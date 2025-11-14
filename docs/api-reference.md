@@ -191,6 +191,114 @@ Execute a specific MCP tool directly.
 
 ---
 
+#### Aggregate Documents 🆕
+
+**POST** `/api/v1/tool/aggregate_documents`
+
+Perform SQL-like aggregation queries on ERPNext data.
+
+**Request:**
+```json
+{
+  "doctype": "Sales Invoice",
+  "fields": ["customer", "SUM(grand_total) as total_revenue"],
+  "group_by": "customer",
+  "order_by": "total_revenue desc",
+  "limit": 5,
+  "filters": {
+    "status": "Paid"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "doctype": "Sales Invoice",
+  "group_by": "customer",
+  "results": [
+    {
+      "customer": "ABC Corp",
+      "total_revenue": 125000.50
+    },
+    {
+      "customer": "XYZ Ltd",
+      "total_revenue": 98500.75
+    }
+    // ... top 5 customers
+  ],
+  "count": 5
+}
+```
+
+**Supported Aggregations:**
+- `SUM(field)` - Sum of values
+- `COUNT(field)` or `COUNT(*)` - Count records
+- `AVG(field)` - Average value
+- `MAX(field)` - Maximum value
+- `MIN(field)` - Minimum value
+
+**Use Cases:**
+- Top N queries: "top 10 customers by revenue"
+- Totals by category: "total sales by item"
+- Counting: "number of orders by status"
+- Rankings: "highest selling products"
+
+---
+
+#### Run Report 🆕
+
+**POST** `/api/v1/tool/run_report`
+
+Execute Frappe/ERPNext standard or custom reports.
+
+**Request:**
+```json
+{
+  "report_name": "Sales Analytics",
+  "filters": {
+    "company": "My Company",
+    "from_date": "2024-01-01",
+    "to_date": "2024-12-31"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "report_name": "Sales Analytics",
+  "columns": [
+    {
+      "label": "Customer",
+      "fieldname": "customer",
+      "fieldtype": "Link",
+      "width": 150
+    },
+    {
+      "label": "Total Amount",
+      "fieldname": "total_amount",
+      "fieldtype": "Currency",
+      "width": 120
+    }
+  ],
+  "data": [
+    ["ABC Corp", 125000.50],
+    ["XYZ Ltd", 98500.75]
+  ],
+  "row_count": 2
+}
+```
+
+**Common Reports:**
+- **Sales**: Sales Analytics, Sales Register, Sales Order Analysis
+- **Purchase**: Purchase Register, Purchase Analytics
+- **Accounting**: Customer Ledger Summary, Supplier Ledger Summary, General Ledger
+- **Inventory**: Stock Balance, Stock Ledger
+- **Financial**: Profit and Loss Statement, Balance Sheet
+
+---
+
 #### Create Document
 
 **POST** `/api/v1/tool/create_document`
@@ -463,6 +571,30 @@ curl -X POST http://localhost:8080/api/v1/chat \
 curl -X POST http://localhost:8080/api/v1/tool/get_document \
   -H "Content-Type: application/json" \
   -d '{"doctype": "Project", "name": "PROJ-0001"}'
+
+# Analytics: Top 5 customers by revenue
+curl -X POST http://localhost:8080/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "show me top 5 customers by revenue in table format"}'
+
+# Aggregation query (direct tool call)
+curl -X POST http://localhost:8080/api/v1/tool/aggregate_documents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "doctype": "Sales Invoice",
+    "fields": ["customer", "SUM(grand_total) as total"],
+    "group_by": "customer",
+    "order_by": "total desc",
+    "limit": 5
+  }'
+
+# Run report
+curl -X POST http://localhost:8080/api/v1/tool/run_report \
+  -H "Content-Type: application/json" \
+  -d '{
+    "report_name": "Sales Analytics",
+    "filters": {"company": "My Company"}
+  }'
 ```
 
 ### JavaScript

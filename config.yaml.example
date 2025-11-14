@@ -1,12 +1,15 @@
-# ERPNext MCP Server Configuration
+# Frappe MCP Server Configuration
 server:
   host: "0.0.0.0"
   port: 8080
   timeout: "30s"
   max_connections: 100
 
-erpnext:
+erpnext:  # Frappe instance configuration (works with ERPNext, Frappe HR, Healthcare, etc.)
   base_url: "http://localhost:8000"
+  # API key and secret are OPTIONAL when OAuth2 is enabled (auth.enabled: true and auth.require_auth: true)
+  # If not provided, the server will pass through user OAuth2 tokens for user-level permissions
+  # If provided, they will be used as fallback when no user token is available
   api_key: "your_api_key_here"
   api_secret: "your_api_secret_here"
   timeout: "30s"
@@ -28,13 +31,21 @@ llm:
   # Provider type: "openai-compatible" (default), "anthropic", or "azure"
   provider_type: "openai-compatible"
   
-  # Generic configuration (works for all providers)
-  base_url: "http://localhost:11434/v1"  # API endpoint
-  api_key: ""                             # API key (if required)
-  model: "llama3.2:1b"                    # Model name/ID
-  timeout: "60s"                          # Request timeout
-  max_tokens: 500                         # Max tokens in response
-  temperature: 0.7                        # Temperature (0.0-2.0)
+  # RECOMMENDED: Groq (ultra-fast, reliable, free tier available)
+  base_url: "https://api.groq.com/openai/v1"  # Groq API endpoint
+  api_key: "YOUR_GROQ_API_KEY_HERE"           # Get from https://console.groq.com
+  model: "llama-3.3-70b-versatile"            # 70B model - very reliable
+  timeout: "30s"                              # Request timeout (Groq is fast!)
+  max_tokens: 1000                            # Max tokens in response
+  temperature: 0.3                            # Lower temp for consistent output
+  
+  # Alternative: Local Ollama (private but less reliable)
+  # base_url: "http://localhost:11434/v1"
+  # api_key: ""
+  # model: "llama3.1:latest"
+  # timeout: "60s"
+  # max_tokens: 500
+  # temperature: 0.7
   
   # Azure-specific (only if provider_type is "azure")
   # azure_deployment: "gpt-4"
@@ -94,3 +105,59 @@ performance:
   worker_pool_size: 10
   batch_size: 50
   enable_compression: true
+
+# Authentication Configuration
+auth:
+  # Enable/disable authentication
+  enabled: true
+  
+  # Require authentication for all endpoints (false = optional auth for backward compatibility)
+  require_auth: true
+  
+  # OAuth2 Configuration
+  oauth2:
+    # Frappe OAuth2 endpoints
+    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo"
+    issuer_url: "http://localhost:8000"
+    
+    # Trusted backend clients (can provide user context via headers)
+    trusted_clients:
+      - "frappe-mcp-backend"
+    
+    # Validate tokens with remote OAuth2 provider (false = skip validation for dev)
+    validate_remote: true
+    
+    # HTTP client timeout for token validation
+    timeout: "30s"
+  
+  # Token cache configuration
+  token_cache:
+    ttl: "5m"              # How long to cache validated tokens
+    cleanup_interval: "10m" # How often to clean up expired tokens
+
+# Production Auth Example with OAuth2 Token Pass-through:
+#
+# When auth is enabled and required, user OAuth2 tokens are passed through to Frappe.
+# This maintains user-level permissions - each request is executed with the user's own credentials.
+# API key/secret can be omitted or left as fallback for system-level operations.
+#
+# auth:
+#   enabled: true
+#   require_auth: true
+#   oauth2:
+#     token_info_url: "https://your-frappe-instance.com/api/method/frappe.integrations.oauth2.openid.userinfo"
+#     issuer_url: "https://your-frappe-instance.com"
+#     trusted_clients:
+#       - "frappe-mcp-backend"
+#       - "mobile-app-client"
+#     validate_remote: true
+#     timeout: "30s"
+#   token_cache:
+#     ttl: "5m"
+#     cleanup_interval: "10m"
+#
+# erpnext:  # Frappe instance config
+#   base_url: "https://your-frappe-instance.com"
+#   api_key: ""      # Optional - will use user OAuth2 tokens
+#   api_secret: ""   # Optional - will use user OAuth2 tokens
+#   timeout: "30s"

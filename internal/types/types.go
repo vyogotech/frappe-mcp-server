@@ -2,7 +2,8 @@ package types
 
 import "time"
 
-// ERPNextError represents an error from ERPNext API
+// ERPNextError represents an error from Frappe API
+// Named ERPNextError for backward compatibility, but works with any Frappe app
 type ERPNextError struct {
 	Message    string `json:"message"`
 	StatusCode int    `json:"status_code"`
@@ -13,7 +14,7 @@ func (e *ERPNextError) Error() string {
 	return e.Message
 }
 
-// Document represents a generic ERPNext document
+// Document represents a generic Frappe document (works with any Frappe app)
 type Document map[string]interface{}
 
 // DocumentList represents a list of documents with pagination
@@ -95,4 +96,75 @@ type ProjectMetrics struct {
 	Efficiency float64 `json:"efficiency"`
 	RiskScore  float64 `json:"risk_score"`
 	Health     string  `json:"health"`
+}
+
+// User represents an authenticated user in the system
+type User struct {
+	ID        string                 `json:"id"`
+	Email     string                 `json:"email"`
+	FullName  string                 `json:"full_name"`
+	Roles     []string               `json:"roles,omitempty"`
+	ClientID  string                 `json:"client_id,omitempty"`
+	Token     string                 `json:"-"` // OAuth2 token (not serialized in JSON)
+	SessionID string                 `json:"-"` // Frappe session ID (sid cookie value)
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// GetID implements a simple auth.Info interface
+func (u *User) GetID() string {
+	return u.ID
+}
+
+// GetUserName returns the user's email as the username
+func (u *User) GetUserName() string {
+	return u.Email
+}
+
+// GetGroups returns the user's roles
+func (u *User) GetGroups() []string {
+	return u.Roles
+}
+
+// GetExtensions returns the user's metadata
+func (u *User) GetExtensions() map[string][]string {
+	// Convert metadata to string map for compatibility
+	result := make(map[string][]string)
+	for k, v := range u.Metadata {
+		if str, ok := v.(string); ok {
+			result[k] = []string{str}
+		}
+	}
+	return result
+}
+
+// AggregationRequest represents a request for aggregated data
+type AggregationRequest struct {
+	DocType string                 `json:"doctype" validate:"required"`
+	Fields  []string               `json:"fields"`                  // ["customer", "SUM(grand_total) as total"]
+	Filters map[string]interface{} `json:"filters,omitempty"`       // {"status": "Paid"}
+	GroupBy string                 `json:"group_by,omitempty"`      // "customer"
+	OrderBy string                 `json:"order_by,omitempty"`      // "total desc"
+	Limit   int                    `json:"limit,omitempty"`         // 5
+}
+
+// ReportRequest represents a request to run a Frappe report
+type ReportRequest struct {
+	ReportName string                 `json:"report_name" validate:"required"` // "Sales Analytics"
+	Filters    map[string]interface{} `json:"filters,omitempty"`                // Report filters
+	User       string                 `json:"user,omitempty"`                   // User context
+}
+
+// ReportResponse represents the response from a report query
+type ReportResponse struct {
+	Columns []ReportColumn `json:"columns"` // Column definitions
+	Data    [][]interface{} `json:"data"`    // Report data (2D array)
+	Message string         `json:"message,omitempty"`
+}
+
+// ReportColumn represents a column in a report
+type ReportColumn struct {
+	Label     string `json:"label"`
+	FieldName string `json:"fieldname"`
+	FieldType string `json:"fieldtype"`
+	Width     int    `json:"width,omitempty"`
 }
