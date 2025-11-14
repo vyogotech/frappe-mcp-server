@@ -11,14 +11,14 @@ services:
     ports:
       - "${MCP_PORT:-8080}:8080"
     environment:
-      # ERPNext Configuration
-      ERPNEXT_BASE_URL: ${ERPNEXT_BASE_URL:-http://localhost:8000}
-      ERPNEXT_API_KEY: ${ERPNEXT_API_KEY}
-      ERPNEXT_API_SECRET: ${ERPNEXT_API_SECRET}
+      # Frappe Instance Configuration
+      FRAPPE_BASE_URL: ${FRAPPE_BASE_URL:-http://erpnext:8000}
+      FRAPPE_API_KEY: ${FRAPPE_API_KEY}
+      FRAPPE_API_SECRET: ${FRAPPE_API_SECRET}
       
-      # Ollama Configuration (for AI features)
-      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      # LLM Configuration (for AI features)
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
+      LLM_MODEL: ${LLM_MODEL:-llama3.2:1b}
       
       # Server Configuration
       SERVER_HOST: 0.0.0.0
@@ -33,7 +33,7 @@ services:
     networks:
       - erpnext-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -46,7 +46,9 @@ services:
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
     volumes:
-      - ollama_data:/root/.ollama
+      # Mount local ollama models to container
+      - /Users/varkrish/.ollama:/root/.ollama
+      # - ollama_data:/root/.ollama  # Commented out - conflicts with local mount
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
       OLLAMA_ORIGINS: "*"
@@ -54,7 +56,7 @@ services:
     networks:
       - erpnext-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD-SHELL", "ollama list || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -62,43 +64,52 @@ services:
 
   # Open WebUI (Web Interface for AI Chat)
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:latest
     restart: unless-stopped
     ports:
-      - "${WEBUI_PORT:-3000}:8080"
+      - "9080:8080"
     volumes:
       - open_webui_data:/app/backend/data
-      - ./open_webui_functions:/app/backend/functions:ro
+      # - ./open_webui_functions:/app/backend/functions:ro
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:-change-this-secret-key}
       ENABLE_SIGNUP: ${ENABLE_SIGNUP:-true}
       DEFAULT_USER_ROLE: user
       WEBUI_NAME: "ERPNext AI Assistant"
-      ENABLE_RAG_HYBRID_SEARCH: true
+      # ENABLE_RAG_HYBRID_SEARCH: true
+      
+      # OAuth2 Configuration (Optional - enables "Login with Frappe")
+      # Uncomment and configure after creating OAuth client in Frappe
+      # OAUTH_CLIENT_ID: ${FRAPPE_OAUTH_CLIENT_ID:-}
+      # OAUTH_CLIENT_SECRET: ${FRAPPE_OAUTH_CLIENT_SECRET:-}
+      # OAUTH_PROVIDER_NAME: "Frappe"
+      # OPENID_PROVIDER_URL: ${FRAPPE_BASE_URL:-http://localhost:8000}/.well-known/openid-configuration
     depends_on:
       ollama:
         condition: service_healthy
       frappe-mcp-server:
-        condition: service_healthy
+        condition: service_started
     networks:
       - erpnext-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 120s
 
   # ERPNext (Optional - only if you want to run ERPNext locally)
   # Remove this if you have ERPNext running elsewhere
+  # Using Vyogo SNE custom version
   erpnext:
-    image: frappe/erpnext:latest
-    profiles:
-      - full-stack  # Only start with: docker compose --profile full-stack up
-    restart: unless-stopped
+    image: docker.io/vyogo/erpnext:sne-version-15
+    # profiles:
+    #   - full-stack  # Only start with: docker compose --profile full-stack up
+    # restart: unless-stopped
     ports:
       - "${ERPNEXT_PORT:-8000}:8000"
+    #command: sleep infinity
     environment:
       SITES: erpnext.local
       SITE_NAME: erpnext.local
@@ -107,6 +118,8 @@ services:
     volumes:
       - erpnext_data:/home/frappe/frappe-bench/sites
       - erpnext_logs:/home/frappe/frappe-bench/logs
+      #mount frappe_ai
+      - /Users/varkrish/personal/frappista_sne_apps/apps/frappe_ai:/home/frappe/frappe-bench/apps/frappe_ai
     networks:
       - erpnext-network
     healthcheck:
