@@ -128,9 +128,9 @@ erpnext:
 	// Set environment variables
 	originalVars := map[string]string{
 		"CONFIG_FILE":        os.Getenv("CONFIG_FILE"),
-		"ERPNEXT_BASE_URL":   os.Getenv("ERPNEXT_BASE_URL"),
-		"ERPNEXT_API_KEY":    os.Getenv("ERPNEXT_API_KEY"),
-		"ERPNEXT_API_SECRET": os.Getenv("ERPNEXT_API_SECRET"),
+		"FRAPPE_BASE_URL":    os.Getenv("FRAPPE_BASE_URL"),
+		"FRAPPE_API_KEY":     os.Getenv("FRAPPE_API_KEY"),
+		"FRAPPE_API_SECRET":  os.Getenv("FRAPPE_API_SECRET"),
 		"SERVER_HOST":        os.Getenv("SERVER_HOST"),
 		"SERVER_PORT":        os.Getenv("SERVER_PORT"),
 		"LOG_LEVEL":          os.Getenv("LOG_LEVEL"),
@@ -138,9 +138,9 @@ erpnext:
 
 	// Set test environment variables
 	_ = os.Setenv("CONFIG_FILE", tmpFile.Name())
-	_ = os.Setenv("ERPNEXT_BASE_URL", "https://env.erpnext.com")
-	_ = os.Setenv("ERPNEXT_API_KEY", "env_key")
-	_ = os.Setenv("ERPNEXT_API_SECRET", "env_secret")
+	_ = os.Setenv("FRAPPE_BASE_URL", "https://env.erpnext.com")
+	_ = os.Setenv("FRAPPE_API_KEY", "env_key")
+	_ = os.Setenv("FRAPPE_API_SECRET", "env_secret")
 	_ = os.Setenv("SERVER_HOST", "env_host")
 	_ = os.Setenv("SERVER_PORT", "9090")
 	_ = os.Setenv("LOG_LEVEL", "debug")

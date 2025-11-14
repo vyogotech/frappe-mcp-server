@@ -201,9 +201,9 @@ go test -v ./...
 
 ```bash
 # Requires ERPNext running
-export ERPNEXT_BASE_URL="http://localhost:8000"
-export ERPNEXT_API_KEY="your_key"
-export ERPNEXT_API_SECRET="your_secret"
+export FRAPPE_BASE_URL="http://localhost:8000"
+export FRAPPE_API_KEY="your_key"
+export FRAPPE_API_SECRET="your_secret"
 
 go test -tags=integration ./...
 ```

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"frappe-mcp-server/internal/auth"
+	"frappe-mcp-server/internal/auth/strategies"
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/llm"
@@ -21,23 +23,25 @@ import (
 
 // MCPServer represents the MCP server
 type MCPServer struct {
-	config       *config.Config
-	frappeClient *frappe.Client
-	llmClient    llm.Client
-	server       *mcp.Server
-	httpServer   *http.Server
-	tools        *tools.ToolRegistry
+	config         *config.Config
+	frappeClient   *frappe.Client
+	llmClient      llm.Client
+	server         *mcp.Server
+	httpServer     *http.Server
+	tools          *tools.ToolRegistry
+	authMiddleware *auth.Middleware
 }
 
 // QueryIntent represents the extracted intent from a natural language query
 type QueryIntent struct {
-	Action         string                 // The intended action (get, list, search, analyze, etc.)
-	DocType        string                 // ERPNext doctype (Project, Customer, Item, etc.)
-	EntityName     string                 // Specific entity name if querying a specific document
-	Tool           string                 // The MCP tool to call
-	Params         json.RawMessage        // Parameters for the tool
-	RequiresSearch bool                   // Whether we need to search for the entity first
-	Confidence     float64                // AI confidence in the extraction (0-1)
+	Action           string                 // The intended action (get, list, search, analyze, etc.)
+	DocType          string                 // ERPNext doctype (Project, Customer, Item, etc.)
+	EntityName       string                 // Specific entity name if querying a specific document
+	Tool             string                 // The MCP tool to call
+	Params           json.RawMessage        // Parameters for the tool
+	RequiresSearch   bool                   // Whether we need to search for the entity first
+	IsERPNextRelated bool                   // Whether the query is about ERPNext data or general
+	Confidence       float64                // AI confidence in the extraction (0-1)
 }
 
 // SearchResult represents the result of searching for an entity
@@ -68,6 +72,22 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 		llmClient:    llmClient,
 		server:       server,
 		tools:        toolRegistry,
+	}
+
+	// Setup authentication if enabled
+	if cfg.Auth.Enabled {
+		slog.Info("Authentication enabled", "require_auth", cfg.Auth.RequireAuth)
+		oauth2Strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{
+			TokenInfoURL:   cfg.Auth.OAuth2.TokenInfoURL,
+			IssuerURL:      cfg.Auth.OAuth2.IssuerURL,
+			TrustedClients: cfg.Auth.OAuth2.TrustedClients,
+			Timeout:        cfg.Auth.OAuth2.Timeout,
+			CacheTTL:       cfg.Auth.TokenCache.TTL,
+			ValidateRemote: cfg.Auth.OAuth2.ValidateRemote,
+		})
+		mcpServer.authMiddleware = auth.NewMiddleware(oauth2Strategy, cfg.Auth.RequireAuth)
+	} else {
+		slog.Info("Authentication disabled")
 	}
 
 	// Setup HTTP server with health checks and MCP endpoints
@@ -181,7 +201,19 @@ func (s *MCPServer) metrics(w http.ResponseWriter, r *http.Request) {
 
 // withMiddleware applies middleware to HTTP handlers
 func (s *MCPServer) withMiddleware(handler http.Handler) http.Handler {
-	return s.loggingMiddleware(s.corsMiddleware(handler))
+	// Chain middleware: logging -> CORS -> auth -> handler
+	h := handler
+	
+	// Apply auth middleware if enabled
+	if s.authMiddleware != nil {
+		h = s.authMiddleware.Handler(h)
+	}
+	
+	// Apply CORS and logging
+	h = s.corsMiddleware(h)
+	h = s.loggingMiddleware(h)
+	
+	return h
 }
 
 // loggingMiddleware logs HTTP requests
@@ -253,6 +285,10 @@ func (s *MCPServer) registerTools() error {
 	s.server.RegisterTool("update_document", s.tools.UpdateDocument)
 	s.server.RegisterTool("delete_document", s.tools.DeleteDocument)
 	s.server.RegisterTool("search_documents", s.tools.SearchDocuments)
+	
+	// Aggregation and reporting tools (2 - For analytics and reports)
+	s.server.RegisterTool("aggregate_documents", s.tools.AggregateDocuments)
+	s.server.RegisterTool("run_report", s.tools.RunReport)
 
 	// Generic analysis tool (1 - Replaces 9 doctype-specific tools!)
 	s.server.RegisterTool("analyze_document", s.tools.AnalyzeDocument)
@@ -269,7 +305,7 @@ func (s *MCPServer) registerTools() error {
 	s.server.RegisterTool("resource_utilization_analysis", s.tools.ResourceUtilizationAnalysis)
 	s.server.RegisterTool("budget_variance_analysis", s.tools.BudgetVarianceAnalysis)
 
-	slog.Info("Registered MCP tools", "count", 16, "core", 7, "legacy", 9)
+	slog.Info("Registered MCP tools", "count", 18, "core", 9, "legacy", 9)
 	return nil
 }
 
@@ -329,6 +365,15 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 		{
 			"name":        "search_documents",
 			"description": "Search ERPNext documents using full-text search",
+		},
+		// Aggregation and reporting tools
+		{
+			"name":        "aggregate_documents",
+			"description": "Perform aggregation queries (SUM, COUNT, AVG, GROUP BY, TOP N) on ERPNext data",
+		},
+		{
+			"name":        "run_report",
+			"description": "Execute Frappe/ERPNext reports (Sales Analytics, Purchase Register, etc.)",
 		},
 		// Generic analysis tool
 		{
@@ -551,11 +596,107 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 		"action", queryIntent.Action,
 		"doctype", queryIntent.DocType,
 		"entity_name", queryIntent.EntityName,
-		"tool", queryIntent.Tool)
+		"tool", queryIntent.Tool,
+		"is_erpnext_related", queryIntent.IsERPNextRelated)
 
 	var result *mcp.ToolResponse
 	var toolsCalled []string
 	ctx := r.Context()
+
+	// Check if query is ERPNext-related
+	if !queryIntent.IsERPNextRelated {
+		slog.Info("Non-ERPNext query detected, providing polite decline")
+		response := map[string]interface{}{
+			"timestamp":      time.Now().Format(time.RFC3339),
+			"tools_called":   []string{},
+			"response":       "I'm an ERPNext assistant specialized in helping you with your business data (customers, invoices, projects, items, etc.). For general questions or other topics, please use a general-purpose AI assistant.",
+			"is_valid_data":  false,
+			"data_quality":   "not_applicable",
+			"data_size":      0,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			slog.Error("Failed to encode response", "error", err)
+		}
+		slog.Info("Chat response sent", "data_size", 0)
+		return
+	}
+
+	// Special handling for create operations
+	if queryIntent.Action == "create" {
+		slog.Info("Processing create query", "doctype", queryIntent.DocType)
+		params, err := s.extractCreateParams(ctx, chatRequest.Message, queryIntent.DocType)
+		if err != nil {
+			slog.Warn("Failed to extract create params", "error", err)
+			err = fmt.Errorf("failed to process create query: %w", err)
+		} else {
+			toolsCalled = append(toolsCalled, "create_document")
+			result, err = s.executeTool(ctx, "create_document", params)
+		}
+		// Skip to response building
+		goto buildResponse
+	}
+	
+	// Special handling for update operations
+	if queryIntent.Action == "update" {
+		slog.Info("Processing update query", "doctype", queryIntent.DocType, "entity", queryIntent.EntityName)
+		params, err := s.extractUpdateParams(ctx, chatRequest.Message, queryIntent.DocType, queryIntent.EntityName)
+		if err != nil {
+			slog.Warn("Failed to extract update params", "error", err)
+			err = fmt.Errorf("failed to process update query: %w", err)
+		} else {
+			toolsCalled = append(toolsCalled, "update_document")
+			result, err = s.executeTool(ctx, "update_document", params)
+		}
+		// Skip to response building
+		goto buildResponse
+	}
+	
+	// Special handling for delete operations
+	if queryIntent.Action == "delete" {
+		slog.Info("Processing delete query", "doctype", queryIntent.DocType, "entity", queryIntent.EntityName)
+		// Delete just needs doctype and name
+		params := map[string]interface{}{
+			"doctype": queryIntent.DocType,
+			"name":    queryIntent.EntityName,
+		}
+		paramsJSON, _ := json.Marshal(params)
+		toolsCalled = append(toolsCalled, "delete_document")
+		result, err = s.executeTool(ctx, "delete_document", paramsJSON)
+		// Skip to response building
+		goto buildResponse
+	}
+	
+	// Special handling for aggregate queries
+	if queryIntent.Action == "aggregate" {
+		slog.Info("Processing aggregation query")
+		params, err := s.extractAggregationParams(ctx, chatRequest.Message, queryIntent.DocType)
+		if err != nil {
+			slog.Warn("Failed to extract aggregation params", "error", err)
+			err = fmt.Errorf("failed to process aggregation query: %w", err)
+		} else {
+			toolsCalled = append(toolsCalled, "aggregate_documents")
+			result, err = s.executeTool(ctx, "aggregate_documents", params)
+		}
+		// Skip to response building
+		goto buildResponse
+	}
+
+	// Special handling for report queries
+	if queryIntent.Action == "report" {
+		slog.Info("Processing report query")
+		params, err := s.extractReportParams(ctx, chatRequest.Message)
+		if err != nil {
+			slog.Warn("Failed to extract report params", "error", err)
+			err = fmt.Errorf("failed to process report query: %w", err)
+		} else {
+			toolsCalled = append(toolsCalled, "run_report")
+			result, err = s.executeTool(ctx, "run_report", params)
+		}
+		// Skip to response building
+		goto buildResponse
+	}
 
 	// Check if entity_name looks like an exact ID (e.g., PROJ-0001, CUST-123)
 	// If yes, use direct get_document instead of searching
@@ -595,6 +736,7 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 		result, err = s.executeTool(ctx, queryIntent.Tool, queryIntent.Params)
 	}
 
+buildResponse:
 	// Build response in expected format
 	response := map[string]interface{}{
 		"timestamp":   time.Now().Format(time.RFC3339),
@@ -618,14 +760,26 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 		}
 		
 		responseStr := responseText.String()
-		response["response"] = responseStr
-		response["data_size"] = len(responseStr)
-		response["is_valid_data"] = len(responseStr) > 0
+		
+		// Use LLM to format the response nicely if available
+		formattedResponse := responseStr
+		if s.llmClient != nil {
+			formatted, err := s.formatResponseWithLLM(ctx, chatRequest.Message, responseStr)
+			if err != nil {
+				slog.Warn("Failed to format response with LLM, using raw data", "error", err)
+			} else {
+				formattedResponse = formatted
+			}
+		}
+		
+		response["response"] = formattedResponse
+		response["data_size"] = len(formattedResponse)
+		response["is_valid_data"] = len(formattedResponse) > 0
 		
 		// Determine data quality based on response size
-		if len(responseStr) > 1000 {
+		if len(formattedResponse) > 1000 {
 			response["data_quality"] = "high"
-		} else if len(responseStr) > 100 {
+		} else if len(formattedResponse) > 100 {
 			response["data_quality"] = "medium"
 		} else {
 			response["data_quality"] = "low"
@@ -645,8 +799,429 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Chat response sent", "data_size", response["data_size"])
 }
 
+// formatResponseWithLLM uses the LLM to format raw data into a user-friendly response
+func (s *MCPServer) formatResponseWithLLM(ctx context.Context, userQuery string, rawData string) (string, error) {
+	prompt := fmt.Sprintf(`You are a data formatter that converts JSON data into user-requested formats.
+
+CRITICAL RULES:
+1. NEVER MAKE UP OR INVENT DATA - Only format what's actually in the raw data
+2. If raw data contains an error message, show it clearly to the user
+3. If raw data is empty or has no results, say so explicitly
+4. DO NOT add placeholder data like "Item 1", "Item 2", etc.
+5. Only format the ACTUAL data provided below
+
+User's Question: "%s"
+Raw Data: %s
+
+FORMAT DETECTION:
+- "table format" / "as a table" / "in table" → Use markdown table with | separators
+- "list" / "bullet points" → Use bullet points (-)
+- "summary" / "summarize" → Provide a brief summary
+- If no format specified → Use the most appropriate format
+
+MARKDOWN TABLE FORMAT (when user asks for table):
+| Column1 | Column2 | Column3 |
+|---------|---------|---------|
+| Value1  | Value2  | Value3  |
+
+BULLET LIST FORMAT (when user asks for list):
+- Item 1
+- Item 2
+- Item 3
+
+EXAMPLES:
+
+Example 1 - With Real Data:
+User: "show companies in table format"
+Data: {"data":[{"name":"VK","company_name":"VK Corp"}],"total_count":1}
+Response:
+Here are the companies in table format:
+
+| Name | Company Name |
+|------|--------------|
+| VK   | VK Corp      |
+
+Total: 1 company
+
+Example 2 - Empty Data:
+User: "list all customers"
+Data: {"data":[],"total_count":0}
+Response:
+No customers found in the system.
+
+Example 3 - Error in Data:
+User: "show warehouses"
+Data: Error processing query: doctype is required
+Response:
+I encountered an error: The query couldn't be processed because the document type is required. Please try rephrasing your question.
+
+NOW FORMAT THE USER'S DATA:
+- Look at the Raw Data above
+- If it contains actual data, format it according to user's request
+- If it's an error message, explain the error clearly
+- If it's empty, say no results were found
+- NEVER invent placeholder data`, userQuery, rawData)
+
+	formatted, err := s.llmClient.Generate(ctx, prompt)
+	if err != nil {
+		return "", fmt.Errorf("failed to call LLM for formatting: %w", err)
+	}
+	
+	return formatted, nil
+}
+
+// extractAggregationParams uses LLM to extract aggregation parameters from query
+func (s *MCPServer) extractAggregationParams(ctx context.Context, query string, doctype string) (json.RawMessage, error) {
+	if s.llmClient == nil {
+		return nil, fmt.Errorf("LLM client not available")
+	}
+
+	prompt := fmt.Sprintf(`Extract aggregation parameters from this query.
+
+Query: "%s"
+DocType: "%s"
+
+CRITICAL: You MUST use the provided DocType "%s" exactly as given. DO NOT change it or make up a new one.
+
+Determine:
+1. doctype: MUST be "%s" (the provided doctype - DO NOT CHANGE THIS)
+2. fields: What fields to select/aggregate (e.g., ["customer", "SUM(grand_total) as total_revenue"])
+3. group_by: Field to group by (e.g., "customer")
+4. order_by: How to sort (e.g., "total_revenue desc")
+5. limit: Top N results (e.g., 5)
+6. filters: Any filters to apply (e.g., {"status": "Paid"})
+
+Common patterns for Sales Invoice:
+- "top 5 customers by revenue" → doctype="Sales Invoice", limit=5, group_by="customer", order_by="SUM(grand_total) desc", fields=["customer", "SUM(grand_total) as total_revenue"]
+- "total sales by customer" → doctype="Sales Invoice", group_by="customer", fields=["customer", "SUM(grand_total) as total"]
+- "which items sold most" → doctype="Sales Order Item", group_by="item_code", order_by="SUM(qty) desc", fields=["item_code", "SUM(qty) as quantity_sold"]
+
+Respond with JSON only:
+{
+  "doctype": "%s",
+  "fields": ["...", "..."],
+  "group_by": "...",
+  "order_by": "...",
+  "limit": 5,
+  "filters": {}
+}`, query, doctype, doctype, doctype, doctype)
+
+	response, err := s.llmClient.Generate(ctx, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract aggregation params: %w", err)
+	}
+
+	// Validate JSON
+	var params map[string]interface{}
+	if err := json.Unmarshal([]byte(response), &params); err != nil {
+		return nil, fmt.Errorf("invalid aggregation params JSON: %w", err)
+	}
+
+	// FORCE the doctype to be the one provided (prevent hallucination)
+	if doctype != "" {
+		params["doctype"] = doctype
+	} else if params["doctype"] == nil || params["doctype"] == "" {
+		return nil, fmt.Errorf("doctype is required for aggregation")
+	}
+
+	return json.Marshal(params)
+}
+
+// extractReportParams uses LLM to extract report parameters from query
+func (s *MCPServer) extractReportParams(ctx context.Context, query string) (json.RawMessage, error) {
+	if s.llmClient == nil {
+		return nil, fmt.Errorf("LLM client not available")
+	}
+
+	prompt := fmt.Sprintf(`Extract report parameters from this query.
+
+Query: "%s"
+
+Determine:
+1. report_name: The exact ERPNext report name (e.g., "Sales Analytics", "Purchase Register", "Customer Ledger Summary")
+2. filters: Any filters mentioned (e.g., {"company": "XYZ Corp", "from_date": "2024-01-01"})
+
+Common ERPNext reports:
+- Sales Analytics, Sales Register, Sales Order Analysis
+- Purchase Register, Purchase Analytics
+- Customer Ledger Summary, Supplier Ledger Summary
+- Stock Balance, Stock Ledger
+- Profit and Loss Statement, Balance Sheet
+- General Ledger
+
+Respond with JSON only:
+{
+  "report_name": "...",
+  "filters": {}
+}`, query)
+
+	response, err := s.llmClient.Generate(ctx, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract report params: %w", err)
+	}
+
+	// Validate JSON
+	var params map[string]interface{}
+	if err := json.Unmarshal([]byte(response), &params); err != nil {
+		return nil, fmt.Errorf("invalid report params JSON: %w", err)
+	}
+
+	return json.Marshal(params)
+}
+
+// extractCreateParams uses LLM to extract field values for document creation
+func (s *MCPServer) extractCreateParams(ctx context.Context, query string, doctype string) (json.RawMessage, error) {
+	if s.llmClient == nil {
+		return nil, fmt.Errorf("LLM client not available")
+	}
+
+	prompt := fmt.Sprintf(`Extract field values from this document creation query.
+
+Query: "%s"
+DocType: "%s"
+
+CRITICAL: Extract ONLY the field values mentioned in the query. Do NOT invent or assume values not explicitly stated.
+
+Common ERPNext DocType fields:
+- Project: project_name (required), status, expected_start_date, expected_end_date, priority
+- Customer: customer_name (required), customer_type, customer_group, territory
+- Item: item_code (required), item_name, item_group, stock_uom
+- Task: subject (required), project, status, priority, exp_start_date, exp_end_date
+- User: email (required), first_name, last_name, enabled
+- Company: company_name (required), abbr, default_currency
+
+Extract values into a "data" object with field names as keys.
+
+Examples:
+
+Query: "create a project named Website Redesign"
+Response: {
+  "doctype": "Project",
+  "data": {
+    "project_name": "Website Redesign"
+  }
+}
+
+Query: "add a new customer called Acme Corp with type Company"
+Response: {
+  "doctype": "Customer",
+  "data": {
+    "customer_name": "Acme Corp",
+    "customer_type": "Company"
+  }
+}
+
+Query: "create task Review PR with priority High for project PROJ-0001"
+Response: {
+  "doctype": "Task",
+  "data": {
+    "subject": "Review PR",
+    "priority": "High",
+    "project": "PROJ-0001"
+  }
+}
+
+Respond with JSON only:
+{
+  "doctype": "%s",
+  "data": {
+    "field_name": "value"
+  }
+}`, query, doctype, doctype)
+
+	response, err := s.llmClient.Generate(ctx, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract create params: %w", err)
+	}
+
+	// Validate JSON
+	var params map[string]interface{}
+	if err := json.Unmarshal([]byte(response), &params); err != nil {
+		return nil, fmt.Errorf("invalid create params JSON: %w", err)
+	}
+
+	// Ensure doctype is set
+	if params["doctype"] == nil || params["doctype"] == "" {
+		params["doctype"] = doctype
+	}
+
+	// Ensure data field exists
+	if params["data"] == nil {
+		return nil, fmt.Errorf("no field data extracted from query")
+	}
+
+	return json.Marshal(params)
+}
+
+// extractUpdateParams uses LLM to extract field values for document updates
+func (s *MCPServer) extractUpdateParams(ctx context.Context, query string, doctype string, entityName string) (json.RawMessage, error) {
+	if s.llmClient == nil {
+		return nil, fmt.Errorf("LLM client not available")
+	}
+
+	prompt := fmt.Sprintf(`Extract field values from this document update query.
+
+Query: "%s"
+DocType: "%s"
+Document Name: "%s"
+
+CRITICAL: Extract ONLY the fields to be updated. Do NOT include the document name in the data.
+
+Extract values into a "data" object with field names as keys.
+
+Examples:
+
+Query: "update project PROJ-0001 status to Completed"
+Response: {
+  "doctype": "Project",
+  "name": "PROJ-0001",
+  "data": {
+    "status": "Completed"
+  }
+}
+
+Query: "change task TASK-123 priority to High and status to Working"
+Response: {
+  "doctype": "Task",
+  "name": "TASK-123",
+  "data": {
+    "priority": "High",
+    "status": "Working"
+  }
+}
+
+Query: "set customer CUST-001 territory to North America"
+Response: {
+  "doctype": "Customer",
+  "name": "CUST-001",
+  "data": {
+    "territory": "North America"
+  }
+}
+
+Respond with JSON only:
+{
+  "doctype": "%s",
+  "name": "%s",
+  "data": {
+    "field_name": "new_value"
+  }
+}`, query, doctype, entityName, doctype, entityName)
+
+	response, err := s.llmClient.Generate(ctx, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract update params: %w", err)
+	}
+
+	// Validate JSON
+	var params map[string]interface{}
+	if err := json.Unmarshal([]byte(response), &params); err != nil {
+		return nil, fmt.Errorf("invalid update params JSON: %w", err)
+	}
+
+	// Ensure required fields are set
+	if params["doctype"] == nil || params["doctype"] == "" {
+		params["doctype"] = doctype
+	}
+	if params["name"] == nil || params["name"] == "" {
+		params["name"] = entityName
+	}
+	if params["data"] == nil {
+		return nil, fmt.Errorf("no field data extracted from query")
+	}
+
+	return json.Marshal(params)
+}
+
+// extractDoctypeFromQuery extracts ERPNext doctype from query using pattern matching
+func extractDoctypeFromQuery(queryLower string) string {
+	// Map of common terms to ERPNext doctypes
+	doctypeMap := map[string]string{
+		"user":          "User",
+		"users":         "User",
+		"customer":      "Customer",
+		"customers":     "Customer",
+		"company":       "Company",
+		"companies":     "Company",
+		"item":          "Item",
+		"items":         "Item",
+		"warehouse":     "Warehouse",
+		"warehouses":    "Warehouse",
+		"project":       "Project",
+		"projects":      "Project",
+		"task":          "Task",
+		"tasks":         "Task",
+		"sales order":   "Sales Order",
+		"sales orders":  "Sales Order",
+		"sales invoice": "Sales Invoice",
+		"sales invoices": "Sales Invoice",
+		"purchase order": "Purchase Order",
+		"purchase orders": "Purchase Order",
+		"supplier":      "Supplier",
+		"suppliers":     "Supplier",
+		"employee":      "Employee",
+		"employees":     "Employee",
+	}
+	
+	// Check for matches in the query
+	for term, doctype := range doctypeMap {
+		if strings.Contains(queryLower, term) {
+			return doctype
+		}
+	}
+	
+	return "" // No match found
+}
+
 // extractQueryIntent uses AI to extract intent and entities from natural language query
 func (s *MCPServer) extractQueryIntent(ctx context.Context, query string) (*QueryIntent, error) {
+	// PREPROCESSING: Detect simple list queries before calling LLM
+	// This prevents LLM from misclassifying simple "list" queries as "aggregate"
+	queryLower := strings.ToLower(query)
+	
+	// Check for list keywords without aggregation keywords
+	hasListKeyword := strings.Contains(queryLower, "list") || 
+	                  strings.Contains(queryLower, "show all") || 
+	                  strings.Contains(queryLower, "give all") ||
+	                  strings.Contains(queryLower, "all ")
+	
+	hasAggregationKeyword := strings.Contains(queryLower, "top ") ||
+	                         strings.Contains(queryLower, "bottom ") ||
+	                         strings.Contains(queryLower, "sum") ||
+	                         strings.Contains(queryLower, "total") ||
+	                         strings.Contains(queryLower, "average") ||
+	                         strings.Contains(queryLower, "count") ||
+	                         strings.Contains(queryLower, "most") ||
+	                         strings.Contains(queryLower, "highest") ||
+	                         strings.Contains(queryLower, "lowest")
+	
+	// If query has "list" but NO aggregation keywords, it's definitely a list query
+	if hasListKeyword && !hasAggregationKeyword {
+		slog.Info("Preprocessing detected simple list query", "query", query)
+		
+		// Extract doctype from query using simple pattern matching
+		doctype := extractDoctypeFromQuery(queryLower)
+		if doctype == "" {
+			doctype = "User" // Default fallback
+		}
+		
+		params := map[string]interface{}{
+			"doctype": doctype,
+		}
+		paramsJSON, _ := json.Marshal(params)
+		
+		return &QueryIntent{
+			Action:           "list",
+			DocType:          doctype,
+			EntityName:       "",
+			Tool:             "list_documents",
+			Params:           paramsJSON,
+			RequiresSearch:   false,
+			IsERPNextRelated: true,
+			Confidence:       0.95,
+		}, nil
+	}
+	
 	// Check if LLM client is available
 	if s.llmClient == nil {
 		return nil, fmt.Errorf("LLM client not available - AI features disabled")
@@ -657,22 +1232,42 @@ func (s *MCPServer) extractQueryIntent(ctx context.Context, query string) (*Quer
 	// Construct prompt for AI to extract structured information
 	prompt := fmt.Sprintf(`You are an ERPNext query parser. Extract structured information from the user's query and respond ONLY with valid JSON.
 
-CRITICAL: Extract the exact entity name/ID mentioned in the query!
+CRITICAL RULES (APPLY IN THIS ORDER):
+1. If query contains the word "list", "all", "show all", "give list", "user list", etc. → action is ALWAYS "list"
+2. If query asks for "top N", "bottom N", "most", "highest", "sum", "total", "average", "count" → action is "aggregate"
+3. If query mentions running a "report" by name → action is "report"
+4. If query mentions a SPECIFIC entity name/ID → action is "get"
+5. "list" and "aggregate" actions ALWAYS have empty entity_name ""
+
+SIMPLE RULE: If you see "list" or "all" in the query → IT IS A LIST ACTION, NOT AGGREGATE!
 
 User Query: "%s"
 
 Extract these fields:
-1. action: what the user wants to do (get, list, search, analyze, create, update, delete)
-2. doctype: the ERPNext document type (Project, Customer, Item, Task, etc.)
-3. entity_name: THE EXACT entity name, ID, or title from the query
-   - If query mentions "PROJ-0001", extract "PROJ-0001"
-   - If query mentions "project titled Website", extract "Website"
-   - If query says "all projects" or "list projects", use empty string ""
-   - LOOK FOR: IDs (PROJ-0001, CUST-123), names after "called/named/titled", quoted names
-4. requires_search: true if entity_name is NOT an exact ID, false if it's an ID or empty
+1. is_erpnext_related: CRITICAL - Is this query about ERPNext business data?
+   - true: Queries about customers, invoices, users, items, warehouses, reports, sales, etc.
+   - false: General questions like "what are you?", "hello", "help", "who made you?", math problems, general knowledge
+2. action: what the user wants to do (ONLY if is_erpnext_related is true)
+   - "list": when asking for multiple/all documents (simple listing) - DEFAULT for "list", "all", "show all"
+   - "aggregate": for queries with top/bottom N, sum, count, average, grouping, rankings (ONLY when explicit math/aggregation keywords)
+   - "report": when asking to run a specific ERPNext report by name
+   - "get": when asking for ONE specific document by name/ID
+   - "search": when searching with criteria
+   - "analyze": when asking for analysis/status/metrics of a specific document
+   - "create/update/delete": for modifications
+3. doctype: the ERPNext document type (User, Customer, Company, Project, Item, Task, Sales Order, Sales Invoice, Warehouse, etc.)
+   - MUST be a valid ERPNext DocType
+   - Map common terms: "user" → "User", "customer" → "Customer", "invoice" → "Sales Invoice", "warehouse" → "Warehouse", "item" → "Item"
+   - NEVER use made-up doctypes like "QueryResponse" or "UserList"
+   - Empty if is_erpnext_related is false
+4. entity_name: THE EXACT entity name/ID (empty for list/aggregate/report/search!)
+   - For aggregate/list/report queries → MUST be empty ""
+   - For "get X named Y" or "X with ID Y" → extract Y
+5. requires_search: true if entity_name is NOT an exact ID, false if it's an ID or empty
 
 Respond with JSON only:
 {
+  "is_erpnext_related": true/false,
   "action": "...",
   "doctype": "...",
   "entity_name": "...",
@@ -681,23 +1276,72 @@ Respond with JSON only:
 }
 
 Examples:
+
+Query: "what are you?"
+Response: {"is_erpnext_related":false,"action":"","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "hello"
+Response: {"is_erpnext_related":false,"action":"","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "help me"
+Response: {"is_erpnext_related":false,"action":"","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "what is 2+2?"
+Response: {"is_erpnext_related":false,"action":"","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "give user list"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"User","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "user list"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"User","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "give list of user"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"User","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "give the list of companies"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"Company","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "show all customers"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"Customer","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "give me warehouse list"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"Warehouse","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "list all items"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"Item","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "top 5 customers by revenue"
+Response: {"is_erpnext_related":true,"action":"aggregate","doctype":"Sales Invoice","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "show me total sales by customer"
+Response: {"is_erpnext_related":true,"action":"aggregate","doctype":"Sales Invoice","entity_name":"","requires_search":false,"confidence":0.9}
+
+Query: "which items sold the most"
+Response: {"is_erpnext_related":true,"action":"aggregate","doctype":"Sales Invoice","entity_name":"","requires_search":false,"confidence":0.9}
+
+Query: "run Sales Analytics report"
+Response: {"is_erpnext_related":true,"action":"report","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "get user john@example.com"
+Response: {"is_erpnext_related":true,"action":"get","doctype":"User","entity_name":"john@example.com","requires_search":false,"confidence":0.9}
+
 Query: "Show me details of project PROJ-0001"
-Response: {"action":"get","doctype":"Project","entity_name":"PROJ-0001","requires_search":false,"confidence":0.95}
+Response: {"is_erpnext_related":true,"action":"get","doctype":"Project","entity_name":"PROJ-0001","requires_search":false,"confidence":0.95}
 
 Query: "What's the status of project titled Website Redesign?"
-Response: {"action":"get","doctype":"Project","entity_name":"Website Redesign","requires_search":true,"confidence":0.9}
+Response: {"is_erpnext_related":true,"action":"get","doctype":"Project","entity_name":"Website Redesign","requires_search":true,"confidence":0.9}
 
-Query: "Get project PROJ-0001"
-Response: {"action":"get","doctype":"Project","entity_name":"PROJ-0001","requires_search":false,"confidence":0.95}
+Query: "create a project named Website Redesign"
+Response: {"is_erpnext_related":true,"action":"create","doctype":"Project","entity_name":"","requires_search":false,"confidence":0.95}
 
-Query: "List all projects"
-Response: {"action":"list","doctype":"Project","entity_name":"","requires_search":false,"confidence":0.9}
+Query: "add a new customer called Acme Corp"
+Response: {"is_erpnext_related":true,"action":"create","doctype":"Customer","entity_name":"","requires_search":false,"confidence":0.9}
 
-Query: "Show me Customer ABC Corp details"
-Response: {"action":"get","doctype":"Customer","entity_name":"ABC Corp","requires_search":true,"confidence":0.85}
+Query: "update project PROJ-0001 status to completed"
+Response: {"is_erpnext_related":true,"action":"update","doctype":"Project","entity_name":"PROJ-0001","requires_search":false,"confidence":0.95}
 
-Query: "How many projects are there?"
-Response: {"action":"list","doctype":"Project","entity_name":"","requires_search":false,"confidence":0.8}
+Query: "delete customer CUST-00123"
+Response: {"is_erpnext_related":true,"action":"delete","doctype":"Customer","entity_name":"CUST-00123","requires_search":false,"confidence":0.9}
 
 Now respond for the user's query:`, query)
 
@@ -709,16 +1353,27 @@ Now respond for the user's query:`, query)
 	
 	// Parse the AI's JSON response
 	var aiExtraction struct {
-		Action         string  `json:"action"`
-		DocType        string  `json:"doctype"`
-		EntityName     string  `json:"entity_name"`
-		RequiresSearch bool    `json:"requires_search"`
-		Confidence     float64 `json:"confidence"`
+		IsERPNextRelated bool    `json:"is_erpnext_related"`
+		Action           string  `json:"action"`
+		DocType          string  `json:"doctype"`
+		EntityName       string  `json:"entity_name"`
+		RequiresSearch   bool    `json:"requires_search"`
+		Confidence       float64 `json:"confidence"`
 	}
 	
 	if err := json.Unmarshal([]byte(aiResponse), &aiExtraction); err != nil {
 		slog.Warn("Failed to parse AI response as JSON", "response", aiResponse, "error", err)
 		return nil, fmt.Errorf("AI response was not valid JSON: %w", err)
+	}
+	
+	// Check if query is ERPNext-related
+	if !aiExtraction.IsERPNextRelated {
+		slog.Info("Query is not ERPNext-related", "query", query)
+		return &QueryIntent{
+			Action:         "non_erpnext",
+			IsERPNextRelated: false,
+			Confidence:     aiExtraction.Confidence,
+		}, nil
 	}
 	
 	// Map action to actual MCP tool
@@ -735,13 +1390,14 @@ Now respond for the user's query:`, query)
 	paramsJSON, _ := json.Marshal(params)
 	
 	intent := &QueryIntent{
-		Action:         aiExtraction.Action,
-		DocType:        aiExtraction.DocType,
-		EntityName:     aiExtraction.EntityName,
-		Tool:           tool,
-		Params:         paramsJSON,
-		RequiresSearch: aiExtraction.RequiresSearch,
-		Confidence:     aiExtraction.Confidence,
+		Action:           aiExtraction.Action,
+		DocType:          aiExtraction.DocType,
+		EntityName:       aiExtraction.EntityName,
+		Tool:             tool,
+		Params:           paramsJSON,
+		RequiresSearch:   aiExtraction.RequiresSearch,
+		IsERPNextRelated: true,
+		Confidence:       aiExtraction.Confidence,
 	}
 	
 	slog.Info("AI extracted intent successfully", 
@@ -769,9 +1425,12 @@ func (s *MCPServer) mapActionToTool(action string) string {
 		"risk":               "analyze_document",
 		"risk_assessment":    "analyze_document",
 		"generate_report":    "analyze_document",
-		"report":             "analyze_document",
 		"analyze":            "analyze_document",
 		"analysis":           "analyze_document",
+		
+		// Aggregation and reporting
+		"aggregate":          "aggregate_documents",
+		"report":             "run_report",
 		
 		// Dashboard/portfolio - can also use analyze_document for specific documents
 		"portfolio":          "portfolio_dashboard", // Keep for now (lists all)
@@ -965,6 +1624,12 @@ func (s *MCPServer) executeTool(ctx context.Context, toolName string, params jso
 		return s.tools.SearchDocuments(ctx, request)
 	case "analyze_document":
 		return s.tools.AnalyzeDocument(ctx, request)
+	
+	// Aggregation and reporting tools
+	case "aggregate_documents":
+		return s.tools.AggregateDocuments(ctx, request)
+	case "run_report":
+		return s.tools.RunReport(ctx, request)
 		
 	// Legacy tools (deprecated - use analyze_document instead)
 	case "get_project_status":

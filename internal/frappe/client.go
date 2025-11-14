@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"frappe-mcp-server/internal/auth"
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/types"
 )
@@ -37,16 +38,17 @@ type Client struct {
 	cache       sync.Map // Simple in-memory cache
 }
 
-// NewClient creates a new ERPNext client
+// NewClient creates a new Frappe client (works with any Frappe-based application)
 func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("base URL is required")
 	}
-	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("API key is required")
+	// API key and secret are now optional - if not provided, will use OAuth2 token from context
+	if cfg.APIKey == "" && cfg.APISecret != "" {
+		return nil, fmt.Errorf("API secret provided without API key")
 	}
-	if cfg.APISecret == "" {
-		return nil, fmt.Errorf("API secret is required")
+	if cfg.APISecret == "" && cfg.APIKey != "" {
+		return nil, fmt.Errorf("API key provided without API secret")
 	}
 
 	// Create HTTP client with connection pooling
@@ -230,7 +232,7 @@ func (c *Client) SearchDocuments(ctx context.Context, req types.SearchRequest) (
 		params.Set("filters", string(filtersJSON))
 	}
 	if req.Search != "" {
-		// Use ERPNext's search functionality
+		// Use Frappe's search functionality
 		endpoint = "/api/method/frappe.desk.search.search_link"
 		params.Set("txt", req.Search)
 		params.Set("doctype", req.DocType)
@@ -296,7 +298,7 @@ func (c *Client) SearchDocuments(ctx context.Context, req types.SearchRequest) (
 	return result, nil
 }
 
-// makeRequest makes an HTTP request to ERPNext API with retry logic
+// makeRequest makes an HTTP request to Frappe API with retry logic
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
 	// Apply rate limiting
 	if err := c.rateLimiter.Wait(ctx); err != nil {
@@ -357,7 +359,32 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("token %s:%s", c.apiKey, c.apiSecret))
+	
+	// Authentication priority:
+	// 1. sid cookie (user session) - best, user-level permissions
+	// 2. OAuth2 Bearer token - good, can be user or system level
+	// 3. API key/secret - fallback, system-level permissions
+	
+	user := auth.UserFromContext(ctx)
+	
+	if user != nil && user.SessionID != "" {
+		// Priority 1: Use Frappe session cookie (user-level permissions)
+		req.AddCookie(&http.Cookie{
+			Name:  "sid",
+			Value: user.SessionID,
+		})
+		slog.Debug("Using Frappe session cookie", "user", user.Email)
+	} else if user != nil && user.Token != "" {
+		// Priority 2: Use user's OAuth2 token for user-level permissions in Frappe
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", user.Token))
+		slog.Debug("Using user OAuth2 token", "user", user.Email)
+	} else if c.apiKey != "" && c.apiSecret != "" {
+		// Priority 3: Fall back to API key/secret if no user token
+		req.Header.Set("Authorization", fmt.Sprintf("token %s:%s", c.apiKey, c.apiSecret))
+		slog.Debug("Using API key/secret authentication")
+	} else {
+		return fmt.Errorf("no authentication credentials available (no session, token, or API key)")
+	}
 
 	// Log request details (without sensitive data)
 	slog.Debug("Making API request",
@@ -432,4 +459,97 @@ func (c *Client) ClearCache() {
 		c.cache.Delete(key)
 		return true
 	})
+}
+
+// RunAggregationQuery executes an aggregation query using frappe.client.get_list
+func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationRequest) ([]types.Document, error) {
+	endpoint := "/api/method/frappe.client.get_list"
+	
+	// Build request body
+	requestBody := map[string]interface{}{
+		"doctype": req.DocType,
+	}
+	
+	// Add fields (for aggregation like SUM, COUNT, etc.)
+	if len(req.Fields) > 0 {
+		requestBody["fields"] = req.Fields
+	}
+	
+	// Add filters
+	if len(req.Filters) > 0 {
+		requestBody["filters"] = req.Filters
+	}
+	
+	// Add group by
+	if req.GroupBy != "" {
+		requestBody["group_by"] = req.GroupBy
+	}
+	
+	// Add order by
+	if req.OrderBy != "" {
+		requestBody["order_by"] = req.OrderBy
+	}
+	
+	// Add limit
+	if req.Limit > 0 {
+		requestBody["limit_page_length"] = req.Limit
+	}
+	
+	var response struct {
+		Message []types.Document `json:"message"`
+	}
+	
+	if err := c.makeRequest(ctx, "POST", endpoint, requestBody, &response); err != nil {
+		return nil, fmt.Errorf("aggregation query failed for %s: %w", req.DocType, err)
+	}
+	
+	slog.Info("Aggregation query executed successfully",
+		"doctype", req.DocType,
+		"group_by", req.GroupBy,
+		"result_count", len(response.Message))
+	
+	return response.Message, nil
+}
+
+// RunReport executes a Frappe report and returns the results
+func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types.ReportResponse, error) {
+	endpoint := "/api/method/frappe.desk.query_report.run"
+	
+	// Build request body
+	requestBody := map[string]interface{}{
+		"report_name": req.ReportName,
+	}
+	
+	// Add filters if provided
+	if len(req.Filters) > 0 {
+		requestBody["filters"] = req.Filters
+	}
+	
+	// Add user context if provided
+	if req.User != "" {
+		requestBody["user"] = req.User
+	}
+	
+	var response struct {
+		Message struct {
+			Columns []types.ReportColumn `json:"columns"`
+			Result  [][]interface{}      `json:"result"`
+		} `json:"message"`
+	}
+	
+	if err := c.makeRequest(ctx, "POST", endpoint, requestBody, &response); err != nil {
+		return nil, fmt.Errorf("report query failed for %s: %w", req.ReportName, err)
+	}
+	
+	result := &types.ReportResponse{
+		Columns: response.Message.Columns,
+		Data:    response.Message.Result,
+	}
+	
+	slog.Info("Report executed successfully",
+		"report_name", req.ReportName,
+		"columns", len(result.Columns),
+		"rows", len(result.Data))
+	
+	return result, nil
 }

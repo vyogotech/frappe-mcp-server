@@ -24,23 +24,22 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o frappe-mcp-server
 # Final stage
 FROM alpine:latest
 
-# Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates tzdata
+# Install ca-certificates for HTTPS requests and curl for healthchecks
+RUN apk --no-cache add ca-certificates tzdata curl
 
-# Create non-root user
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup
-
-WORKDIR /root/
+# Set working directory first
+WORKDIR /app
 
 # Copy the binary from builder stage
-COPY --from=builder /app/frappe-mcp-server .
+COPY --from=builder /app/frappe-mcp-server /app/frappe-mcp-server
 
-# Copy configuration files
-COPY --from=builder /app/config.yaml .
+# Create logs directory and set permissions before creating user
+RUN mkdir -p /app/logs
 
-# Change ownership to non-root user
-RUN chown -R appuser:appgroup /root/
+# Create non-root user with explicit home directory
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup -h /app && \
+    chown -R appuser:appgroup /app
 
 # Switch to non-root user
 USER appuser
@@ -50,7 +49,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Run the application
 CMD ["./frappe-mcp-server"]

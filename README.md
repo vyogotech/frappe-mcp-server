@@ -15,6 +15,8 @@ Connect ERPNext and other Frappe-based apps with AI assistants through natural l
   - Simple 3-field config: `base_url`, `api_key`, `model`
 - 🔌 **MCP Protocol** - Standard protocol for AI tool integration
 - 📊 **Generic Tools** - Works with ANY ERPNext doctype (standard or custom)
+- 📈 **Advanced Analytics** 🆕 - Aggregations (SUM, COUNT, AVG, TOP N) and ERPNext reports
+- 🔐 **OAuth2 Authentication** - Standard OAuth2 security with token caching
 - 🔒 **Privacy First** - Local AI option with Ollama
 - 🚀 **Production Ready** - Built with Go for performance
 
@@ -50,11 +52,13 @@ cp config.yaml.example config.yaml
 **Complete documentation:** [https://vyogotech.github.io/frappe-mcp-server/](https://vyogotech.github.io/frappe-mcp-server/)
 
 **Key guides:**
-- [Quick Start](https://vyogotech.github.io/frappe-mcp-server/quick-start) - Get running in 5 minutes
-- [Generic LLM Config](https://vyogotech.github.io/frappe-mcp-server/generic-llm-config) - Simple 3-field config
-- [LLM Providers](https://vyogotech.github.io/frappe-mcp-server/llm-providers) - Ollama, OpenAI, Together.ai, Groq, etc.
-- [Docker Deployment](https://vyogotech.github.io/frappe-mcp-server/docker) - Deploy with Docker Compose
-- [API Reference](https://vyogotech.github.io/frappe-mcp-server/api-reference) - Complete API docs
+- [Quick Start](https://varun-krishnamurthy.github.io/frappe-mcp-server/quick-start) - Get running in 5 minutes
+- [OAuth2 Authentication](https://varun-krishnamurthy.github.io/frappe-mcp-server/authentication) - 🔐 **NEW!** Standard OAuth2 security
+- [Auth Quick Start](https://varun-krishnamurthy.github.io/frappe-mcp-server/auth-quickstart) - Set up auth in 5 minutes
+- [Generic LLM Config](https://varun-krishnamurthy.github.io/frappe-mcp-server/generic-llm-config) - Simple 3-field config
+- [LLM Providers](https://varun-krishnamurthy.github.io/frappe-mcp-server/llm-providers) - Ollama, OpenAI, Together.ai, Groq, etc.
+- [Docker Deployment](https://varun-krishnamurthy.github.io/frappe-mcp-server/docker) - Deploy with Docker Compose
+- [API Reference](https://varun-krishnamurthy.github.io/frappe-mcp-server/api-reference) - Complete API docs
 
 ## 💡 Usage Examples
 
@@ -64,14 +68,22 @@ cp config.yaml.example config.yaml
 @erpnext List all open projects
 @erpnext Show me customer ABC-CORP
 @erpnext What are the pending tasks?
+@erpnext Show me top 5 customers by revenue  🆕
+@erpnext Run Sales Analytics report  🆕
 ```
 
 ### HTTP API
 
 ```bash
+# Get documents
 curl -X POST http://localhost:8080/api/v1/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Show me project PROJ-0001"}'
+
+# Analytics 🆕
+curl -X POST http://localhost:8080/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "top 10 customers by revenue in table format"}'
 ```
 
 ### Claude Desktop
