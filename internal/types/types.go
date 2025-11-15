@@ -107,6 +107,7 @@ type User struct {
 	ClientID  string                 `json:"client_id,omitempty"`
 	Token     string                 `json:"-"` // OAuth2 token (not serialized in JSON)
 	SessionID string                 `json:"-"` // Frappe session ID (sid cookie value)
+	CSRFToken string                 `json:"-"` // Frappe CSRF token (for POST/PUT/DELETE with session)
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -167,4 +168,13 @@ type ReportColumn struct {
 	FieldName string `json:"fieldname"`
 	FieldType string `json:"fieldtype"`
 	Width     int    `json:"width,omitempty"`
+}
+
+// ReportFilter represents a filter definition from a Frappe report
+type ReportFilter struct {
+	FieldName string `json:"fieldname"`
+	Label     string `json:"label"`
+	FieldType string `json:"fieldtype"`
+	Mandatory int    `json:"mandatory"`  // 0 or 1
+	Default   interface{} `json:"default,omitempty"`
 }

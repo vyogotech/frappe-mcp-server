@@ -359,6 +359,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	
 	// Authentication priority:
 	// 1. sid cookie (user session) - best, user-level permissions
@@ -373,7 +374,17 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 			Name:  "sid",
 			Value: user.SessionID,
 		})
-		slog.Debug("Using Frappe session cookie", "user", user.Email)
+		slog.Info("DEBUG Client: Using sid cookie", "user", user.Email, "method", method, "csrf_token_len", len(user.CSRFToken))
+		// Add CSRF token for POST/PUT/DELETE requests
+		if method == "POST" || method == "PUT" || method == "DELETE" {
+			if user.CSRFToken != "" {
+				req.Header.Set("X-Frappe-CSRF-Token", user.CSRFToken)
+				slog.Info("DEBUG Client: Set CSRF token header", "user", user.Email, "method", method, "token", user.CSRFToken[:min(20, len(user.CSRFToken))]+"...")
+			} else {
+				slog.Error("CSRF token missing for mutating operation", "user", user.Email, "method", method, "endpoint", endpoint)
+				return fmt.Errorf("CSRF token required for %s operation but not available for user %s. This usually indicates a session validation issue", method, user.Email)
+			}
+		}
 	} else if user != nil && user.Token != "" {
 		// Priority 2: Use user's OAuth2 token for user-level permissions in Frappe
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", user.Token))
@@ -381,6 +392,18 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	} else if c.apiKey != "" && c.apiSecret != "" {
 		// Priority 3: Fall back to API key/secret if no user token
 		req.Header.Set("Authorization", fmt.Sprintf("token %s:%s", c.apiKey, c.apiSecret))
+		
+		// For API key auth, bypass CSRF by setting headers
+		// Frappe recognizes api/method endpoints and API key auth should bypass CSRF
+		req.Header.Set("X-Frappe-CSRF-Token", "bypass")
+		
+		// Warn if using placeholder credentials
+		if c.apiKey == "your_api_key_here" || c.apiSecret == "your_api_secret_here" {
+			slog.Warn("Using placeholder API credentials - authentication will fail",
+				"api_key", c.apiKey,
+				"api_secret", c.apiSecret,
+				"endpoint", endpoint)
+		}
 		slog.Debug("Using API key/secret authentication")
 	} else {
 		return fmt.Errorf("no authentication credentials available (no session, token, or API key)")
@@ -419,6 +442,29 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 			}
 		}
 		erpError.StatusCode = resp.StatusCode
+		
+		// If message is empty, provide a more helpful error based on status code
+		if erpError.Message == "" {
+			switch resp.StatusCode {
+			case 401:
+				erpError.Message = fmt.Sprintf("Authentication failed (HTTP %d). Please check your API credentials or OAuth2 token. Raw response: %s", resp.StatusCode, string(responseBody))
+			case 403:
+				erpError.Message = fmt.Sprintf("Permission denied (HTTP %d). The current user/API key does not have permission for this operation. Raw response: %s", resp.StatusCode, string(responseBody))
+			case 404:
+				erpError.Message = fmt.Sprintf("Resource not found (HTTP %d). Endpoint: %s. Raw response: %s", resp.StatusCode, endpoint, string(responseBody))
+			case 500:
+				erpError.Message = fmt.Sprintf("Internal server error (HTTP %d). Raw response: %s", resp.StatusCode, string(responseBody))
+			default:
+				erpError.Message = fmt.Sprintf("HTTP error %d. Raw response: %s", resp.StatusCode, string(responseBody))
+			}
+		}
+		
+		slog.Error("Frappe API error",
+			"status_code", resp.StatusCode,
+			"endpoint", endpoint,
+			"message", erpError.Message,
+			"response_body", string(responseBody))
+		
 		return &erpError
 	}
 
@@ -511,23 +557,105 @@ func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationR
 	return response.Message, nil
 }
 
-// RunReport executes a Frappe report and returns the results
-func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types.ReportResponse, error) {
-	endpoint := "/api/method/frappe.desk.query_report.run"
+// GetReportFilters fetches the filter metadata for a report
+func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]types.ReportFilter, error) {
+	// Check cache first
+	cacheKey := fmt.Sprintf("report_filters:%s", reportName)
+	if cached, ok := c.cache.Load(cacheKey); ok {
+		if filters, ok := cached.([]types.ReportFilter); ok {
+			slog.Debug("Report filters retrieved from cache", "report_name", reportName)
+			return filters, nil
+		}
+	}
+
+	// Use Frappe's desk.query_report.get_report_doc method to get report metadata
+	endpoint := "/api/method/frappe.desk.query_report.get_report_doc"
 	
-	// Build request body
-	requestBody := map[string]interface{}{
-		"report_name": req.ReportName,
+	// Build query parameters
+	queryParams := url.Values{}
+	queryParams.Set("report_name", reportName)
+	endpoint = endpoint + "?" + queryParams.Encode()
+	
+	var response struct {
+		Message struct {
+			Filters interface{} `json:"filters"` // Can be string (JSON) or array
+		} `json:"message"`
 	}
 	
-	// Add filters if provided
+	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
+		return nil, fmt.Errorf("failed to get report metadata for %s: %w", reportName, err)
+	}
+	
+	// Parse the filters - they might be a JSON string or already an array
+	var filters []types.ReportFilter
+	
+	switch v := response.Message.Filters.(type) {
+	case string:
+		// Filters are JSON string, need to unmarshal
+		if v != "" {
+			if err := json.Unmarshal([]byte(v), &filters); err != nil {
+				slog.Warn("Failed to parse report filters from JSON string", "report_name", reportName, "error", err)
+				return []types.ReportFilter{}, nil
+			}
+		}
+	case []interface{}:
+		// Filters are already an array, convert each element
+		for _, item := range v {
+			if filterMap, ok := item.(map[string]interface{}); ok {
+				filter := types.ReportFilter{}
+				if fieldname, ok := filterMap["fieldname"].(string); ok {
+					filter.FieldName = fieldname
+				}
+				if label, ok := filterMap["label"].(string); ok {
+					filter.Label = label
+				}
+				if fieldtype, ok := filterMap["fieldtype"].(string); ok {
+					filter.FieldType = fieldtype
+				}
+				if mandatory, ok := filterMap["mandatory"].(float64); ok {
+					filter.Mandatory = int(mandatory)
+				} else if mandatory, ok := filterMap["mandatory"].(int); ok {
+					filter.Mandatory = mandatory
+				}
+				filter.Default = filterMap["default"]
+				filters = append(filters, filter)
+			}
+		}
+	}
+	
+	// Cache the result for 5 minutes
+	c.cache.Store(cacheKey, filters)
+	
+	slog.Info("Report filters retrieved successfully", "report_name", reportName, "filter_count", len(filters))
+	return filters, nil
+}
+
+// RunReport executes a Frappe report and returns the results
+func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types.ReportResponse, error) {
+	// Use GET request with query parameters to avoid CSRF issues with API key auth
+	endpoint := "/api/method/frappe.desk.query_report.run"
+	
+	// Build query parameters
+	queryParams := url.Values{}
+	queryParams.Set("report_name", req.ReportName)
+	
+	// Add filters if provided - need to JSON encode them
 	if len(req.Filters) > 0 {
-		requestBody["filters"] = req.Filters
+		filtersJSON, err := json.Marshal(req.Filters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode filters: %w", err)
+		}
+		queryParams.Set("filters", string(filtersJSON))
 	}
 	
 	// Add user context if provided
 	if req.User != "" {
-		requestBody["user"] = req.User
+		queryParams.Set("user", req.User)
+	}
+	
+	// Append query parameters to endpoint
+	if len(queryParams) > 0 {
+		endpoint = endpoint + "?" + queryParams.Encode()
 	}
 	
 	var response struct {
@@ -537,7 +665,8 @@ func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types
 		} `json:"message"`
 	}
 	
-	if err := c.makeRequest(ctx, "POST", endpoint, requestBody, &response); err != nil {
+	// Use GET request instead of POST to avoid CSRF token issues
+	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
 		return nil, fmt.Errorf("report query failed for %s: %w", req.ReportName, err)
 	}
 	
