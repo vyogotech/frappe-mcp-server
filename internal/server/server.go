@@ -21,11 +21,39 @@ import (
 	"frappe-mcp-server/internal/types"
 )
 
+// detectProvider detects the LLM provider from the base URL
+func detectProvider(baseURL string) string {
+	lower := strings.ToLower(baseURL)
+	if strings.Contains(lower, "groq") {
+		return "groq"
+	} else if strings.Contains(lower, "ollama") || strings.Contains(lower, "11434") {
+		return "ollama"
+	} else if strings.Contains(lower, "openai") {
+		return "openai"
+	}
+	return "unknown"
+}
+
+// generateWithLLM generates text using the LLM manager (with auto-fallback) or legacy client
+func (s *MCPServer) generateWithLLM(ctx context.Context, prompt string) (string, error) {
+	// Try LLM Manager first (with auto-fallback support)
+	if s.llmManager != nil {
+		return s.llmManager.Generate(ctx, prompt)
+	}
+	// Fall back to legacy client
+	if s.llmClient != nil {
+		return s.generateWithLLM(ctx, prompt)
+	}
+	return "", fmt.Errorf("no LLM client available")
+}
+
+
 // MCPServer represents the MCP server
 type MCPServer struct {
 	config         *config.Config
 	frappeClient   *frappe.Client
-	llmClient      llm.Client
+	llmClient      llm.Client      // Legacy: will be deprecated
+	llmManager     *llm.Manager    // New: dynamic model switching
 	server         *mcp.Server
 	httpServer     *http.Server
 	tools          *tools.ToolRegistry
@@ -59,17 +87,60 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	// Create tool registry
 	toolRegistry := tools.NewRegistry(frappeClient)
 	
-	// Create LLM client
+	// Create LLM client (legacy)
 	llmClient, err := llm.NewClient(cfg.LLM)
 	if err != nil {
 		slog.Warn("Failed to initialize LLM client", "error", err)
 		slog.Info("AI-powered query processing will be disabled")
 	}
 
+	// Create LLM Manager for dynamic switching
+	primaryConfig := llm.ModelConfig{
+		Provider:    detectProvider(cfg.LLM.BaseURL),
+		Model:       cfg.LLM.Model,
+		BaseURL:     cfg.LLM.BaseURL,
+		APIKey:      cfg.LLM.APIKey,
+		Temperature: cfg.LLM.Temperature,
+		MaxTokens:   cfg.LLM.MaxTokens,
+		Timeout:     cfg.LLM.Timeout.String(),
+	}
+
+	// Configure fallback from config if available
+	var fallbackConfig *llm.ModelConfig
+	if cfg.LLM.Fallback != nil && cfg.LLM.Fallback.Enabled {
+		fallbackConfig = &llm.ModelConfig{
+			Provider:    detectProvider(cfg.LLM.Fallback.BaseURL),
+			Model:       cfg.LLM.Fallback.Model,
+			BaseURL:     cfg.LLM.Fallback.BaseURL,
+			APIKey:      cfg.LLM.Fallback.APIKey,
+			Temperature: cfg.LLM.Fallback.Temperature,
+			MaxTokens:   cfg.LLM.Fallback.MaxTokens,
+			Timeout:     cfg.LLM.Fallback.Timeout.String(),
+		}
+		slog.Info("Fallback LLM configured from config",
+			"provider", fallbackConfig.Provider,
+			"model", fallbackConfig.Model,
+			"auto_switch", cfg.LLM.Fallback.AutoSwitch)
+	}
+
+	llmManager, err := llm.NewManager(primaryConfig, fallbackConfig)
+	if err != nil {
+		slog.Warn("Failed to initialize LLM manager", "error", err)
+	} else {
+		// Enable auto-fallback if configured
+		if cfg.LLM.Fallback != nil && cfg.LLM.Fallback.AutoSwitch {
+			llmManager.EnableAutoFallback(true)
+			slog.Info("LLM Manager initialized with auto-fallback enabled")
+		} else {
+			slog.Info("LLM Manager initialized (auto-fallback disabled)")
+		}
+	}
+
 	mcpServer := &MCPServer{
 		config:       cfg,
 		frappeClient: frappeClient,
-		llmClient:    llmClient,
+		llmClient:    llmClient,   // Legacy
+		llmManager:   llmManager,  // New
 		server:       server,
 		tools:        toolRegistry,
 	}
@@ -585,8 +656,15 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("Processing chat query", "message", chatRequest.Message)
 
+	// Declare variables for query processing
+	var queryIntent *QueryIntent
+	var result *mcp.ToolResponse
+	var toolsCalled []string
+	var err error  // Declare err early to avoid shadowing
+	ctx := r.Context()
+
 	// Use AI to extract intent and entities from the query
-	queryIntent, err := s.extractQueryIntent(r.Context(), chatRequest.Message)
+	queryIntent, err = s.extractQueryIntent(ctx, chatRequest.Message)
 	if err != nil {
 		// Check if this is a rate limit error
 		if strings.Contains(err.Error(), "rate limit") || strings.Contains(err.Error(), "429") {
@@ -618,10 +696,6 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 		"tool", queryIntent.Tool,
 		"is_erpnext_related", queryIntent.IsERPNextRelated)
 
-	var result *mcp.ToolResponse
-	var toolsCalled []string
-	ctx := r.Context()
-
 	// Check if query is ERPNext-related
 	if !queryIntent.IsERPNextRelated {
 		slog.Info("Non-ERPNext query detected, providing polite decline")
@@ -645,7 +719,8 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Special handling for create operations
 	if queryIntent.Action == "create" {
 		slog.Info("Processing create query", "doctype", queryIntent.DocType)
-		params, err := s.extractCreateParams(ctx, chatRequest.Message, queryIntent.DocType)
+		var params json.RawMessage
+		params, err = s.extractCreateParams(ctx, chatRequest.Message, queryIntent.DocType)
 		if err != nil {
 			slog.Warn("Failed to extract create params", "error", err)
 			err = fmt.Errorf("failed to process create query: %w", err)
@@ -660,7 +735,8 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Special handling for update operations
 	if queryIntent.Action == "update" {
 		slog.Info("Processing update query", "doctype", queryIntent.DocType, "entity", queryIntent.EntityName)
-		params, err := s.extractUpdateParams(ctx, chatRequest.Message, queryIntent.DocType, queryIntent.EntityName)
+		var params json.RawMessage
+		params, err = s.extractUpdateParams(ctx, chatRequest.Message, queryIntent.DocType, queryIntent.EntityName)
 		if err != nil {
 			slog.Warn("Failed to extract update params", "error", err)
 			err = fmt.Errorf("failed to process update query: %w", err)
@@ -705,17 +781,56 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Special handling for report queries
 	if queryIntent.Action == "report" {
 		slog.Info("Processing report query")
-		params, err := s.extractReportParams(ctx, chatRequest.Message)
+		var params json.RawMessage
+		params, err = s.extractReportParams(ctx, chatRequest.Message)
 		if err != nil {
-			slog.Warn("Failed to extract report params", "error", err)
-			err = fmt.Errorf("failed to process report query: %w", err)
+			// Check if it's a missing params error - don't wrap it
+			if strings.HasPrefix(err.Error(), "missing_params:") {
+				slog.Info("Missing report parameters, will prompt user")
+				// Keep the error as-is for the buildResponse handler
+			} else {
+				slog.Warn("Failed to extract report params", "error", err)
+				err = fmt.Errorf("failed to process report query: %w", err)
+			}
 		} else {
+			// SMART SCHEMA VALIDATION: Transform filters to match report's expected field names
+			var rawParams map[string]interface{}
+			if err := json.Unmarshal(params, &rawParams); err == nil {
+				reportName, _ := rawParams["report_name"].(string)
+				userFilters, _ := rawParams["filters"].(map[string]interface{})
+				
+				if reportName != "" && userFilters != nil {
+					// Get report schema (dynamically or from hardcoded fallback)
+					schema, schemaErr := s.GetReportSchema(ctx, reportName)
+					if schemaErr != nil {
+						slog.Warn("Failed to get report schema, proceeding with original filters", "error", schemaErr)
+					} else {
+						// Transform and validate filters
+						transformedFilters, missingFilters, validErr := schema.ValidateAndTransformFilters(userFilters)
+						if validErr != nil {
+							slog.Warn("Filter validation error", "error", validErr)
+						} else if len(missingFilters) > 0 {
+							slog.Info("Missing required filters after transformation", "missing", missingFilters)
+							// Return missing params error
+							err = fmt.Errorf("missing_params:%s:%v", reportName, missingFilters)
+							goto buildResponse
+						} else {
+							// Use transformed filters
+							rawParams["filters"] = transformedFilters
+							params, _ = json.Marshal(rawParams)
+							slog.Info("Filters transformed by schema", "original", userFilters, "transformed", transformedFilters)
+						}
+					}
+				}
+			}
+			
 			toolsCalled = append(toolsCalled, "run_report")
 			result, err = s.executeTool(ctx, "run_report", params)
 			if err != nil {
 				slog.Warn("Report tool returned error", "error", err)
+				// Don't clear the error - let it be handled in buildResponse
 			}
-			slog.Info("Report tool executed", "result_is_nil", result == nil, "error_is_nil", err == nil)
+			slog.Info("Report tool executed", "result_is_nil", result == nil, "error_is_nil", err == nil, "has_error", err != nil)
 		}
 		// Skip to response building
 		goto buildResponse
@@ -771,12 +886,75 @@ buildResponse:
 	if err != nil {
 		// Provide more helpful error messages for common cases
 		errorMsg := err.Error()
+		
+		// Check for missing parameters error
+		if strings.HasPrefix(errorMsg, "missing_params:") {
+			// Parse the missing params error: "missing_params:ReportName:[param1 param2]"
+			parts := strings.SplitN(errorMsg, ":", 3)
+			if len(parts) == 3 {
+				reportName := parts[1]
+				missingParamsStr := strings.Trim(parts[2], "[]")
+				
+				// Use LLM to generate a friendly, contextual prompt
+				if s.llmClient != nil {
+					prompt := fmt.Sprintf(`The user asked: "%s"
+
+They want to see the "%s" report, but this report requires some additional information that wasn't provided:
+
+Missing parameters: %s
+
+Your task: Write a friendly, conversational message asking the user for these missing parameters.
+
+Guidelines:
+1. Be warm and helpful, not robotic
+2. Explain what each parameter means in simple terms
+3. Provide 2-3 concrete examples showing how they can rephrase their query
+4. Use emojis sparingly for visual appeal
+5. Keep it concise but informative
+
+Parameter explanations:
+- from_date/to_date: Date range for the report (e.g., "last year", "Q1 2024", "January to March 2024")
+- company: The company name (e.g., "ABC Corp", "My Company")
+- fiscal_year: Fiscal year (e.g., "2024-2025")
+- periodicity: How to break down the data - Monthly, Quarterly, or Yearly
+
+Write a natural, helpful response.`, chatRequest.Message, reportName, missingParamsStr)
+
+					friendlyResponse, err := s.generateWithLLM(ctx, prompt)
+					if err != nil {
+						// Fallback to basic message if LLM fails
+						slog.Warn("Failed to generate friendly prompt with LLM, using fallback", "error", err)
+						response["response"] = fmt.Sprintf("To generate the %s report, I need some additional information: %s. Please include these details in your request.", reportName, missingParamsStr)
+					} else {
+						response["response"] = friendlyResponse
+					}
+				} else {
+					// No LLM available, use basic message
+					response["response"] = fmt.Sprintf("To generate the %s report, I need some additional information: %s. Please include these details in your request.", reportName, missingParamsStr)
+				}
+				
+				response["data_quality"] = "needs_info"
+				response["data_size"] = 0
+				response["is_valid_data"] = false
+				slog.Info("Missing report parameters, prompting user", "report", reportName, "missing", missingParamsStr)
+				
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					slog.Error("Failed to encode chat response", "error", err)
+				}
+				slog.Info("Chat response sent", "data_size", response["data_size"])
+				return
+			}
+		}
+		
 		if strings.Contains(errorMsg, "report query failed") && strings.HasSuffix(errorMsg, ": ") {
 			// Empty Frappe API error - likely authentication or empty report
 			errorMsg = fmt.Sprintf("The report could not be executed. This might be because:\n- The report requires authentication (please check your API credentials)\n- The report has no data for the current parameters\n- The report requires additional filters like company or fiscal year\n\nTechnical details: %v", err)
 		}
 		
-		response["response"] = fmt.Sprintf("Error processing query: %v", errorMsg)
+		// Format error messages conversationally (never show raw traces!)
+		response["response"] = formatFrappeError(errorMsg, chatRequest.Message)
 		response["data_quality"] = "error"
 		response["data_size"] = 0
 		response["is_valid_data"] = false
@@ -794,26 +972,27 @@ buildResponse:
 		responseStr := strings.TrimSpace(responseText.String())
 		slog.Info("Tool response extracted", "response_length", len(responseStr), "has_content", responseStr != "")
 		
-		// Even if responseStr is empty, try to format with LLM to explain the empty result
+		// Format response - ALWAYS make it conversational
 		formattedResponse := responseStr
-		if s.llmClient != nil && responseStr != "" {
+		
+		if responseStr == "" {
+			// Tool succeeded but returned no data
+			slog.Warn("Tool returned empty response", "tools", toolsCalled)
+			formattedResponse = formatEmptyResult(chatRequest.Message)
+		} else if s.llmClient != nil {
+			// Try LLM formatting first (best quality)
 			formatted, err := s.formatResponseWithLLM(ctx, chatRequest.Message, responseStr)
 			if err != nil {
-				// Check for rate limit in formatting
-				if strings.Contains(err.Error(), "rate limit") || strings.Contains(err.Error(), "429") {
-					slog.Warn("LLM rate limit during formatting, using raw data", "error", err)
-					formattedResponse = responseStr + "\n\n⚠️ Note: AI formatting unavailable due to rate limits. Showing raw data."
-				} else {
-					slog.Warn("Failed to format response with LLM, using raw data", "error", err)
-				}
+				// LLM failed - use smart fallback (NO RAW JSON!)
+				slog.Warn("LLM formatting failed, using smart fallback", "error", err)
+				formattedResponse = formatDataWithoutLLM(chatRequest.Message, responseStr)
 			} else {
 				formattedResponse = formatted
 			}
-		} else if responseStr == "" {
-			// Tool succeeded but returned no data - provide helpful message
-			slog.Warn("Tool returned empty response", "tools", toolsCalled)
-			formattedResponse = fmt.Sprintf("The query was executed successfully, but no data was returned. This could mean:\n- The report '%s' has no data for the current filters\n- You may need to specify additional filters or date ranges\n- The report may require certain company or fiscal year parameters", 
-				extractReportNameFromTools(toolsCalled))
+		} else {
+			// No LLM available - use smart fallback (NO RAW JSON!)
+			slog.Info("No LLM available, using smart fallback formatting")
+			formattedResponse = formatDataWithoutLLM(chatRequest.Message, responseStr)
 		}
 		
 		response["response"] = formattedResponse
@@ -916,7 +1095,7 @@ NOW FORMAT THE USER'S DATA:
 - If it's empty, say no results were found
 - NEVER invent placeholder data`, userQuery, rawData)
 
-	formatted, err := s.llmClient.Generate(ctx, prompt)
+	formatted, err := s.generateWithLLM(ctx, prompt)
 	if err != nil {
 		return "", fmt.Errorf("failed to call LLM for formatting: %w", err)
 	}
@@ -960,17 +1139,13 @@ Respond with JSON only:
   "filters": {}
 }`, query, doctype, doctype, doctype, doctype)
 
-	response, err := s.llmClient.Generate(ctx, prompt)
+	response, err := s.generateWithLLM(ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract aggregation params: %w", err)
 	}
 
-	// Clean response: remove markdown code blocks if present
-	cleanedResponse := strings.TrimSpace(response)
-	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```json")
-	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```")
-	cleanedResponse = strings.TrimSuffix(cleanedResponse, "```")
-	cleanedResponse = strings.TrimSpace(cleanedResponse)
+	// Clean response: remove markdown code blocks and extra text
+	cleanedResponse := cleanJSONResponse(response)
 
 	// Validate JSON
 	var params map[string]interface{}
@@ -995,39 +1170,144 @@ func (s *MCPServer) extractReportParams(ctx context.Context, query string) (json
 		return nil, fmt.Errorf("LLM client not available")
 	}
 
+	// Get current date for context
+	now := time.Now()
+	currentYear := now.Year()
+	
 	prompt := fmt.Sprintf(`Extract report parameters from this query.
 
 Query: "%s"
+Current Date: %s
 
 Determine:
-1. report_name: The exact ERPNext report name (e.g., "Sales Analytics", "Purchase Register", "Customer Ledger Summary")
-2. filters: Any filters mentioned (e.g., {"company": "XYZ Corp", "from_date": "2024-01-01"})
+1. report_name: The exact ERPNext report name (e.g., "Sales Analytics", "Purchase Register", "Profit and Loss Statement")
+2. filters: Any filters explicitly mentioned in the query - PARSE DATES INTO ACTUAL DATES
+3. missing_required_params: List of required parameters not mentioned in the query
 
-Common ERPNext reports:
-- Sales Analytics, Sales Register, Sales Order Analysis
-- Purchase Register, Purchase Analytics
-- Customer Ledger Summary, Supplier Ledger Summary
-- Stock Balance, Stock Ledger
-- Profit and Loss Statement, Balance Sheet
-- General Ledger
+CRITICAL - Date Parsing Rules:
+When dates ARE mentioned, you MUST convert them to actual dates.
+Use the correct field names for each report type:
+- For Profit and Loss Statement / Balance Sheet: use period_start_date and period_end_date
+- For other reports: use from_date and to_date
+
+Examples:
+- "Q1 2024" → period_start_date: "2024-01-01", period_end_date: "2024-03-31" (for P&L)
+- "Q2 2024" → period_start_date: "2024-04-01", period_end_date: "2024-06-30" (for P&L)
+- "Q3 2024" → period_start_date: "2024-07-01", period_end_date: "2024-09-30" (for P&L)
+- "Q4 2024" → period_start_date: "2024-10-01", period_end_date: "2024-12-31" (for P&L)
+- "Q1 2024 to Q2 2024" → period_start_date: "2024-01-01", period_end_date: "2024-06-30" (for P&L)
+- "last year" → period_start_date: "%d-01-01", period_end_date: "%d-12-31" (for P&L)
+- "this year" → period_start_date: "%d-01-01", period_end_date: "%d-12-31" (for P&L)
+- "January 2024" → period_start_date: "2024-01-01", period_end_date: "2024-01-31" (for P&L)
+- "January to March 2024" → period_start_date: "2024-01-01", period_end_date: "2024-03-31" (for P&L)
+- "last month" → calculate based on current date
+- "this month" → calculate based on current date
+
+Date Interpretation (when dates ARE mentioned):
+- "this month" → current month
+- "last month" → previous month
+- "this year" / "current year" → current calendar year (Jan 1 - Dec 31)
+- "last year" → previous calendar year
+- "Q1" → Jan-Mar, "Q2" → Apr-Jun, "Q3" → Jul-Sep, "Q4" → Oct-Dec
+- "January 2024" → 2024-01-01 to 2024-01-31
+
+IMPORTANT - Use correct field names for the report type:
+- For "Profit and Loss Statement" and "Balance Sheet": use period_start_date and period_end_date
+- For other reports: use from_date and to_date
+
+If NO dates mentioned at all, mark period_start_date/period_end_date (or from_date/to_date) as missing.
+
+Common ERPNext reports and their REQUIRED filters:
+- "Profit and Loss Statement" → REQUIRES: period_start_date, period_end_date, company
+- "Balance Sheet" → REQUIRES: period_start_date, period_end_date, company  
+- "General Ledger" → REQUIRES: from_date, to_date, company
+- "Sales Analytics" → REQUIRES: from_date, to_date
+- "Purchase Register" → REQUIRES: from_date, to_date
+- "Stock Balance" → OPTIONAL: warehouse (no required params)
+
+CRITICAL - Field naming:
+- Financial reports (P&L, Balance Sheet, Cash Flow) use: period_start_date, period_end_date
+- Other reports use: from_date, to_date
+
+Examples:
+
+Query: "give me P & L statement"
+Response: {
+  "report_name": "Profit and Loss Statement",
+  "filters": {},
+  "missing_required_params": ["period_start_date", "period_end_date", "company"]
+}
+
+Query: "Show me Profit and Loss Statement from Q1 2024 to Q2 2024"
+Response: {
+  "report_name": "Profit and Loss Statement",
+  "filters": {
+    "period_start_date": "2024-01-01",
+    "period_end_date": "2024-06-30",
+    "periodicity": "Monthly"
+  },
+  "missing_required_params": ["company"]
+}
+
+Query: "show me profit and loss for last year"
+Response: {
+  "report_name": "Profit and Loss Statement",
+  "filters": {
+    "period_start_date": "%d-01-01",
+    "period_end_date": "%d-12-31",
+    "periodicity": "Monthly"
+  },
+  "missing_required_params": ["company"]
+}
+
+Query: "P&L for Q1 2024 for company ABC Corp"
+Response: {
+  "report_name": "Profit and Loss Statement",
+  "filters": {
+    "period_start_date": "2024-01-01",
+    "period_end_date": "2024-03-31",
+    "company": "ABC Corp",
+    "periodicity": "Monthly"
+  },
+  "missing_required_params": []
+}
+
+Query: "Balance Sheet from January to March 2024 for XYZ Inc"
+Response: {
+  "report_name": "Balance Sheet",
+  "filters": {
+    "period_start_date": "2024-01-01",
+    "period_end_date": "2024-03-31",
+    "company": "XYZ Inc",
+    "periodicity": "Monthly"
+  },
+  "missing_required_params": []
+}
+
+Query: "General Ledger from Q1 2024"
+Response: {
+  "report_name": "General Ledger",
+  "filters": {
+    "from_date": "2024-01-01",
+    "to_date": "2024-03-31"
+  },
+  "missing_required_params": ["company"]
+}
 
 Respond with JSON only:
 {
   "report_name": "...",
-  "filters": {}
-}`, query)
+  "filters": {},
+  "missing_required_params": []
+}`, query, now.Format("2006-01-02"), currentYear-1, currentYear-1, currentYear, currentYear, currentYear-1, currentYear-1)
 
-	response, err := s.llmClient.Generate(ctx, prompt)
+	response, err := s.generateWithLLM(ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract report params: %w", err)
 	}
 
-	// Clean response: remove markdown code blocks if present
-	cleanedResponse := strings.TrimSpace(response)
-	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```json")
-	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```")
-	cleanedResponse = strings.TrimSuffix(cleanedResponse, "```")
-	cleanedResponse = strings.TrimSpace(cleanedResponse)
+	// Clean response: remove markdown code blocks and extra text
+	cleanedResponse := cleanJSONResponse(response)
 
 	// Validate JSON
 	var params map[string]interface{}
@@ -1035,6 +1315,17 @@ Respond with JSON only:
 		slog.Warn("Failed to parse report params JSON", "response", cleanedResponse, "error", err)
 		return nil, fmt.Errorf("invalid report params JSON: %w", err)
 	}
+	
+	// Check if required parameters are missing
+	missingParams, _ := params["missing_required_params"].([]interface{})
+	if len(missingParams) > 0 {
+		// Build a friendly message asking for the missing parameters
+		reportName, _ := params["report_name"].(string)
+		return nil, fmt.Errorf("missing_params:%s:%v", reportName, missingParams)
+	}
+	
+	// Log extracted parameters for debugging
+	slog.Info("Extracted report parameters", "report_name", params["report_name"], "filters", params["filters"])
 
 	return json.Marshal(params)
 }
@@ -1099,17 +1390,13 @@ Respond with JSON only:
   }
 }`, query, doctype, doctype)
 
-	response, err := s.llmClient.Generate(ctx, prompt)
+	response, err := s.generateWithLLM(ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract create params: %w", err)
 	}
 
-	// Clean response: remove markdown code blocks if present
-	cleanedResponse := strings.TrimSpace(response)
-	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```json")
-	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```")
-	cleanedResponse = strings.TrimSuffix(cleanedResponse, "```")
-	cleanedResponse = strings.TrimSpace(cleanedResponse)
+	// Clean response: remove markdown code blocks and extra text
+	cleanedResponse := cleanJSONResponse(response)
 
 	// Validate JSON
 	var params map[string]interface{}
@@ -1186,17 +1473,13 @@ Respond with JSON only:
   }
 }`, query, doctype, entityName, doctype, entityName)
 
-	response, err := s.llmClient.Generate(ctx, prompt)
+	response, err := s.generateWithLLM(ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract update params: %w", err)
 	}
 
-	// Clean response: remove markdown code blocks if present
-	cleanedResponse := strings.TrimSpace(response)
-	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```json")
-	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```")
-	cleanedResponse = strings.TrimSuffix(cleanedResponse, "```")
-	cleanedResponse = strings.TrimSpace(cleanedResponse)
+	// Clean response: remove markdown code blocks and extra text
+	cleanedResponse := cleanJSONResponse(response)
 
 	// Validate JSON
 	var params map[string]interface{}
@@ -1259,6 +1542,34 @@ func extractDoctypeFromQuery(queryLower string) string {
 	return "" // No match found
 }
 
+// getDefaultFieldsForDocType returns default fields to fetch for each doctype
+func getDefaultFieldsForDocType(doctype string) []string {
+	// Define commonly useful fields for each doctype
+	fieldMap := map[string][]string{
+		"Company":        {"name", "company_name", "abbr", "default_currency", "country", "creation"},
+		"Customer":       {"name", "customer_name", "customer_type", "customer_group", "territory", "email_id", "mobile_no", "creation"},
+		"Supplier":       {"name", "supplier_name", "supplier_type", "supplier_group", "country", "email_id", "mobile_no", "creation"},
+		"Item":           {"name", "item_name", "item_group", "stock_uom", "standard_rate", "is_stock_item", "creation"},
+		"Project":        {"name", "project_name", "status", "percent_complete", "expected_start_date", "expected_end_date", "priority", "creation"},
+		"Task":           {"name", "subject", "status", "priority", "project", "exp_start_date", "exp_end_date", "creation"},
+		"User":           {"name", "email", "full_name", "enabled", "user_type", "creation"},
+		"Sales Invoice":  {"name", "customer", "posting_date", "grand_total", "outstanding_amount", "status", "creation"},
+		"Sales Order":    {"name", "customer", "transaction_date", "grand_total", "delivery_status", "status", "creation"},
+		"Purchase Order": {"name", "supplier", "transaction_date", "grand_total", "status", "creation"},
+		"Warehouse":      {"name", "warehouse_name", "warehouse_type", "company", "is_group", "creation"},
+		"Lead":           {"name", "lead_name", "company_name", "status", "email_id", "mobile_no", "source", "creation"},
+		"Opportunity":    {"name", "opportunity_from", "party_name", "status", "opportunity_amount", "currency", "creation"},
+	}
+	
+	// Return specific fields if defined, otherwise return common fields
+	if fields, ok := fieldMap[doctype]; ok {
+		return fields
+	}
+	
+	// Default fields for unknown doctypes
+	return []string{"name", "creation", "modified", "owner"}
+}
+
 // extractQueryIntent uses AI to extract intent and entities from natural language query
 func (s *MCPServer) extractQueryIntent(ctx context.Context, query string) (*QueryIntent, error) {
 	// PREPROCESSING: Detect simple list queries before calling LLM
@@ -1271,6 +1582,13 @@ func (s *MCPServer) extractQueryIntent(ctx context.Context, query string) (*Quer
 	                  strings.Contains(queryLower, "give all") ||
 	                  strings.Contains(queryLower, "all ")
 	
+	// Check for generic data request words (these are NOT entity names!)
+	hasGenericDataWord := strings.Contains(queryLower, " data") ||
+	                      strings.Contains(queryLower, " info") ||
+	                      strings.Contains(queryLower, " information") ||
+	                      strings.Contains(queryLower, " details") ||
+	                      strings.Contains(queryLower, " records")
+	
 	hasAggregationKeyword := strings.Contains(queryLower, "top ") ||
 	                         strings.Contains(queryLower, "bottom ") ||
 	                         strings.Contains(queryLower, "sum") ||
@@ -1281,8 +1599,8 @@ func (s *MCPServer) extractQueryIntent(ctx context.Context, query string) (*Quer
 	                         strings.Contains(queryLower, "highest") ||
 	                         strings.Contains(queryLower, "lowest")
 	
-	// If query has "list" but NO aggregation keywords, it's definitely a list query
-	if hasListKeyword && !hasAggregationKeyword {
+	// If query has "list" OR generic data words, but NO aggregation keywords, it's a list query
+	if (hasListKeyword || hasGenericDataWord) && !hasAggregationKeyword {
 		slog.Info("Preprocessing detected simple list query", "query", query)
 		
 		// Extract doctype from query using simple pattern matching
@@ -1291,8 +1609,12 @@ func (s *MCPServer) extractQueryIntent(ctx context.Context, query string) (*Quer
 			doctype = "User" // Default fallback
 		}
 		
+		// Set default fields based on doctype to get more useful information
+		defaultFields := getDefaultFieldsForDocType(doctype)
+		
 		params := map[string]interface{}{
 			"doctype": doctype,
+			"fields":  defaultFields,
 		}
 		paramsJSON, _ := json.Marshal(params)
 		
@@ -1350,7 +1672,9 @@ Extract these fields:
    - For aggregate/list/report queries → MUST be empty ""
    - For "get X named Y" or "X with ID Y" → extract Y
    - CRITICAL: If entity includes contextual words like "default", "current", "active", "primary" → use action="list" instead and leave entity_name empty
-   - Examples of NON-ENTITIES: "default currency", "current company", "active user", "primary warehouse"
+   - CRITICAL: Generic words like "data", "info", "information", "details", "records" are NOT entity names → use action="list" and leave entity_name empty
+   - Examples of NON-ENTITIES: "default currency", "current company", "active user", "primary warehouse", "customer data", "user info", "project details"
+   - ONLY extract entity_name if there's a SPECIFIC name or ID mentioned (e.g., "Acme Corp", "INV-2024-001", "John Doe")
    - These should be list/search queries, NOT get queries
 5. requires_search: true if entity_name is NOT an exact ID, false if it's an ID or empty
 
@@ -1392,6 +1716,18 @@ Response: {"is_erpnext_related":true,"action":"list","doctype":"Company","entity
 
 Query: "show all customers"
 Response: {"is_erpnext_related":true,"action":"list","doctype":"Customer","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "get customer data"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"Customer","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "show me customer information"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"Customer","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "customer details"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"Customer","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "give me user info"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"User","entity_name":"","requires_search":false,"confidence":0.95}
 
 Query: "give me warehouse list"
 Response: {"is_erpnext_related":true,"action":"list","doctype":"Warehouse","entity_name":"","requires_search":false,"confidence":0.95}
@@ -1453,10 +1789,13 @@ Response: {"is_erpnext_related":true,"action":"report","doctype":"","entity_name
 Now respond for the user's query:`, query)
 
 	// Call LLM provider
-	aiResponse, err := s.llmClient.Generate(ctx, prompt)
+	aiResponse, err := s.generateWithLLM(ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LLM: %w", err)
 	}
+	
+	// Clean the response - remove markdown and extra text
+	cleanedResponse := cleanJSONResponse(aiResponse)
 	
 	// Parse the AI's JSON response
 	var aiExtraction struct {
@@ -1468,8 +1807,8 @@ Now respond for the user's query:`, query)
 		Confidence       float64 `json:"confidence"`
 	}
 	
-	if err := json.Unmarshal([]byte(aiResponse), &aiExtraction); err != nil {
-		slog.Warn("Failed to parse AI response as JSON", "response", aiResponse, "error", err)
+	if err := json.Unmarshal([]byte(cleanedResponse), &aiExtraction); err != nil {
+		slog.Warn("Failed to parse AI response as JSON", "response", cleanedResponse, "error", err)
 		return nil, fmt.Errorf("AI response was not valid JSON: %w", err)
 	}
 	
@@ -1514,6 +1853,46 @@ Now respond for the user's query:`, query)
 		"entity", intent.EntityName)
 	
 	return intent, nil
+}
+
+// cleanJSONResponse cleans LLM responses that may contain markdown or extra text
+func cleanJSONResponse(response string) string {
+	// First, trim whitespace
+	cleaned := strings.TrimSpace(response)
+	
+	// Remove markdown code blocks
+	cleaned = strings.TrimPrefix(cleaned, "```json")
+	cleaned = strings.TrimPrefix(cleaned, "```")
+	cleaned = strings.TrimSpace(cleaned)
+	
+	// Find the JSON object boundaries
+	// Look for the first { and last matching }
+	startIdx := strings.Index(cleaned, "{")
+	if startIdx == -1 {
+		return cleaned // No JSON found, return as-is
+	}
+	
+	// Find the last } that matches
+	braceCount := 0
+	lastBrace := -1
+	for i := startIdx; i < len(cleaned); i++ {
+		if cleaned[i] == '{' {
+			braceCount++
+		} else if cleaned[i] == '}' {
+			braceCount--
+			if braceCount == 0 {
+				lastBrace = i
+				break
+			}
+		}
+	}
+	
+	if lastBrace == -1 {
+		return cleaned // No matching brace found
+	}
+	
+	// Extract just the JSON object
+	return cleaned[startIdx : lastBrace+1]
 }
 
 // mapActionToTool maps an action string to the appropriate MCP tool name
