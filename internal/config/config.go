@@ -72,9 +72,24 @@ type LLMConfig struct {
 	MaxTokens   int           `yaml:"max_tokens"`    // Max tokens in response
 	Temperature float64       `yaml:"temperature"`   // Temperature (0.0-2.0)
 	
+	// Fallback configuration (optional)
+	Fallback         *LLMFallbackConfig `yaml:"fallback,omitempty"`    // Fallback model config
+	
 	// Azure-specific fields (only needed if provider_type is "azure")
 	AzureDeployment string `yaml:"azure_deployment,omitempty"` // Azure deployment name
 	AzureAPIVersion string `yaml:"azure_api_version,omitempty"` // Azure API version
+}
+
+// LLMFallbackConfig represents fallback LLM configuration
+type LLMFallbackConfig struct {
+	Enabled     bool          `yaml:"enabled"`       // Enable fallback
+	BaseURL     string        `yaml:"base_url"`      // Fallback API endpoint
+	APIKey      string        `yaml:"api_key"`       // Fallback API key
+	Model       string        `yaml:"model"`         // Fallback model name
+	Timeout     time.Duration `yaml:"timeout"`       // Fallback timeout
+	MaxTokens   int           `yaml:"max_tokens"`    // Fallback max tokens
+	Temperature float64       `yaml:"temperature"`   // Fallback temperature
+	AutoSwitch  bool          `yaml:"auto_switch"`   // Auto-switch on rate limit
 }
 
 // CacheConfig represents caching configuration
