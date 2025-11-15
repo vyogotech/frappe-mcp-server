@@ -1390,6 +1390,12 @@ Response: {"is_erpnext_related":true,"action":"list","doctype":"User","entity_na
 Query: "run accounts receivable report"
 Response: {"is_erpnext_related":true,"action":"report","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
 
+Query: "show me the balance sheet"
+Response: {"is_erpnext_related":true,"action":"report","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "get profit and loss report"
+Response: {"is_erpnext_related":true,"action":"report","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
+
 Now respond for the user's query:`, query)
 
 	// Call LLM provider
