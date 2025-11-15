@@ -588,6 +588,25 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Use AI to extract intent and entities from the query
 	queryIntent, err := s.extractQueryIntent(r.Context(), chatRequest.Message)
 	if err != nil {
+		// Check if this is a rate limit error
+		if strings.Contains(err.Error(), "rate limit") || strings.Contains(err.Error(), "429") {
+			slog.Warn("LLM rate limit reached", "error", err)
+			// Return user-friendly rate limit message
+			response := map[string]interface{}{
+				"timestamp":      time.Now().Format(time.RFC3339),
+				"tools_called":   []string{},
+				"response":       "⚠️ The AI service is temporarily unavailable due to rate limits. Please try again in a few minutes.\n\nIf you're seeing this frequently, the system may need to upgrade to a higher tier or switch to a local LLM.",
+				"is_valid_data":  false,
+				"data_quality":   "rate_limited",
+				"data_size":      0,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(response)
+			slog.Info("Chat response sent - rate limited", "data_size", 0)
+			return
+		}
+		
 		slog.Warn("Failed to extract intent with AI, falling back to simple routing", "error", err)
 		queryIntent = s.fallbackQueryRouting(chatRequest.Message)
 	}
@@ -780,7 +799,13 @@ buildResponse:
 		if s.llmClient != nil && responseStr != "" {
 			formatted, err := s.formatResponseWithLLM(ctx, chatRequest.Message, responseStr)
 			if err != nil {
-				slog.Warn("Failed to format response with LLM, using raw data", "error", err)
+				// Check for rate limit in formatting
+				if strings.Contains(err.Error(), "rate limit") || strings.Contains(err.Error(), "429") {
+					slog.Warn("LLM rate limit during formatting, using raw data", "error", err)
+					formattedResponse = responseStr + "\n\n⚠️ Note: AI formatting unavailable due to rate limits. Showing raw data."
+				} else {
+					slog.Warn("Failed to format response with LLM, using raw data", "error", err)
+				}
 			} else {
 				formattedResponse = formatted
 			}
