@@ -693,6 +693,10 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 		} else {
 			toolsCalled = append(toolsCalled, "run_report")
 			result, err = s.executeTool(ctx, "run_report", params)
+			if err != nil {
+				slog.Warn("Report tool returned error", "error", err)
+			}
+			slog.Info("Report tool executed", "result_is_nil", result == nil, "error_is_nil", err == nil)
 		}
 		// Skip to response building
 		goto buildResponse
@@ -743,8 +747,17 @@ buildResponse:
 		"tools_called": toolsCalled,
 	}
 
+	slog.Info("Building response", "err_is_nil", err == nil, "result_is_nil", result == nil)
+
 	if err != nil {
-		response["response"] = fmt.Sprintf("Error processing query: %v", err)
+		// Provide more helpful error messages for common cases
+		errorMsg := err.Error()
+		if strings.Contains(errorMsg, "report query failed") && strings.HasSuffix(errorMsg, ": ") {
+			// Empty Frappe API error - likely authentication or empty report
+			errorMsg = fmt.Sprintf("The report could not be executed. This might be because:\n- The report requires authentication (please check your API credentials)\n- The report has no data for the current parameters\n- The report requires additional filters like company or fiscal year\n\nTechnical details: %v", err)
+		}
+		
+		response["response"] = fmt.Sprintf("Error processing query: %v", errorMsg)
 		response["data_quality"] = "error"
 		response["data_size"] = 0
 		response["is_valid_data"] = false
@@ -759,17 +772,23 @@ buildResponse:
 			}
 		}
 		
-		responseStr := responseText.String()
+		responseStr := strings.TrimSpace(responseText.String())
+		slog.Info("Tool response extracted", "response_length", len(responseStr), "has_content", responseStr != "")
 		
-		// Use LLM to format the response nicely if available
+		// Even if responseStr is empty, try to format with LLM to explain the empty result
 		formattedResponse := responseStr
-		if s.llmClient != nil {
+		if s.llmClient != nil && responseStr != "" {
 			formatted, err := s.formatResponseWithLLM(ctx, chatRequest.Message, responseStr)
 			if err != nil {
 				slog.Warn("Failed to format response with LLM, using raw data", "error", err)
 			} else {
 				formattedResponse = formatted
 			}
+		} else if responseStr == "" {
+			// Tool succeeded but returned no data - provide helpful message
+			slog.Warn("Tool returned empty response", "tools", toolsCalled)
+			formattedResponse = fmt.Sprintf("The query was executed successfully, but no data was returned. This could mean:\n- The report '%s' has no data for the current filters\n- You may need to specify additional filters or date ranges\n- The report may require certain company or fiscal year parameters", 
+				extractReportNameFromTools(toolsCalled))
 		}
 		
 		response["response"] = formattedResponse
@@ -797,6 +816,16 @@ buildResponse:
 		slog.Error("Failed to encode chat response", "error", err)
 	}
 	slog.Info("Chat response sent", "data_size", response["data_size"])
+}
+
+// extractReportNameFromTools extracts report name from tools_called for better error messages
+func extractReportNameFromTools(toolsCalled []string) string {
+	for _, tool := range toolsCalled {
+		if tool == "run_report" {
+			return "requested report"
+		}
+	}
+	return "query"
 }
 
 // formatResponseWithLLM uses the LLM to format raw data into a user-friendly response
