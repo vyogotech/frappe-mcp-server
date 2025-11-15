@@ -911,9 +911,17 @@ Respond with JSON only:
 		return nil, fmt.Errorf("failed to extract aggregation params: %w", err)
 	}
 
+	// Clean response: remove markdown code blocks if present
+	cleanedResponse := strings.TrimSpace(response)
+	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```json")
+	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```")
+	cleanedResponse = strings.TrimSuffix(cleanedResponse, "```")
+	cleanedResponse = strings.TrimSpace(cleanedResponse)
+
 	// Validate JSON
 	var params map[string]interface{}
-	if err := json.Unmarshal([]byte(response), &params); err != nil {
+	if err := json.Unmarshal([]byte(cleanedResponse), &params); err != nil {
+		slog.Warn("Failed to parse aggregation params JSON", "response", cleanedResponse, "error", err)
 		return nil, fmt.Errorf("invalid aggregation params JSON: %w", err)
 	}
 
@@ -960,9 +968,17 @@ Respond with JSON only:
 		return nil, fmt.Errorf("failed to extract report params: %w", err)
 	}
 
+	// Clean response: remove markdown code blocks if present
+	cleanedResponse := strings.TrimSpace(response)
+	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```json")
+	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```")
+	cleanedResponse = strings.TrimSuffix(cleanedResponse, "```")
+	cleanedResponse = strings.TrimSpace(cleanedResponse)
+
 	// Validate JSON
 	var params map[string]interface{}
-	if err := json.Unmarshal([]byte(response), &params); err != nil {
+	if err := json.Unmarshal([]byte(cleanedResponse), &params); err != nil {
+		slog.Warn("Failed to parse report params JSON", "response", cleanedResponse, "error", err)
 		return nil, fmt.Errorf("invalid report params JSON: %w", err)
 	}
 
@@ -1034,9 +1050,17 @@ Respond with JSON only:
 		return nil, fmt.Errorf("failed to extract create params: %w", err)
 	}
 
+	// Clean response: remove markdown code blocks if present
+	cleanedResponse := strings.TrimSpace(response)
+	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```json")
+	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```")
+	cleanedResponse = strings.TrimSuffix(cleanedResponse, "```")
+	cleanedResponse = strings.TrimSpace(cleanedResponse)
+
 	// Validate JSON
 	var params map[string]interface{}
-	if err := json.Unmarshal([]byte(response), &params); err != nil {
+	if err := json.Unmarshal([]byte(cleanedResponse), &params); err != nil {
+		slog.Warn("Failed to parse create params JSON", "response", cleanedResponse, "error", err)
 		return nil, fmt.Errorf("invalid create params JSON: %w", err)
 	}
 
@@ -1113,9 +1137,17 @@ Respond with JSON only:
 		return nil, fmt.Errorf("failed to extract update params: %w", err)
 	}
 
+	// Clean response: remove markdown code blocks if present
+	cleanedResponse := strings.TrimSpace(response)
+	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```json")
+	cleanedResponse = strings.TrimPrefix(cleanedResponse, "```")
+	cleanedResponse = strings.TrimSuffix(cleanedResponse, "```")
+	cleanedResponse = strings.TrimSpace(cleanedResponse)
+
 	// Validate JSON
 	var params map[string]interface{}
-	if err := json.Unmarshal([]byte(response), &params); err != nil {
+	if err := json.Unmarshal([]byte(cleanedResponse), &params); err != nil {
+		slog.Warn("Failed to parse update params JSON", "response", cleanedResponse, "error", err)
 		return nil, fmt.Errorf("invalid update params JSON: %w", err)
 	}
 
