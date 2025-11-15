@@ -1263,6 +1263,9 @@ Extract these fields:
 4. entity_name: THE EXACT entity name/ID (empty for list/aggregate/report/search!)
    - For aggregate/list/report queries → MUST be empty ""
    - For "get X named Y" or "X with ID Y" → extract Y
+   - CRITICAL: If entity includes contextual words like "default", "current", "active", "primary" → use action="list" instead and leave entity_name empty
+   - Examples of NON-ENTITIES: "default currency", "current company", "active user", "primary warehouse"
+   - These should be list/search queries, NOT get queries
 5. requires_search: true if entity_name is NOT an exact ID, false if it's an ID or empty
 
 Respond with JSON only:
@@ -1342,6 +1345,18 @@ Response: {"is_erpnext_related":true,"action":"update","doctype":"Project","enti
 
 Query: "delete customer CUST-00123"
 Response: {"is_erpnext_related":true,"action":"delete","doctype":"Customer","entity_name":"CUST-00123","requires_search":false,"confidence":0.9}
+
+Query: "what's the default currency?"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"Company","entity_name":"","requires_search":false,"confidence":0.9}
+
+Query: "give details of the current company"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"Company","entity_name":"","requires_search":false,"confidence":0.9}
+
+Query: "show me the active user"
+Response: {"is_erpnext_related":true,"action":"list","doctype":"User","entity_name":"","requires_search":false,"confidence":0.9}
+
+Query: "run accounts receivable report"
+Response: {"is_erpnext_related":true,"action":"report","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
 
 Now respond for the user's query:`, query)
 
