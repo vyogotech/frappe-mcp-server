@@ -39,6 +39,23 @@ llm:
   max_tokens: 1000                            # Max tokens in response
   temperature: 0.3                            # Lower temp for consistent output
   
+  # Fallback LLM (auto-switch when primary hits rate limit or errors)
+  # Recommended: Use Ollama as fallback for Groq
+  fallback:
+    enabled: true                             # Enable fallback
+    auto_switch: true                         # Auto-switch on rate limit/timeout/error
+    base_url: "http://ollama:11434/v1"       # Local Ollama instance
+    api_key: ""                               # No API key needed for Ollama
+    model: "mixtral:8x7b"                     # Powerful MoE model (~26GB RAM)
+    timeout: "120s"
+    max_tokens: 1000
+    temperature: 0.3
+  
+  # Alternative fallback models:
+  # - llama3.2:1b (~1GB RAM) - fast but less accurate
+  # - llama3.1:latest (~5GB RAM) - balanced
+  # - mixtral:8x7b (~26GB RAM) - most accurate, requires more memory
+  
   # Alternative: Local Ollama (private but less reliable)
   # base_url: "http://localhost:11434/v1"
   # api_key: ""

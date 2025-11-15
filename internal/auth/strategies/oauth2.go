@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"frappe-mcp-server/internal/types"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -67,10 +68,22 @@ func NewOAuth2Strategy(config OAuth2StrategyConfig) *OAuth2Strategy {
 func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*types.User, error) {
 	// Strategy 1: Try sid cookie first (Frappe session - user-level permissions)
 	if sidCookie, err := r.Cookie("sid"); err == nil && sidCookie.Value != "" {
+		// Check cache first
+		cacheKey := "sid:" + sidCookie.Value
+		if cached, found := s.cache.Get(cacheKey); found {
+			if user, ok := cached.(*types.User); ok {
+				log.Printf("DEBUG Auth: Using cached user for sid, CSRF token len: %d", len(user.CSRFToken))
+				return user, nil
+			}
+		}
+
+		// Validate session and get CSRF token from Frappe
 		user, err := s.validateSessionCookie(ctx, sidCookie)
 		if err == nil {
-			// Cache the validated user
-			s.cache.Set("sid:"+sidCookie.Value, user, cache.DefaultExpiration)
+			log.Printf("DEBUG Auth: Session validation successful, CSRF token len: %d", len(user.CSRFToken))
+			// Cache the validated user with shorter expiration for CSRF token freshness
+			// CSRF tokens can expire, so use 2 minutes instead of default 5 minutes
+			s.cache.Set(cacheKey, user, 2*time.Minute)
 			return user, nil
 		}
 		// If sid validation fails, continue to try Bearer token
@@ -79,7 +92,7 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 	// Strategy 2: Try Bearer token (OAuth2)
 	token := extractBearerToken(r)
 	if token == "" {
-		return nil, errors.New("missing authentication: no sid cookie or Bearer token found")
+		return nil, errors.New("missing or invalid Bearer token")
 	}
 
 	// Check cache first
@@ -223,6 +236,10 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 		return nil, fmt.Errorf("invalid session: status %d", resp.StatusCode)
 	}
 
+	// Extract CSRF token from response headers
+	csrfToken := resp.Header.Get("X-Frappe-CSRF-Token")
+	log.Printf("DEBUG validateSession: Extracted CSRF token from Frappe response: %q (len=%d)", csrfToken, len(csrfToken))
+
 	var result struct {
 		Message string `json:"message"` // The user email
 	}
@@ -235,7 +252,10 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 		ID:        result.Message,
 		Email:     result.Message,
 		SessionID: sidCookie.Value, // Store for pass-through to Frappe API calls
+		CSRFToken: csrfToken,       // Store CSRF token from validation response
 	}
+
+	log.Printf("DEBUG validateSession: Created user with CSRF token (len=%d)", len(user.CSRFToken))
 
 	return user, nil
 }
