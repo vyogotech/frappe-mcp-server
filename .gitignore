@@ -142,3 +142,4 @@ docs/.jekyll-metadata
 *.tar.gz
 *.rar
 
+.mcp.json
