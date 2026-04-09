@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
@@ -307,10 +308,12 @@ func BenchmarkExecuteToolRequest(b *testing.B) {
 
 func TestExecuteToolRequest_EmitsSpan(t *testing.T) {
 	// Capture spans in memory using the SDK's tracetest exporter.
+	prev := otel.GetTracerProvider()
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	otel.SetTracerProvider(tp)
 	t.Cleanup(func() {
+		otel.SetTracerProvider(prev)
 		_ = tp.Shutdown(context.Background())
 	})
 
@@ -345,10 +348,12 @@ func TestExecuteToolRequest_EmitsSpan(t *testing.T) {
 }
 
 func TestExecuteToolRequest_EmitsErrorSpanOnFailure(t *testing.T) {
+	prev := otel.GetTracerProvider()
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	otel.SetTracerProvider(tp)
 	t.Cleanup(func() {
+		otel.SetTracerProvider(prev)
 		_ = tp.Shutdown(context.Background())
 	})
 
@@ -375,4 +380,5 @@ func TestExecuteToolRequest_EmitsErrorSpanOnFailure(t *testing.T) {
 		attrs[string(kv.Key)] = kv.Value.Emit()
 	}
 	assert.Equal(t, "false", attrs["tool.success"])
+	assert.Equal(t, codes.Error, span.Status.Code)
 }
