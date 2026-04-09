@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -155,4 +156,71 @@ func TestStreamableHTTP_UnknownMethod(t *testing.T) {
 	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
 	require.NotNil(t, resp.Error)
 	assert.Equal(t, JSONRPCMethodNotFound, resp.Error.Code)
+}
+
+func TestStreamableHTTP_ToolsCall_Success(t *testing.T) {
+	rr := postMCP(t, newTestServer(t),
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call",
+		  "params":{"name":"stub_tool","arguments":{"doctype":"Customer","name":"C-1"}}}`, nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var resp JSONRPCResponse
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+	require.Nil(t, resp.Error)
+	require.NotNil(t, resp.Result)
+
+	raw, err := json.Marshal(resp.Result)
+	require.NoError(t, err)
+
+	var result toolsCallResult
+	require.NoError(t, json.Unmarshal(raw, &result))
+	assert.False(t, result.IsError)
+	require.Len(t, result.Content, 1)
+	assert.Equal(t, "text", result.Content[0].Type)
+	assert.Equal(t, "stub-result", result.Content[0].Text)
+}
+
+func TestStreamableHTTP_ToolsCall_UnknownTool(t *testing.T) {
+	rr := postMCP(t, newTestServer(t),
+		`{"jsonrpc":"2.0","id":5,"method":"tools/call",
+		  "params":{"name":"nope","arguments":{}}}`, nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var resp JSONRPCResponse
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+	require.NotNil(t, resp.Error)
+	assert.Equal(t, JSONRPCMethodNotFound, resp.Error.Code)
+}
+
+func TestStreamableHTTP_ToolsCall_HandlerError(t *testing.T) {
+	server := NewServer("test-server", "1.0.0")
+	server.RegisterTool("failing_tool", func(ctx context.Context, request ToolRequest) (*ToolResponse, error) {
+		return nil, errors.New("tool exploded")
+	})
+
+	rr := postMCP(t, server,
+		`{"jsonrpc":"2.0","id":6,"method":"tools/call",
+		  "params":{"name":"failing_tool","arguments":{}}}`, nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var resp JSONRPCResponse
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+	require.NotNil(t, resp.Error)
+	assert.Equal(t, JSONRPCServerError, resp.Error.Code)
+	assert.Contains(t, resp.Error.Message, "tool exploded")
+}
+
+func TestStreamableHTTP_ToolsCall_MissingName(t *testing.T) {
+	rr := postMCP(t, newTestServer(t),
+		`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"arguments":{}}}`, nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var resp JSONRPCResponse
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+	require.NotNil(t, resp.Error)
+	assert.Equal(t, JSONRPCInvalidParams, resp.Error.Code)
 }

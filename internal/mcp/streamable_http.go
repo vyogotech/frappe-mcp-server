@@ -55,13 +55,14 @@ func (s *Server) handleStreamableHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // dispatchJSONRPC routes a JSON-RPC request to the appropriate handler.
-// tools/call is added in Task 9.
 func (s *Server) dispatchJSONRPC(ctx context.Context, req JSONRPCRequest) JSONRPCResponse {
 	switch req.Method {
 	case "initialize":
 		return s.dispatchInitialize(req)
 	case "tools/list":
 		return s.dispatchToolsList(req)
+	case "tools/call":
+		return s.dispatchToolsCall(ctx, req)
 	default:
 		return newJSONRPCError(req.ID, JSONRPCMethodNotFound, "Method not found: "+req.Method)
 	}
@@ -121,4 +122,70 @@ func acceptsJSON(accept string) bool {
 		}
 	}
 	return false
+}
+
+// toolsCallParams is the params shape for the JSON-RPC tools/call method.
+type toolsCallParams struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+// dispatchToolsCall handles the JSON-RPC "tools/call" method. It translates
+// the JSON-RPC request into the legacy ToolRequest shape, runs it through the
+// shared executeToolRequest dispatcher (which emits the OpenTelemetry span),
+// then translates the resulting ToolResponse back into the JSON-RPC tools/call
+// result shape.
+func (s *Server) dispatchToolsCall(ctx context.Context, req JSONRPCRequest) JSONRPCResponse {
+	if len(req.Params) == 0 {
+		return newJSONRPCError(req.ID, JSONRPCInvalidParams, "tools/call requires params")
+	}
+
+	var params toolsCallParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return newJSONRPCError(req.ID, JSONRPCInvalidParams, "Invalid params: "+err.Error())
+	}
+	if params.Name == "" {
+		return newJSONRPCError(req.ID, JSONRPCInvalidParams, "tools/call requires params.name")
+	}
+
+	// Default arguments to an empty object so tools that ignore params can be
+	// called with `arguments` omitted entirely.
+	if len(params.Arguments) == 0 {
+		params.Arguments = json.RawMessage(`{}`)
+	}
+
+	// Translate JSON-RPC ID to a string for the legacy ToolRequest envelope.
+	// We do not use this ID anywhere observable; the JSON-RPC ID is what gets
+	// echoed back to the caller.
+	toolReq := ToolRequest{
+		ID:     string(req.ID),
+		Tool:   params.Name,
+		Params: params.Arguments,
+	}
+
+	resp := s.executeToolRequest(ctx, toolReq)
+
+	// Translate the legacy response into the JSON-RPC tools/call shape.
+	if resp.Error != nil {
+		// Map legacy error codes to JSON-RPC error codes.
+		// 404 (tool not found) → -32601 Method not found
+		// anything else        → -32000 Server error
+		code := JSONRPCServerError
+		if resp.Error.Code == http.StatusNotFound {
+			code = JSONRPCMethodNotFound
+		}
+		return newJSONRPCError(req.ID, code, resp.Error.Message)
+	}
+
+	content := make([]toolContent, 0, len(resp.Content))
+	for _, c := range resp.Content {
+		content = append(content, toolContent{
+			Type: c.Type,
+			Text: c.Text,
+		})
+	}
+	return newJSONRPCResult(req.ID, toolsCallResult{
+		Content: content,
+		IsError: false,
+	})
 }
