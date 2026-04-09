@@ -8,6 +8,7 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"runtime/debug"
@@ -59,8 +60,11 @@ func Init(ctx context.Context) (func(context.Context) error, error) {
 		),
 	)
 	if err != nil {
-		slog.Warn("OpenTelemetry resource init failed; tracing disabled", "error", err)
-		return noopShutdown, nil
+		if !errors.Is(err, resource.ErrPartialResource) {
+			slog.Warn("OpenTelemetry resource init failed; tracing disabled", "error", err, "endpoint", endpoint)
+			return noopShutdown, nil
+		}
+		slog.Warn("OpenTelemetry resource init returned partial resource; continuing", "error", err)
 	}
 
 	provider := sdktrace.NewTracerProvider(

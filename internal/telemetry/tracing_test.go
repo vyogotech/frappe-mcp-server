@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func TestInit_NoEndpoint(t *testing.T) {
@@ -28,6 +30,7 @@ func TestInit_ValidEndpoint(t *testing.T) {
 	// exporter lazily — it does not dial during New(), so this succeeds and
 	// exercises the "real provider installed" branch.
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
 
 	shutdown, err := Init(context.Background())
 
@@ -41,6 +44,7 @@ func TestInit_ValidEndpoint(t *testing.T) {
 
 func TestInit_ShutdownTimeout(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
 
 	shutdown, err := Init(context.Background())
 	require.NoError(t, err)
@@ -48,5 +52,7 @@ func TestInit_ShutdownTimeout(t *testing.T) {
 	// Cancelled context: shutdown must return without panic.
 	shutdownCtx, cancel := context.WithCancel(context.Background())
 	cancel()
+	// With a cancelled context, shutdown may return a context error; we only
+	// verify that it returns without panicking.
 	_ = shutdown(shutdownCtx)
 }
