@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"golang.org/x/time/rate"
 
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/types"
