@@ -19,7 +19,7 @@ import (
 func (s *Server) handleStreamableHTTP(w http.ResponseWriter, r *http.Request) {
 	// 1. Validate Content-Type. We accept only application/json (with optional
 	//    charset). Anything else is a transport error.
-	contentType := r.Header.Get("Content-Type")
+	contentType := strings.ToLower(r.Header.Get("Content-Type"))
 	if !strings.HasPrefix(contentType, "application/json") {
 		slog.Debug("POST /mcp rejected: wrong Content-Type", "content_type", contentType)
 		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
@@ -79,7 +79,7 @@ func writeJSONRPC(w http.ResponseWriter, resp JSONRPCResponse) {
 // application/json is fine. Pure text/event-stream is not.
 func acceptsJSON(accept string) bool {
 	for _, part := range strings.Split(accept, ",") {
-		mediaType := strings.TrimSpace(strings.SplitN(part, ";", 2)[0])
+		mediaType := strings.ToLower(strings.TrimSpace(strings.SplitN(part, ";", 2)[0]))
 		if mediaType == "application/json" || mediaType == "*/*" || mediaType == "application/*" {
 			return true
 		}

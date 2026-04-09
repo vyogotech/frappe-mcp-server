@@ -85,9 +85,12 @@ func TestStreamableHTTP_GETStillRoutesToWebSocket(t *testing.T) {
 	rr := httptest.NewRecorder()
 	server.router.ServeHTTP(rr, req)
 
-	// The streamable handler always returns Content-Type application/json.
-	// The WS handler does not. If we see application/json here, the route
-	// dispatched to the wrong handler.
+	// The gorilla/websocket upgrader returns 400 when the Upgrade header is
+	// missing. If we saw any 2xx or 4xx response with Content-Type
+	// application/json, the route would have dispatched to the streamable
+	// handler instead.
+	assert.Equal(t, http.StatusBadRequest, rr.Code,
+		"GET /mcp without Upgrade header should hit the WS handler (400)")
 	assert.NotEqual(t, "application/json", rr.Header().Get("Content-Type"),
 		"GET /mcp should not be routed to streamable HTTP handler")
 }
