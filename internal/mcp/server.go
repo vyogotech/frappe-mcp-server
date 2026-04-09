@@ -96,9 +96,14 @@ func (s *Server) RegisterResource(uri, description string) {
 	slog.Debug("Registered MCP resource", "uri", uri)
 }
 
-// setupRoutes sets up HTTP routes
+// setupRoutes sets up HTTP routes.
+//
+// The /mcp path serves two transports based on HTTP method:
+//   - POST: JSON-RPC 2.0 Streamable HTTP transport (langchain-mcp-adapters)
+//   - GET:  WebSocket upgrade for the legacy custom transport
 func (s *Server) setupRoutes() {
-	s.router.HandleFunc("/mcp", s.handleWebSocket)
+	s.router.HandleFunc("/mcp", s.handleStreamableHTTP).Methods("POST")
+	s.router.HandleFunc("/mcp", s.handleWebSocket).Methods("GET")
 	s.router.HandleFunc("/tools", s.handleToolsList).Methods("GET")
 	s.router.HandleFunc("/tools/{tool}", s.handleToolCall).Methods("POST")
 	s.router.HandleFunc("/resources", s.handleResourcesList).Methods("GET")
