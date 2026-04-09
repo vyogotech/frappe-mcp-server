@@ -55,12 +55,48 @@ func (s *Server) handleStreamableHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // dispatchJSONRPC routes a JSON-RPC request to the appropriate handler.
-// Stubbed in this task; Tasks 8 and 9 add tools/list and tools/call.
+// tools/call is added in Task 9.
 func (s *Server) dispatchJSONRPC(ctx context.Context, req JSONRPCRequest) JSONRPCResponse {
 	switch req.Method {
+	case "initialize":
+		return s.dispatchInitialize(req)
+	case "tools/list":
+		return s.dispatchToolsList(req)
 	default:
 		return newJSONRPCError(req.ID, JSONRPCMethodNotFound, "Method not found: "+req.Method)
 	}
+}
+
+// dispatchInitialize handles the JSON-RPC "initialize" method. Returns the
+// MCP protocol version and the server's tool capability advertisement.
+func (s *Server) dispatchInitialize(req JSONRPCRequest) JSONRPCResponse {
+	return newJSONRPCResult(req.ID, initializeResult{
+		ProtocolVersion: "2024-11-05",
+		Capabilities: map[string]interface{}{
+			"tools": map[string]interface{}{},
+		},
+		ServerInfo: serverInfo{
+			Name:    s.name,
+			Version: s.version,
+		},
+	})
+}
+
+// dispatchToolsList handles the JSON-RPC "tools/list" method. Returns each
+// registered tool with an empty inputSchema; the agent treats unknown
+// schemas as "accept any object".
+func (s *Server) dispatchToolsList(req JSONRPCRequest) JSONRPCResponse {
+	tools := make([]toolDefinition, 0, len(s.tools))
+	for name := range s.tools {
+		tools = append(tools, toolDefinition{
+			Name:        name,
+			Description: "",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+			},
+		})
+	}
+	return newJSONRPCResult(req.ID, toolsListResult{Tools: tools})
 }
 
 // writeJSONRPC encodes a JSON-RPC response and writes it with HTTP 200.

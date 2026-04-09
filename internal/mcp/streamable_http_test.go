@@ -94,3 +94,65 @@ func TestStreamableHTTP_GETStillRoutesToWebSocket(t *testing.T) {
 	assert.NotEqual(t, "application/json", rr.Header().Get("Content-Type"),
 		"GET /mcp should not be routed to streamable HTTP handler")
 }
+
+func TestStreamableHTTP_Initialize(t *testing.T) {
+	rr := postMCP(t, newTestServer(t),
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`, nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var resp JSONRPCResponse
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+	require.Nil(t, resp.Error)
+	require.NotNil(t, resp.Result)
+
+	// Re-encode/decode the result so we can inspect its fields without a
+	// concrete type at the call site.
+	raw, err := json.Marshal(resp.Result)
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &result))
+
+	assert.Equal(t, "2024-11-05", result["protocolVersion"])
+	assert.NotNil(t, result["capabilities"])
+
+	serverInfo, ok := result["serverInfo"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "test-server", serverInfo["name"])
+	assert.Equal(t, "1.0.0", serverInfo["version"])
+}
+
+func TestStreamableHTTP_ToolsList(t *testing.T) {
+	rr := postMCP(t, newTestServer(t),
+		`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`, nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var resp JSONRPCResponse
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+	require.Nil(t, resp.Error)
+	require.NotNil(t, resp.Result)
+
+	raw, err := json.Marshal(resp.Result)
+	require.NoError(t, err)
+
+	var result toolsListResult
+	require.NoError(t, json.Unmarshal(raw, &result))
+
+	require.Len(t, result.Tools, 1)
+	assert.Equal(t, "stub_tool", result.Tools[0].Name)
+	assert.NotNil(t, result.Tools[0].InputSchema)
+}
+
+func TestStreamableHTTP_UnknownMethod(t *testing.T) {
+	rr := postMCP(t, newTestServer(t),
+		`{"jsonrpc":"2.0","id":3,"method":"nonexistent/method"}`, nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var resp JSONRPCResponse
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+	require.NotNil(t, resp.Error)
+	assert.Equal(t, JSONRPCMethodNotFound, resp.Error.Code)
+}
