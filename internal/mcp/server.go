@@ -10,7 +10,14 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
+
+// tracerName is the instrumentation scope for mcp dispatch spans.
+const tracerName = "frappe-mcp-server/internal/mcp"
 
 // Server represents an MCP server
 type Server struct {
@@ -203,14 +210,34 @@ func (s *Server) handleResourcesList(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// executeToolRequest executes a tool request
+// executeToolRequest executes a tool request and emits an OpenTelemetry span
+// describing the call. Both the WebSocket handler and the streamable HTTP
+// handler call into this function so they share identical traces.
 func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *ToolResponse {
 	if request.ID == "" {
 		request.ID = fmt.Sprintf("req_%d", time.Now().UnixNano())
 	}
 
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "tool."+request.Tool,
+		trace.WithAttributes(attribute.String("tool.name", request.Tool)),
+	)
+	defer span.End()
+
+	// Best-effort: extract doctype from params for observability. Tools that
+	// do not use a doctype field simply omit the attribute.
+	if len(request.Params) > 0 {
+		var paramsMap map[string]interface{}
+		if err := json.Unmarshal(request.Params, &paramsMap); err == nil {
+			if dt, ok := paramsMap["doctype"].(string); ok && dt != "" {
+				span.SetAttributes(attribute.String("tool.doctype", dt))
+			}
+		}
+	}
+
 	handler, exists := s.tools[request.Tool]
 	if !exists {
+		span.SetAttributes(attribute.Bool("tool.success", false))
+		span.SetStatus(codes.Error, "tool not found")
 		return &ToolResponse{
 			ID: request.ID,
 			Error: &Error{
@@ -225,6 +252,9 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 	response, err := handler(ctx, request)
 	if err != nil {
 		slog.Error("Tool execution failed", "tool", request.Tool, "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Bool("tool.success", false))
 		return &ToolResponse{
 			ID: request.ID,
 			Error: &Error{
@@ -238,5 +268,6 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 		response.ID = request.ID
 	}
 
+	span.SetAttributes(attribute.Bool("tool.success", true))
 	return response
 }
