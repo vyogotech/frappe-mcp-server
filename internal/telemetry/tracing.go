@@ -10,6 +10,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -19,10 +20,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-const (
-	serviceName    = "frappe-mcp-server"
-	serviceVersion = "1.0.0"
-)
+const serviceName = "frappe-mcp-server"
 
 // noopShutdown is returned when telemetry is disabled.
 func noopShutdown(_ context.Context) error { return nil }
@@ -49,10 +47,15 @@ func Init(ctx context.Context) (func(context.Context) error, error) {
 		return noopShutdown, nil
 	}
 
+	version := "unknown"
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+		version = info.Main.Version
+	}
+
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			attribute.String("service.name", serviceName),
-			attribute.String("service.version", serviceVersion),
+			attribute.String("service.version", version),
 		),
 	)
 	if err != nil {
