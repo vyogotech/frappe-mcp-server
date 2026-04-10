@@ -45,6 +45,23 @@ cp config.yaml.example config.yaml
 # Edit config.yaml with your Frappe/ERPNext credentials
 ```
 
+## Using with frappe-copilot-agent
+
+When running as part of the Frappe Copilot stack, the agent connects via the Streamable HTTP MCP endpoint, not the legacy REST API.
+
+**Ports:**
+- `8080` — legacy REST API (`/health`, direct ERPNext tool calls)
+- `8081` — MCP protocol endpoint (`POST /mcp` JSON-RPC, used by `frappe-copilot-agent`)
+
+**Build the local Docker image:**
+```bash
+docker build -t frappe-mcp-server:local .
+```
+
+**Important:** `ERPNEXT_BASE_URL` must use the port ERPNext is mapped to on the Docker host — not the internal container port. If your ERPNext container maps `8000→8080`, use `http://host.docker.internal:8080`.
+
+See [frappe-copilot](https://github.com/your-org/frappe-copilot) for the full stack setup guide.
+
 ## 📖 Documentation
 
 **Complete documentation:** [https://vyogotech.github.io/frappe-mcp-server/](https://vyogotech.github.io/frappe-mcp-server/)

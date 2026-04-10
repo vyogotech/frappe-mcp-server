@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func TestNewServer(t *testing.T) {
@@ -299,4 +304,81 @@ func BenchmarkExecuteToolRequest(b *testing.B) {
 			b.Fatal(response.Error.Message)
 		}
 	}
+}
+
+func TestExecuteToolRequest_EmitsSpan(t *testing.T) {
+	// Capture spans in memory using the SDK's tracetest exporter.
+	prev := otel.GetTracerProvider()
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(prev)
+		_ = tp.Shutdown(context.Background())
+	})
+
+	server := NewServer("test-server", "1.0.0")
+	server.RegisterTool("stub_tool", func(ctx context.Context, request ToolRequest) (*ToolResponse, error) {
+		return &ToolResponse{
+			ID:      request.ID,
+			Content: []Content{{Type: "text", Text: "ok"}},
+		}, nil
+	})
+
+	resp := server.executeToolRequest(context.Background(), ToolRequest{
+		ID:     "req-1",
+		Tool:   "stub_tool",
+		Params: json.RawMessage(`{"doctype":"Customer","name":"C-1"}`),
+	})
+	require.Nil(t, resp.Error)
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+
+	span := spans[0]
+	assert.Equal(t, "tool.stub_tool", span.Name)
+
+	attrs := map[string]string{}
+	for _, kv := range span.Attributes {
+		attrs[string(kv.Key)] = kv.Value.Emit()
+	}
+	assert.Equal(t, "stub_tool", attrs["tool.name"])
+	assert.Equal(t, "Customer", attrs["tool.doctype"])
+	assert.Equal(t, "true", attrs["tool.success"])
+}
+
+func TestExecuteToolRequest_EmitsErrorSpanOnFailure(t *testing.T) {
+	prev := otel.GetTracerProvider()
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(prev)
+		_ = tp.Shutdown(context.Background())
+	})
+
+	server := NewServer("test-server", "1.0.0")
+	server.RegisterTool("failing_tool", func(ctx context.Context, request ToolRequest) (*ToolResponse, error) {
+		return nil, errors.New("boom")
+	})
+
+	resp := server.executeToolRequest(context.Background(), ToolRequest{
+		ID:     "req-2",
+		Tool:   "failing_tool",
+		Params: json.RawMessage(`{}`),
+	})
+	require.NotNil(t, resp.Error)
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+
+	span := spans[0]
+	assert.Equal(t, "tool.failing_tool", span.Name)
+
+	attrs := map[string]string{}
+	for _, kv := range span.Attributes {
+		attrs[string(kv.Key)] = kv.Value.Emit()
+	}
+	assert.Equal(t, "false", attrs["tool.success"])
+	assert.Equal(t, codes.Error, span.Status.Code)
 }
