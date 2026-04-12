@@ -14,7 +14,7 @@ Get Frappe MCP Server running in 5 minutes.
 
 ```bash
 # One-command installation
-curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 ```
 
 This will:
@@ -25,7 +25,7 @@ This will:
 
 ### Option B: Manual Download
 
-1. Go to [Releases](https://github.com/varkrish/frappe-mcp-server/releases/latest)
+1. Go to [Releases](https://github.com/vyogotech/frappe-mcp-server/releases/latest)
 2. Download the binary for your platform:
    - **Linux (Intel)**: `frappe-mcp-server-stdio-linux-amd64.tar.gz`
    - **Linux (ARM)**: `frappe-mcp-server-stdio-linux-arm64.tar.gz`
@@ -38,7 +38,7 @@ This will:
 
 ```bash
 # Requires Go 1.24+
-git clone https://github.com/varkrish/frappe-mcp-server
+git clone https://github.com/vyogotech/frappe-mcp-server
 cd frappe-mcp-server
 
 # Install dependencies

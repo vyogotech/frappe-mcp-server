@@ -1,429 +1,292 @@
-# OAuth2 Authentication
+# Authentication
 
-This document describes how to set up and use OAuth2 authentication with the Frappe MCP Server.
+This document describes how to set up and use authentication with the Frappe MCP Server.
 
 ## Overview
 
-The Frappe MCP Server supports **standard OAuth2 authentication** with the following features:
+The Frappe MCP Server supports **three authentication methods** with automatic priority-based fallback:
 
-- **Client Credentials Grant**: For backend-to-backend authentication (Frappe backend → MCP)
-- **Authorization Code Grant**: For external clients like mobile apps, VS Code extensions
-- **JWT Validation**: Token validation with Frappe OAuth2 provider
-- **Token Caching**: In-memory caching to reduce validation overhead
-- **Optional Authentication**: Backward compatible mode for gradual migration
-- **Trusted Clients**: Special handling for trusted backend clients that can provide user context
+| Priority | Method | Use Case | Permissions |
+|----------|--------|----------|-------------|
+| 1 | **Frappe `sid` cookie** | Frappe apps (Awesome Bar, desk widgets) | User-level — respects Frappe roles |
+| 2 | **OAuth2 Bearer token** | External apps (Open WebUI, VS Code, mobile) | User or system-level |
+| 3 | **API key/secret** | Server-to-server, fallback | System-level |
+
+Authentication is **optional by default** — set `require_auth: true` in production.
 
 ## Architecture
 
-### Authentication Flow
+### Authentication Priority
+
+The server tries each method in order, using the first that succeeds:
 
 ```
-┌─────────────┐                  ┌──────────────┐                 ┌────────────┐
-│   Client    │                  │  MCP Server  │                 │   Frappe   │
-│ (Frappe App)│                  │              │                 │  OAuth2    │
-└──────┬──────┘                  └──────┬───────┘                 └─────┬──────┘
-       │                                │                               │
-       │  1. Get OAuth2 Token          │                               │
-       │───────────────────────────────────────────────────────────────>│
-       │                                │                               │
-       │  2. Access Token               │                               │
-       │<───────────────────────────────────────────────────────────────│
-       │                                │                               │
-       │  3. API Request + Bearer Token │                               │
-       │     + User Context Headers     │                               │
-       │───────────────────────────────>│                               │
-       │                                │                               │
-       │                                │  4. Validate Token            │
-       │                                │──────────────────────────────>│
-       │                                │                               │
-       │                                │  5. Token Info + User Data    │
-       │                                │<──────────────────────────────│
-       │                                │                               │
-       │  6. API Response               │                               │
-       │<───────────────────────────────│                               │
+Incoming Request
+     │
+     ├─1─► sid cookie present?  → Validate with Frappe → ✅ User-level permissions
+     │
+     ├─2─► Bearer token present? → Validate OAuth2 token → ✅ User/system permissions  
+     │
+     └─3─► API key configured?  → Use token key:secret  → ✅ System-level permissions
+```
+
+### Request Flow (sid cookie)
+
+```
+User (logged into ERPNext)
+  │  1. Request with Cookie: sid=abc123
+  ▼
+MCP Server (auth middleware)
+  │  2. Validate sid with Frappe /api/method/frappe.integrations.oauth2.openid.userinfo
+  │  3. Extract CSRF token from response
+  │  4. Store {SessionID, CSRFToken, Email} in request context
+  ▼
+Tool Handler
+  │  5. Frappe client reads user from context
+  │  6. Forwards Cookie: sid + X-Frappe-CSRF-Token on all ERPNext API calls
+  ▼
+ERPNext (validates sid per request, enforces user permissions)
 ```
 
 ## Configuration
 
-### MCP Server Configuration
-
-Add the following to your `config.yaml`:
+### `config.yaml`
 
 ```yaml
 auth:
-  # Enable/disable authentication
+  # Master switch — set false to disable all auth checks
   enabled: true
-  
-  # Require authentication for all endpoints (false = optional auth)
+
+  # true = reject unauthenticated requests (production)
+  # false = optional auth, anonymous requests still allowed (development)
   require_auth: false
-  
-  # OAuth2 Configuration
+
   oauth2:
-    # Frappe OAuth2 endpoints
+    # Frappe userinfo endpoint (used for both sid validation and Bearer token introspection)
     token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo"
     issuer_url: "http://localhost:8000"
-    
-    # Trusted backend clients (can provide user context via headers)
+
+    # Backend clients that can pass user context via X-MCP-User-* headers
     trusted_clients:
       - "frappe-mcp-backend"
-    
-    # Validate tokens with remote OAuth2 provider
+
+    # Set false to skip remote validation in local development
     validate_remote: true
-    
-    # HTTP client timeout for token validation
+
     timeout: "30s"
-  
-  # Token cache configuration
+
   token_cache:
-    ttl: "5m"              # How long to cache validated tokens
-    cleanup_interval: "10m" # How often to clean up expired tokens
+    ttl: "5m"
+    cleanup_interval: "10m"
+
+# ERPNext credentials — used as Priority 3 fallback
+erpnext:
+  base_url: "http://localhost:8000"
+  api_key: "your_api_key"
+  api_secret: "your_api_secret"
 ```
 
 ### Environment Variables
 
-You can also configure authentication using environment variables:
-
 ```bash
-# Enable authentication
 AUTH_ENABLED=true
 AUTH_REQUIRE_AUTH=false
-
-# OAuth2 configuration
 OAUTH_TOKEN_INFO_URL=http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo
 OAUTH_ISSUER_URL=http://localhost:8000
 OAUTH_TIMEOUT=30s
-
-# Cache configuration
 CACHE_TTL=5m
 CACHE_CLEANUP_INTERVAL=10m
 ```
 
-## Setup Guide
+## Method 1: Frappe `sid` Cookie (Recommended for Frappe Apps)
 
-### Step 1: Register OAuth2 Client in Frappe
+The simplest integration for any Frappe app. No OAuth2 setup required — the user's existing Frappe login session is passed through.
 
-1. Navigate to your Frappe instance: `/app/oauth-client`
-2. Create a new OAuth Client:
-   - **App Name**: MCP Backend Integration
-   - **Client ID**: `frappe-mcp-backend` (or auto-generated)
-   - **Scopes**: `openid`, `profile`, `email`, `all`
-   - **Grant Type**: `Client Credentials`
-3. Save and note the **Client Secret**
+### How it works
 
-### Step 2: Configure MCP Server
+1. User is already logged into ERPNext
+2. Your Frappe app reads `frappe.session.sid`
+3. Sends it as a cookie to the MCP server
+4. MCP validates the session and forwards it to all ERPNext API calls
+5. All queries run with the **logged-in user's permissions**
 
-Update your `config.yaml` with the OAuth2 configuration (see above).
-
-### Step 3: Configure Frappe Backend Integration
-
-If you're building a Frappe app to integrate with the MCP server:
+### Frappe App Example
 
 ```python
 import frappe
 import requests
-from datetime import datetime, timedelta
-
-# Token cache (use Redis in production)
-_token_cache = {}
-
-def get_access_token():
-    """Get OAuth2 access token using client credentials grant"""
-    settings = frappe.get_single("MCP Server Settings")
-    
-    # Check cache
-    cache_key = "mcp_access_token"
-    if cache_key in _token_cache:
-        token_data = _token_cache[cache_key]
-        if datetime.now() < token_data["expires_at"]:
-            return token_data["access_token"]
-    
-    # Get new token
-    token_url = f"{settings.frappe_base_url}/api/method/frappe.integrations.oauth2.get_token"
-    
-    response = requests.post(
-        token_url,
-        data={
-            "grant_type": "client_credentials",
-            "client_id": settings.oauth_client_id,
-            "client_secret": settings.get_password("oauth_client_secret"),
-        },
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
-    )
-    
-    token_data = response.json()
-    
-    # Cache token
-    _token_cache[cache_key] = {
-        "access_token": token_data["access_token"],
-        "expires_at": datetime.now() + timedelta(seconds=token_data.get("expires_in", 3600))
-    }
-    
-    return token_data["access_token"]
 
 @frappe.whitelist()
 def query_mcp(message):
-    """Call MCP server with OAuth2 authentication"""
-    user = frappe.session.user
-    user_email = frappe.db.get_value("User", user, "email")
-    full_name = frappe.db.get_value("User", user, "full_name")
-    
     settings = frappe.get_single("MCP Server Settings")
-    access_token = get_access_token()
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {access_token}",
-        # User context (trusted because token is from known backend client)
-        "X-MCP-User-ID": user,
-        "X-MCP-User-Email": user_email,
-        "X-MCP-User-Name": full_name,
-    }
-    
+
     response = requests.post(
         f"{settings.mcp_server_url}/api/v1/chat",
         json={"message": message},
-        headers=headers,
+        cookies={"sid": frappe.session.sid},  # Pass user session
         timeout=30
     )
-    
     return response.json()
 ```
 
-## Usage
-
-### Making Authenticated Requests
-
-#### From Frappe Backend (Trusted Client)
+### Testing with curl
 
 ```bash
-# 1. Get OAuth2 token
-TOKEN=$(curl -X POST http://localhost:8000/api/method/frappe.integrations.oauth2.get_token \
+# Get your sid from ERPNext browser DevTools → Application → Cookies
+export SID='your-sid-value-here'
+
+curl -X POST http://localhost:8080/api/v1/chat \
+  -b "sid=$SID" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "show me top 5 customers"}'
+```
+
+### CSRF Token Handling
+
+For `POST`/`PUT`/`DELETE` operations, the MCP server automatically extracts and forwards the `X-Frappe-CSRF-Token` header. This is handled transparently — no action needed in your app.
+
+## Method 2: OAuth2 Bearer Token
+
+For external clients (Open WebUI, VS Code extensions, mobile apps) that cannot share a Frappe session cookie.
+
+### Setup: Register OAuth2 Client in Frappe
+
+1. Navigate to `/app/oauth-client` in your Frappe instance
+2. Create a new OAuth Client:
+   - **App Name**: `MCP Backend Integration`
+   - **Client ID**: `frappe-mcp-backend` (or auto-generated)
+   - **Scopes**: `openid profile email all`
+   - **Grant Type**: `Client Credentials` or `Authorization Code`
+3. Note the **Client ID** and **Client Secret**
+
+### Client Credentials Flow (Backend-to-Backend)
+
+```bash
+# 1. Get token
+TOKEN=$(curl -s -X POST http://localhost:8000/api/method/frappe.integrations.oauth2.get_token \
   -d "grant_type=client_credentials" \
   -d "client_id=frappe-mcp-backend" \
   -d "client_secret=YOUR_CLIENT_SECRET" \
   | jq -r '.access_token')
 
-# 2. Call MCP with token + user context
+# 2. Call MCP
 curl -X POST http://localhost:8080/api/v1/chat \
   -H "Authorization: Bearer $TOKEN" \
-  -H "X-MCP-User-ID: user@example.com" \
-  -H "X-MCP-User-Email: user@example.com" \
-  -H "X-MCP-User-Name: John Doe" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Show me all projects"}'
+  -d '{"message": "Show me all open projects"}'
 ```
 
-#### From External Client
+### Authorization Code Flow (User Login)
+
+For user-facing apps where individual users authenticate via Frappe's login page:
 
 ```bash
-# Get token via Authorization Code flow (user login)
-# Then use the token:
-
-curl -X POST http://localhost:8080/api/v1/chat \
-  -H "Authorization: Bearer $USER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Show me all projects"}'
+python3 scripts/get-oauth-token-authcode.py
 ```
 
-### Accessing User Context in Tools
+This script opens a browser for the user to log in and returns a Bearer token.
 
-Within your MCP tools, you can access the authenticated user:
+## Method 3: API Key / Secret (System Fallback)
+
+Used automatically when no `sid` or `Bearer` token is present. Configured via `config.yaml` or environment variables.
+
+```yaml
+erpnext:
+  api_key: "your_api_key"
+  api_secret: "your_api_secret"
+```
+
+All tool calls run under the **API user's permissions** in this mode. For write operations (`POST`/`PUT`/`DELETE`), the server sets `X-Frappe-CSRF-Token: bypass` automatically since API key auth bypasses Frappe's CSRF checks.
+
+## Accessing User Context in Tools
 
 ```go
-import (
-    "frappe-mcp-server/internal/auth"
-)
+import "frappe-mcp-server/internal/auth"
 
 func (r *ToolRegistry) MyTool(ctx context.Context, req mcp.ToolRequest) (*mcp.ToolResponse, error) {
-    // Get authenticated user from context
     user, found := auth.GetUserFromContext(ctx)
     if found {
-        // User is authenticated
-        log.Printf("Request from user: %s (%s)", user.FullName, user.Email)
-        
-        // Access user properties
-        userID := user.ID
-        roles := user.Roles
-        clientID := user.ClientID
-        
-        // Use user context for authorization, logging, etc.
-    } else {
-        // No authenticated user (optional auth mode)
-        log.Printf("Anonymous request")
+        // user.Email, user.FullName, user.Roles, user.SessionID, user.Token
+        slog.Info("Tool called by", "user", user.Email)
     }
-    
-    // ... rest of tool implementation
+    // ...
+}
+```
+
+The `User` struct:
+
+```go
+type User struct {
+    ID        string
+    Email     string
+    FullName  string
+    Roles     []string
+    Token     string    // OAuth2 Bearer token
+    SessionID string    // Frappe sid cookie value
+    CSRFToken string    // Frappe CSRF token (extracted during sid validation)
+    ClientID  string    // OAuth2 client ID
 }
 ```
 
 ## Security Best Practices
 
-### Production Deployment
-
-1. **Always use HTTPS** in production
-2. **Use strong client secrets** (32+ characters)
-3. **Enable required auth** (`require_auth: true`)
-4. **Validate tokens remotely** (`validate_remote: true`)
-5. **Use secure token storage** (e.g., environment variables, secrets manager)
-6. **Implement rate limiting** for token validation
-7. **Monitor authentication failures**
-8. **Rotate client secrets** periodically
-
-### Token Security
-
-- Tokens are cached in memory (5 minutes default)
-- Cache is cleared on server restart
-- Invalid tokens are rejected immediately
-- Token validation timeout: 30 seconds default
-
-## Backward Compatibility
-
-The authentication system is **backward compatible**:
-
-- Set `enabled: false` to disable authentication entirely
-- Set `require_auth: false` for optional authentication
-- Existing clients without tokens will still work in optional mode
-- Gradually migrate by enabling optional auth first, then required auth
+1. **Enable HTTPS** in production — never pass `sid` or Bearer tokens over plain HTTP
+2. Set `require_auth: true` in production
+3. Use `validate_remote: true` to introspect tokens with Frappe
+4. Keep API key/secret in environment variables, not in `config.yaml` committed to source control
+5. Rotate API key/secret and OAuth2 client secrets periodically
+6. Token cache TTL of 5 minutes balances performance and security
 
 ## Troubleshooting
 
-### Common Issues
+### `401 Unauthorized` on all requests
 
-#### 1. "Unauthorized" errors
+- Check `auth.enabled` and `auth.require_auth` in `config.yaml`
+- Verify `token_info_url` points to a reachable Frappe endpoint
+- Enable debug logging: `logging.level: debug`
 
-**Problem**: Requests are rejected with 401 Unauthorized
+### `"invalid session: status 401"` with sid cookie
 
-**Solutions**:
-- Check that `AUTH_ENABLED=true` in your config
-- Verify the Bearer token is valid and not expired
-- Ensure the token validation URL is correct
-- Check network connectivity to Frappe OAuth2 server
+The `sid` has expired. The user needs to log in to ERPNext again. Sessions expire based on Frappe's session lifetime setting.
 
-#### 2. Token validation timeout
+### `"CSRF token required"` on POST/PUT/DELETE with sid auth
 
-**Problem**: Requests are slow or timeout during token validation
+MCP server couldn't extract the CSRF token during session validation. Check Frappe server logs and ensure the `token_info_url` endpoint returns the `X-Frappe-CSRF-Token` response header.
 
-**Solutions**:
-- Increase `timeout` in OAuth2 config (default: 30s)
-- Check network latency to Frappe server
-- Ensure Frappe OAuth2 endpoint is responsive
-- Consider increasing cache TTL to reduce validation calls
+### User context is nil in tool handler
 
-#### 3. User context not available
+- Auth middleware is only applied to the HTTP interface, not stdio
+- Verify the client is listed in `trusted_clients` if using `X-MCP-User-*` headers
+- Set `require_auth: false` if running in optional auth mode
 
-**Problem**: `GetUserFromContext` returns nil even with valid token
-
-**Solutions**:
-- Verify the client is in `trusted_clients` list
-- Check that `X-MCP-User-*` headers are being sent
-- Ensure token belongs to a trusted client
-- Verify middleware is properly configured
-
-#### 4. Cache not working
-
-**Problem**: Every request validates token remotely
-
-**Solutions**:
-- Check `token_cache.ttl` is set (default: 5m)
-- Verify tokens are identical across requests
-- Ensure cache cleanup interval is reasonable
-- Check for memory constraints
-
-### Debug Mode
-
-Enable debug logging to troubleshoot authentication issues:
+### Debug Logging
 
 ```yaml
 logging:
-  level: "debug"  # Enable detailed auth logs
+  level: "debug"
 ```
+
+This logs auth decisions, sid validation calls, token cache hits/misses, and CSRF token extraction.
 
 ## Testing
 
-### Unit Tests
-
-Run authentication tests:
-
 ```bash
+# Run auth unit tests
 go test ./internal/auth/... -v
+
+# Test with sid cookie
+export SID='your-sid-value'
+./test_sid_auth.sh
+
+# Test OAuth2 flow
+./test-oauth.sh
 ```
 
-### Integration Testing
+## Related
 
-Test with a mock OAuth2 server:
-
-```bash
-# Start mock OAuth2 server
-go run test/mock_oauth_server.go
-
-# Test authentication flow
-curl -X POST http://localhost:8080/api/v1/chat \
-  -H "Authorization: Bearer test-token" \
-  -d '{"message": "test"}'
-```
-
-### Development Mode
-
-For local development, you can skip remote validation:
-
-```yaml
-auth:
-  enabled: true
-  require_auth: false
-  oauth2:
-    validate_remote: false  # Skip remote validation
-```
-
-## API Reference
-
-### User Context
-
-The `User` type provides authenticated user information:
-
-```go
-type User struct {
-    ID       string                 // User ID (email or username)
-    Email    string                 // User email
-    FullName string                 // Full name
-    Roles    []string               // User roles
-    ClientID string                 // OAuth2 client that issued token
-    Metadata map[string]interface{} // Additional metadata
-}
-```
-
-### Context Functions
-
-```go
-// Add user to context
-ctx := auth.WithUser(ctx, user)
-
-// Get user from context
-user := auth.UserFromContext(ctx)
-
-// Get user with boolean check
-user, found := auth.GetUserFromContext(ctx)
-```
-
-## Future Enhancements
-
-Planned improvements for future releases:
-
-- **Redis-based caching** for distributed deployments
-- **Rate limiting** with configurable thresholds
-- **Token refresh** support
-- **JWKS validation** for JWT tokens
-- **RBAC integration** with Frappe permissions
-- **Audit logging** for authentication events
-- **Metrics** for token validation performance
-
-## Related Documentation
-
+- [Auth Quick Start](auth-quickstart) — Set up auth in 5 minutes
+- [Configuration](configuration) — Full config reference
 - [OAuth2 RFC 6749](https://tools.ietf.org/html/rfc6749)
-- [Frappe OAuth2 Documentation](https://frappeframework.com/docs/user/en/guides/integration/oauth)
-- [OpenID Connect](https://openid.net/connect/)
-
-
-
-
+- [Frappe OAuth2 Docs](https://frappeframework.com/docs/user/en/guides/integration/oauth)
 
 

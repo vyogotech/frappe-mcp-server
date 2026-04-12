@@ -75,11 +75,11 @@ Once the tag is pushed, GitHub Actions automatically:
 
 ### 4. Verify the Release
 
-1. Go to [Releases](https://github.com/varkrish/frappe-mcp-server/releases)
+1. Go to [Releases](https://github.com/vyogotech/frappe-mcp-server/releases)
 2. Check that all binaries are attached
 3. Test the install script:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
    ```
 4. Verify binary works:
    ```bash
@@ -135,7 +135,7 @@ sha256sum *.tar.gz *.zip > SHA256SUMS
 
 ### Create GitHub Release
 
-1. Go to [New Release](https://github.com/varkrish/frappe-mcp-server/releases/new)
+1. Go to [New Release](https://github.com/vyogotech/frappe-mcp-server/releases/new)
 2. Choose the tag
 3. Add release title: "v1.0.0"
 4. Add release notes
@@ -217,7 +217,7 @@ After release:
 The install script always fetches the **latest** release. When you create a new release, users automatically get the new version when they run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 ```
 
 ## Build Artifacts
@@ -262,6 +262,6 @@ Each release includes:
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/varkrish/frappe-mcp-server/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/varkrish/frappe-mcp-server/discussions)
+- **Issues**: [GitHub Issues](https://github.com/vyogotech/frappe-mcp-server/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/vyogotech/frappe-mcp-server/discussions)
 
