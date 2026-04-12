@@ -2,6 +2,47 @@
 
 All notable changes to ERPNext MCP Server.
 
+## [Unreleased] - 2026-04-12
+
+### Added
+- **Global Search Tool** — new `global_search` MCP tool backed by `POST /api/method/frappe.utils.global_search.search`
+  - Full-text search across all indexed Frappe/ERPNext doctypes in a single call
+  - Optional `doctype` param to restrict results to one doctype
+  - Optional `scope` param (string or `[]string`) for multi-doctype filtering
+  - `limit` (default 20) and `start` for pagination
+  - Returns `name`, `doctype`, `content`, and `route` per result
+  - Exposed via Streamable HTTP (`POST /mcp`) and REST (`POST /tool/global_search`)
+  - Full `inputSchema` published in `/tools` listing
+- **Unit tests for Global Search**
+  - `internal/frappe/client_test.go` — `TestGlobalSearch` (valid text, default limit, empty text error)
+  - `internal/tools/registry_test.go` — `TestGlobalSearch` (valid text, optional doctype filter, missing text error, invalid JSON error)
+  - `internal/testutils/testutils.go` — mock handler for `POST /api/method/frappe.utils.global_search.search`
+- **Streamable HTTP Transport** (ported from PR #3)
+  - `POST /mcp` endpoint — JSON-RPC 2.0 Streamable HTTP with SSE support
+  - Registered on the main port-8080 mux; inherits full 3-tier auth middleware (fixes auth gap)
+- **OpenTelemetry Tracing** (ported from PR #3)
+  - `go.opentelemetry.io/otel v1.43.0` with stdout OTLP exporter
+  - Spans on every tool call (`tool.name`, `tool.doctype`, `tool.success` attributes)
+  - Outbound Frappe HTTP wrapped with `otelhttp.NewTransport`
+  - `internal/telemetry` package with `Init` / `Shutdown` helpers
+- **Tool Input Schemas** (ported from PR #3)
+  - `inputSchema` JSON Schema objects published for all active tools in `/tools` listing
+  - Deprecated legacy tools hidden from listing but remain callable for backward compatibility
+- **go-sdk Migration**
+  - Migrated from custom MCP implementation to `github.com/modelcontextprotocol/go-sdk v1.4.0`
+  - Server wraps `gosdk.Server`; all tool handlers use the SDK's `ToolRequest`/`ToolResponse` types
+
+### Fixed
+- **gosec G204** — `cmd/ollama-client`: subprocess path resolved via `filepath.Abs(filepath.Clean(...))` + `os.Stat` validation before `exec.Command`
+- **Auth gap on Streamable HTTP** — `POST /mcp` placed on main mux instead of a separate port, ensuring OAuth2/SID/API-key middleware is always applied
+
+### Changed
+- Go toolchain bumped to **1.25** (required by OTEL v1.43.0 indirect dependency)
+- `Dockerfile` base image updated to `golang:1.25-alpine`
+
+### Removed
+- Deleted unused `create_oauth_client.py` and `create_oauth_client_fixed.py`
+
 ## [Unreleased] - 2025-11-13
 
 ### Added

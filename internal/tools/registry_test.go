@@ -515,3 +515,59 @@ func BenchmarkGetDocument(b *testing.B) {
 		}
 	}
 }
+
+func TestGlobalSearch(t *testing.T) {
+	client := createTestClient(t)
+	registry := NewRegistry(client)
+	ctx := context.Background()
+
+	t.Run("returns results for valid text", func(t *testing.T) {
+		params, _ := json.Marshal(map[string]interface{}{"text": "test"})
+		request := mcp.ToolRequest{ID: "gs-1", Tool: "global_search", Params: params}
+
+		response, err := registry.GlobalSearch(ctx, request)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, response)
+		assert.Equal(t, "gs-1", response.ID)
+		assert.Len(t, response.Content, 2)
+		assert.Contains(t, response.Content[0].Text, `Found 2 result(s) for "test"`)
+	})
+
+	t.Run("accepts optional doctype filter", func(t *testing.T) {
+		params, _ := json.Marshal(map[string]interface{}{
+			"text":    "project",
+			"doctype": "Project",
+		})
+		request := mcp.ToolRequest{ID: "gs-2", Tool: "global_search", Params: params}
+
+		response, err := registry.GlobalSearch(ctx, request)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, response)
+	})
+
+	t.Run("returns error for missing text", func(t *testing.T) {
+		params, _ := json.Marshal(map[string]interface{}{})
+		request := mcp.ToolRequest{ID: "gs-3", Tool: "global_search", Params: params}
+
+		response, err := registry.GlobalSearch(ctx, request)
+
+		assert.Error(t, err)
+		assert.Nil(t, response)
+		assert.Contains(t, err.Error(), "text is required")
+	})
+
+	t.Run("returns error for invalid JSON params", func(t *testing.T) {
+		request := mcp.ToolRequest{
+			ID:     "gs-4",
+			Tool:   "global_search",
+			Params: []byte(`{invalid json}`),
+		}
+
+		response, err := registry.GlobalSearch(ctx, request)
+
+		assert.Error(t, err)
+		assert.Nil(t, response)
+	})
+}
