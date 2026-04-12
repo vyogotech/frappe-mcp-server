@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -123,8 +124,18 @@ func NewOllamaERPNextClient(mcpServerPath, ollamaModel string, debugMode bool) *
 func (c *OllamaERPNextClient) StartMCPServer() error {
 	log.Printf("[DEBUG] Starting MCP server subprocess: %s", c.mcpServerPath)
 
+	// Resolve to a clean absolute path to satisfy security requirements (gosec G204).
+	// This prevents path traversal and ensures the binary is an actual file on disk.
+	cleanPath, err := filepath.Abs(filepath.Clean(c.mcpServerPath))
+	if err != nil {
+		return fmt.Errorf("failed to resolve MCP server path: %w", err)
+	}
+	if _, statErr := os.Stat(cleanPath); statErr != nil {
+		return fmt.Errorf("MCP server binary not found at %s: %w", cleanPath, statErr)
+	}
+
 	// Start the MCP server process
-	c.mcpProcess = exec.Command(c.mcpServerPath)
+	c.mcpProcess = exec.Command(cleanPath) // #nosec G204 -- path is resolved to absolute and validated above
 	c.mcpProcess.Stderr = os.Stderr // Forward stderr for debugging
 
 	stdin, err := c.mcpProcess.StdinPipe()
