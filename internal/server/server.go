@@ -337,7 +337,7 @@ func (s *MCPServer) corsMiddleware(next http.Handler) http.Handler {
 		slog.Debug("CORS middleware invoked", "method", r.Method, "path", r.URL.Path)
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Cache-Control")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -691,8 +691,19 @@ func (s *MCPServer) listResources(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/resources response sent", "count", len(resources))
 }
 
-// handleChat handles natural language chat queries
+// handleChat handles natural language chat queries.
+// When the client sends Accept: text/event-stream it delegates to
+// handleChatSSE which streams SSE events; otherwise it returns JSON.
 func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		s.handleChatSSE(w, r)
+		return
+	}
+	s.handleChatJSON(w, r)
+}
+
+// handleChatJSON handles natural language chat queries (non-streaming JSON response).
+func (s *MCPServer) handleChatJSON(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/api/v1/chat endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr)
 
 	if r.Method != "POST" {
