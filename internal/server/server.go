@@ -164,13 +164,18 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	// Setup HTTP server with health checks and MCP endpoints
 	mux := http.NewServeMux()
 	
+	// MCP Streamable HTTP endpoint (JSON-RPC 2.0, used by frappe-copilot-agent)
+	// Auth middleware is applied via withMiddleware below, so every tool call
+	// executes on behalf of the authenticated user.
+	mux.HandleFunc("/mcp", mcpServer.server.HandleStreamableHTTP)
+
 	// API v1 endpoints (for Open WebUI integration)
 	mux.HandleFunc("/api/v1/health", mcpServer.healthCheck)
 	mux.HandleFunc("/api/v1/tools", mcpServer.listTools)
 	mux.HandleFunc("/api/v1/tools/", mcpServer.handleToolCall)
 	mux.HandleFunc("/api/v1/chat", mcpServer.handleChat)
 	mux.HandleFunc("/api/v1/openapi.json", mcpServer.handleOpenAPI)
-	
+
 	// Legacy endpoints (for backward compatibility)
 	mux.HandleFunc("/health", mcpServer.healthCheck)
 	mux.HandleFunc("/metrics", mcpServer.metrics)
@@ -412,32 +417,98 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	tools := []map[string]interface{}{
-		// Core CRUD tools (Generic - work with ANY doctype)
 		{
 			"name":        "get_document",
 			"description": "Retrieve a single ERPNext document by doctype and name",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"doctype": map[string]interface{}{"type": "string", "description": "ERPNext document type (e.g., Customer, Sales Order)"},
+					"name":    map[string]interface{}{"type": "string", "description": "Document name or ID"},
+				},
+				"required": []string{"doctype", "name"},
+			},
 		},
 		{
 			"name":        "list_documents",
 			"description": "List ERPNext documents with optional filters and pagination",
-		},
-		{
-			"name":        "create_document",
-			"description": "Create a new ERPNext document of any doctype",
-		},
-		{
-			"name":        "update_document",
-			"description": "Update an existing ERPNext document",
-		},
-		{
-			"name":        "delete_document",
-			"description": "Delete an ERPNext document (with confirmation)",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"doctype":     map[string]interface{}{"type": "string", "description": "ERPNext document type"},
+					"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
+					"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
+					"fields":      map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Fields to return"},
+					"order_by":    map[string]interface{}{"type": "string", "description": "Sort order (e.g., 'creation desc')"},
+				},
+				"required": []string{"doctype"},
+			},
 		},
 		{
 			"name":        "search_documents",
 			"description": "Search ERPNext documents using full-text search",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"doctype":     map[string]interface{}{"type": "string", "description": "Document type to search"},
+					"search":      map[string]interface{}{"type": "string", "description": "Search query string"},
+					"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
+					"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
+				},
+				"required": []string{"doctype"},
+			},
 		},
-		// Aggregation and reporting tools
+		{
+			"name":        "analyze_document",
+			"description": "Analyze any ERPNext document with optional related data",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"doctype":         map[string]interface{}{"type": "string", "description": "ERPNext document type"},
+					"name":            map[string]interface{}{"type": "string", "description": "Document name or ID"},
+					"include_related": map[string]interface{}{"type": "boolean", "description": "Include related documents", "default": false},
+				},
+				"required": []string{"doctype", "name"},
+			},
+		},
+		{
+			"name":        "create_document",
+			"description": "Create a new ERPNext document",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"doctype": map[string]interface{}{"type": "string"},
+					"data":    map[string]interface{}{"type": "object", "description": "Field values for the new document"},
+				},
+				"required": []string{"doctype", "data"},
+			},
+		},
+		{
+			"name":        "update_document",
+			"description": "Update an existing ERPNext document",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"doctype": map[string]interface{}{"type": "string"},
+					"name":    map[string]interface{}{"type": "string"},
+					"data":    map[string]interface{}{"type": "object", "description": "Fields to update"},
+				},
+				"required": []string{"doctype", "name", "data"},
+			},
+		},
+		{
+			"name":        "delete_document",
+			"description": "Delete an ERPNext document (requires confirm: true)",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"doctype": map[string]interface{}{"type": "string"},
+					"name":    map[string]interface{}{"type": "string"},
+					"confirm": map[string]interface{}{"type": "boolean", "description": "Must be true to confirm deletion"},
+				},
+				"required": []string{"doctype", "name"},
+			},
+		},
 		{
 			"name":        "aggregate_documents",
 			"description": "Perform aggregation queries (SUM, COUNT, AVG, GROUP BY, TOP N) on ERPNext data",
@@ -446,37 +517,8 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 			"name":        "run_report",
 			"description": "Execute Frappe/ERPNext reports (Sales Analytics, Purchase Register, etc.)",
 		},
-		// Generic analysis tool
-		{
-			"name":        "analyze_document",
-			"description": "Analyze ANY ERPNext document (Project, Customer, Sales Order, custom doctypes, etc.)",
-		},
-		// Legacy tools (deprecated - use analyze_document instead)
-		{
-			"name":        "get_project_status",
-			"description": "[DEPRECATED] Use analyze_document instead. Get comprehensive project status",
-		},
-		{
-			"name":        "portfolio_dashboard",
-			"description": "[DEPRECATED] Use analyze_document instead. Get portfolio-wide dashboard",
-		},
-		{
-			"name":        "analyze_project_timeline",
-			"description": "[DEPRECATED] Use analyze_document instead. Analyze project timeline",
-		},
-		{
-			"name":        "calculate_project_metrics",
-			"description": "[DEPRECATED] Use analyze_document instead. Calculate project metrics",
-		},
-		{
-			"name":        "resource_utilization_analysis",
-			"description": "[DEPRECATED] Use analyze_document instead. Analyze resource utilization",
-		},
-		{
-			"name":        "budget_variance_analysis",
-			"description": "[DEPRECATED] Use analyze_document instead. Analyze budget variance",
-		},
 	}
+	// Deprecated tools are omitted from the listing but remain callable for backward compatibility.
 
 	response := map[string]interface{}{
 		"tools": tools,

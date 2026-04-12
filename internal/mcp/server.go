@@ -9,7 +9,14 @@ import (
 	"time"
 
 	gosdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
+
+// tracerName is the instrumentation scope for mcp dispatch spans.
+const tracerName = "frappe-mcp-server/internal/mcp"
 
 // Server wraps the go-sdk MCP server with a simplified registration API that
 // maintains backward compatibility with the existing ToolHandler signature.
@@ -152,18 +159,35 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// executeToolRequest executes a tool request using the go-sdk server.
-// This is a helper kept for backward-compatible test code; new code should
-// use the go-sdk session API directly.
+// executeToolRequest executes a tool request using the go-sdk server and emits
+// an OpenTelemetry span for the call. Both the Streamable HTTP handler and any
+// other caller share identical traces through this function.
 func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *ToolResponse {
 	if request.ID == "" {
 		request.ID = fmt.Sprintf("req_%d", time.Now().UnixNano())
+	}
+
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "tool."+request.Tool,
+		trace.WithAttributes(attribute.String("tool.name", request.Tool)),
+	)
+	defer span.End()
+
+	// Best-effort: extract doctype from params for observability.
+	if len(request.Params) > 0 {
+		var paramsMap map[string]interface{}
+		if err := json.Unmarshal(request.Params, &paramsMap); err == nil {
+			if dt, ok := paramsMap["doctype"].(string); ok && dt != "" {
+				span.SetAttributes(attribute.String("tool.doctype", dt))
+			}
+		}
 	}
 
 	// Use in-memory transports to exercise the go-sdk server.
 	t1, t2 := gosdk.NewInMemoryTransports()
 	_, err := s.sdkServer.Connect(ctx, t1, nil)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return &ToolResponse{
 			ID: request.ID,
 			Error: &Error{Code: 500, Message: fmt.Sprintf("failed to connect: %v", err)},
@@ -173,6 +197,8 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 	client := gosdk.NewClient(&gosdk.Implementation{Name: "internal", Version: "1.0.0"}, nil)
 	cs, err := client.Connect(ctx, t2, nil)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return &ToolResponse{
 			ID: request.ID,
 			Error: &Error{Code: 500, Message: fmt.Sprintf("failed to connect client: %v", err)},
@@ -188,6 +214,9 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 	})
 	if err != nil {
 		slog.Error("Tool execution failed", "tool", request.Tool, "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Bool("tool.success", false))
 		return &ToolResponse{
 			ID: request.ID,
 			Error: &Error{Code: 500, Message: err.Error()},
@@ -201,6 +230,8 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 				msg = tc.Text
 			}
 		}
+		span.SetAttributes(attribute.Bool("tool.success", false))
+		span.SetStatus(codes.Error, msg)
 		return &ToolResponse{
 			ID:    request.ID,
 			Error: &Error{Code: 500, Message: msg},
@@ -213,6 +244,7 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 			content = append(content, Content{Type: "text", Text: tc.Text})
 		}
 	}
+	span.SetAttributes(attribute.Bool("tool.success", true))
 	return &ToolResponse{ID: request.ID, Content: content}
 }
 
