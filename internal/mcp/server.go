@@ -189,7 +189,7 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return &ToolResponse{
-			ID: request.ID,
+			ID:    request.ID,
 			Error: &Error{Code: 500, Message: fmt.Sprintf("failed to connect: %v", err)},
 		}
 	}
@@ -200,11 +200,11 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return &ToolResponse{
-			ID: request.ID,
+			ID:    request.ID,
 			Error: &Error{Code: 500, Message: fmt.Sprintf("failed to connect client: %v", err)},
 		}
 	}
-	defer cs.Close()
+	defer func() { _ = cs.Close() }()
 
 	slog.Debug("Executing tool", "tool", request.Tool, "id", request.ID)
 
@@ -218,7 +218,7 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 		span.SetStatus(codes.Error, err.Error())
 		span.SetAttributes(attribute.Bool("tool.success", false))
 		return &ToolResponse{
-			ID: request.ID,
+			ID:    request.ID,
 			Error: &Error{Code: 500, Message: err.Error()},
 		}
 	}
