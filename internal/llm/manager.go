@@ -223,6 +223,43 @@ func (m *Manager) Generate(ctx context.Context, prompt string) (string, error) {
 	return result, err
 }
 
+// GenerateStream implements the Streamer interface.
+// It picks the active client (primary or fallback) and, if that client also
+// implements Streamer, delegates to its GenerateStream.  Otherwise it falls
+// back to a non-streaming Generate call and synthesises a single-token stream.
+func (m *Manager) GenerateStream(ctx context.Context, prompt string) (<-chan string, error) {
+	m.mutex.RLock()
+	client := m.primaryClient
+	isRateLimited := time.Now().Before(m.rateLimitUntil)
+	fallbackEnabled := m.fallbackEnabled
+	fallbackClient := m.fallbackClient
+	m.mutex.RUnlock()
+
+	// Use fallback if primary is rate-limited.
+	if isRateLimited && fallbackEnabled && fallbackClient != nil {
+		client = fallbackClient
+	}
+
+	if s, ok := client.(Streamer); ok {
+		return s.GenerateStream(ctx, prompt)
+	}
+
+	// Synthesise a single-chunk stream from the non-streaming Generate call.
+	ch := make(chan string, 1)
+	go func() {
+		defer close(ch)
+		text, err := client.Generate(ctx, prompt)
+		if err != nil {
+			return // caller already gets nothing
+		}
+		select {
+		case ch <- text:
+		case <-ctx.Done():
+		}
+	}()
+	return ch, nil
+}
+
 // SwitchModel switches to a new model configuration at runtime
 func (m *Manager) SwitchModel(config ModelConfig, persist bool) error {
 	m.mutex.Lock()

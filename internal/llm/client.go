@@ -12,9 +12,20 @@ import (
 type Client interface {
 	// Generate generates a completion from the given prompt
 	Generate(ctx context.Context, prompt string) (string, error)
-	
+
 	// Provider returns the provider name
 	Provider() string
+}
+
+// Streamer is optionally implemented by LLM clients that support token streaming.
+// Callers should type-assert: if s, ok := client.(llm.Streamer); ok { ... }
+type Streamer interface {
+	// GenerateStream sends prompt to the LLM and streams individual tokens into
+	// the returned channel. The channel is closed when generation finishes or
+	// the context is cancelled. A non-nil error returned means the stream could
+	// not be started; errors mid-stream are sent as a final empty token and the
+	// channel is closed.
+	GenerateStream(ctx context.Context, prompt string) (<-chan string, error)
 }
 
 // NewClient creates an LLM client based on configuration

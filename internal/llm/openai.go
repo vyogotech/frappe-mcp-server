@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -119,3 +120,93 @@ func (c *OpenAICompatibleClient) Generate(ctx context.Context, prompt string) (s
 	return result.Choices[0].Message.Content, nil
 }
 
+// GenerateStream implements the Streamer interface.
+// It requests a streaming completion (stream:true) and sends each content
+// token into the returned channel, closing it when done or on error.
+func (c *OpenAICompatibleClient) GenerateStream(ctx context.Context, prompt string) (<-chan string, error) {
+	requestBody := map[string]interface{}{
+		"model": c.model,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+		"max_tokens":  c.maxTokens,
+		"temperature": c.temperature,
+		"stream":      true,
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal stream request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stream request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Accept", "text/event-stream")
+
+	// Use a client without a response-body timeout so we can stream.
+	streamClient := &http.Client{Transport: c.client.Transport}
+	resp, err := streamClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start stream: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("stream request returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	ch := make(chan string, 64)
+
+	go func() {
+		defer close(ch)
+		defer func() { _ = resp.Body.Close() }()
+
+		scanner := bufio.NewScanner(resp.Body)
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// SSE format: "data: <json>" or "data: [DONE]"
+			if !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+			payload := strings.TrimPrefix(line, "data: ")
+			if payload == "[DONE]" {
+				return
+			}
+
+			var chunk struct {
+				Choices []struct {
+					Delta struct {
+						Content string `json:"content"`
+					} `json:"delta"`
+					FinishReason *string `json:"finish_reason"`
+				} `json:"choices"`
+			}
+			if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+				continue
+			}
+			if len(chunk.Choices) == 0 {
+				continue
+			}
+
+			token := chunk.Choices[0].Delta.Content
+			if token == "" {
+				continue
+			}
+
+			select {
+			case ch <- token:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return ch, nil
+}
