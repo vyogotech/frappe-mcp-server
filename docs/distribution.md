@@ -53,7 +53,7 @@ make release            # Full release build (HTTP + STDIO, all platforms)
 
 **Usage:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 ```
 
 ### 4. **Comprehensive Documentation** ✅
@@ -82,11 +82,11 @@ All documentation in `/docs`:
 
 **Install:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 ```
 
 **Or download from releases:**
-https://github.com/varkrish/frappe-mcp-server/releases/latest
+https://github.com/vyogotech/frappe-mcp-server/releases/latest
 
 ### For Maintainers
 
@@ -179,7 +179,7 @@ Developer                GitHub Actions              Users
 ### To Create First Release:
 
 1. **Verify GitHub repo settings:**
-   - Repository name: `varkrish/frappe-mcp-server`
+   - Repository name: `vyogotech/frappe-mcp-server`
    - Ensure Actions are enabled
    - Verify GITHUB_TOKEN has write permissions
 
@@ -196,7 +196,7 @@ Developer                GitHub Actions              Users
 
 4. **Test installation:**
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
    ```
 
 ### For Distribution:

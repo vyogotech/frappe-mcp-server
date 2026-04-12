@@ -52,13 +52,13 @@ cp config.yaml.example config.yaml
 **Complete documentation:** [https://vyogotech.github.io/frappe-mcp-server/](https://vyogotech.github.io/frappe-mcp-server/)
 
 **Key guides:**
-- [Quick Start](https://varun-krishnamurthy.github.io/frappe-mcp-server/quick-start) - Get running in 5 minutes
-- [OAuth2 Authentication](https://varun-krishnamurthy.github.io/frappe-mcp-server/authentication) - 🔐 **NEW!** Standard OAuth2 security
-- [Auth Quick Start](https://varun-krishnamurthy.github.io/frappe-mcp-server/auth-quickstart) - Set up auth in 5 minutes
-- [Generic LLM Config](https://varun-krishnamurthy.github.io/frappe-mcp-server/generic-llm-config) - Simple 3-field config
-- [LLM Providers](https://varun-krishnamurthy.github.io/frappe-mcp-server/llm-providers) - Ollama, OpenAI, Together.ai, Groq, etc.
-- [Docker Deployment](https://varun-krishnamurthy.github.io/frappe-mcp-server/docker) - Deploy with Docker Compose
-- [API Reference](https://varun-krishnamurthy.github.io/frappe-mcp-server/api-reference) - Complete API docs
+- [Quick Start](https://vyogotech.github.io/frappe-mcp-server/quick-start) - Get running in 5 minutes
+- [Authentication](https://vyogotech.github.io/frappe-mcp-server/authentication) - sid cookie, OAuth2, and API key auth
+- [Auth Quick Start](https://vyogotech.github.io/frappe-mcp-server/auth-quickstart) - Set up auth in 5 minutes
+- [Generic LLM Config](https://vyogotech.github.io/frappe-mcp-server/generic-llm-config) - Simple 3-field config
+- [LLM Providers](https://vyogotech.github.io/frappe-mcp-server/llm-providers) - Ollama, OpenAI, Together.ai, Groq, etc.
+- [Docker Deployment](https://vyogotech.github.io/frappe-mcp-server/docker) - Deploy with Docker Compose
+- [API Reference](https://vyogotech.github.io/frappe-mcp-server/api-reference) - Complete API docs
 
 ## 💡 Usage Examples
 

@@ -181,5 +181,5 @@ docker compose up -d
 
 ## Documentation
 
-For detailed documentation, visit [GitHub Pages](https://varkrish.github.io/frappe-mcp-server/)
+For detailed documentation, visit [GitHub Pages](https://vyogotech.github.io/frappe-mcp-server/)
 

@@ -94,10 +94,10 @@ Build custom workflows and integrations using MCP tools.
 
 ```bash
 # One-command installation
-curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 ```
 
-Or download pre-built binaries from [Releases](https://github.com/varkrish/frappe-mcp-server/releases/latest).
+Or download pre-built binaries from [Releases](https://github.com/vyogotech/frappe-mcp-server/releases/latest).
 
 ### Prerequisites
 
@@ -109,7 +109,7 @@ See [Installation Guide](installation.md) for complete installation options.
 
 ## Community
 
-- **GitHub**: [frappe-mcp-server](https://github.com/varkrish/frappe-mcp-server)
+- **GitHub**: [frappe-mcp-server](https://github.com/vyogotech/frappe-mcp-server)
 - **Issues**: Report bugs or request features
 - **Discussions**: Share ideas and get help
 

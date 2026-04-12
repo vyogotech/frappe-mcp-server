@@ -85,7 +85,7 @@ jobs:
           2. Add to your MCP client configuration (Cursor or Claude Desktop)
           3. Start using natural language queries!
           
-          See full documentation at: https://github.com/varkrish/frappe-mcp-server
+          See full documentation at: https://github.com/vyogotech/frappe-mcp-server
           EOF
           
           # Create archive

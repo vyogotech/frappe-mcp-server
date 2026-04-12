@@ -9,7 +9,7 @@ Complete installation guide for Frappe MCP Server.
 The easiest way to install:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 ```
 
 **What it does:**
@@ -26,7 +26,7 @@ curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/ins
 
 ### 📦 Method 2: Pre-built Binaries
 
-Download pre-built binaries from [GitHub Releases](https://github.com/varkrish/frappe-mcp-server/releases/latest).
+Download pre-built binaries from [GitHub Releases](https://github.com/vyogotech/frappe-mcp-server/releases/latest).
 
 #### Available Downloads
 
@@ -43,7 +43,7 @@ Download pre-built binaries from [GitHub Releases](https://github.com/varkrish/f
 **Linux/macOS:**
 ```bash
 # Download (replace with your platform)
-wget https://github.com/varkrish/frappe-mcp-server/releases/latest/download/frappe-mcp-server-stdio-darwin-arm64.tar.gz
+wget https://github.com/vyogotech/frappe-mcp-server/releases/latest/download/frappe-mcp-server-stdio-darwin-arm64.tar.gz
 
 # Extract
 tar -xzf frappe-mcp-server-stdio-darwin-arm64.tar.gz
@@ -79,7 +79,7 @@ For developers or if you want the latest unreleased version:
 
 ```bash
 # Clone the repository
-git clone https://github.com/varkrish/frappe-mcp-server.git
+git clone https://github.com/vyogotech/frappe-mcp-server.git
 cd frappe-mcp-server
 
 # Install dependencies
@@ -258,7 +258,7 @@ To update to the latest version:
 
 ```bash
 # With install script
-curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 
 # Or download manually from releases
 # Then replace your existing binary
