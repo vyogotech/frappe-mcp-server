@@ -1013,3 +1013,52 @@ func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (
 		},
 	}, nil
 }
+
+// GlobalSearch performs a full-text search across all Frappe doctypes.
+func (t *ToolRegistry) GlobalSearch(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
+	var params struct {
+		Text    string      `json:"text"`
+		Doctype string      `json:"doctype"`
+		Scope   interface{} `json:"scope"`  // string or []string
+		Limit   int         `json:"limit"`
+		Start   int         `json:"start"`
+	}
+
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters: %w", err)
+	}
+
+	if params.Text == "" {
+		return nil, fmt.Errorf("text is required")
+	}
+
+	results, err := t.frappeClient.GlobalSearch(ctx, frappe.GlobalSearchRequest{
+		Text:    params.Text,
+		Doctype: params.Doctype,
+		Scope:   params.Scope,
+		Limit:   params.Limit,
+		Start:   params.Start,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resultJSON, err := json.Marshal(results)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal results: %w", err)
+	}
+
+	return &mcp.ToolResponse{
+		ID: request.ID,
+		Content: []mcp.Content{
+			{
+				Type: "text",
+				Text: fmt.Sprintf("Found %d result(s) for %q", len(results), params.Text),
+			},
+			{
+				Type: "text",
+				Text: string(resultJSON),
+			},
+		},
+	}, nil
+}
