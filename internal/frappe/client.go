@@ -21,6 +21,8 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	"frappe-mcp-server/internal/auth"
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/types"
@@ -51,7 +53,10 @@ func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 		return nil, fmt.Errorf("API key provided without API secret")
 	}
 
-	// Create HTTP client with connection pooling
+	// Create HTTP client with connection pooling, instrumented with OpenTelemetry.
+	// otelhttp.NewTransport wraps the underlying transport and creates child
+	// spans for every outbound request. When telemetry is disabled (no global
+	// provider), the wrapper is a no-op.
 	transport := &http.Transport{
 		MaxIdleConns:        100,
 		IdleConnTimeout:     90 * time.Second,
@@ -60,7 +65,7 @@ func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 	}
 
 	httpClient := &http.Client{
-		Transport: transport,
+		Transport: otelhttp.NewTransport(transport),
 		Timeout:   cfg.Timeout,
 	}
 
