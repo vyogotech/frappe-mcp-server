@@ -704,6 +704,11 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 	var chatRequest struct {
 		Message string `json:"message"`
 		Model   string `json:"model,omitempty"`
+		Context struct {
+			UserID    string `json:"user_id"`
+			UserEmail string `json:"user_email"`
+			Timestamp string `json:"timestamp"`
+		} `json:"context,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&chatRequest); err != nil {
@@ -717,7 +722,11 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("Processing chat query", "message", chatRequest.Message)
+	if chatRequest.Context.UserEmail != "" {
+		slog.Info("Processing chat query", "message", chatRequest.Message, "user_email", chatRequest.Context.UserEmail)
+	} else {
+		slog.Info("Processing chat query", "message", chatRequest.Message)
+	}
 
 	// Declare variables for query processing
 	var queryIntent *QueryIntent
@@ -826,6 +835,21 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 		goto buildResponse
 	}
 	
+	// Special handling for global_search queries
+	if queryIntent.Action == "global_search" || queryIntent.Action == "search_all" {
+		slog.Info("Processing global search query", "message", chatRequest.Message)
+		params := map[string]interface{}{
+			"text": chatRequest.Message,
+		}
+		if queryIntent.DocType != "" {
+			params["doctype"] = queryIntent.DocType
+		}
+		paramsJSON, _ := json.Marshal(params)
+		toolsCalled = append(toolsCalled, "global_search")
+		result, err = s.executeTool(ctx, "global_search", paramsJSON)
+		goto buildResponse
+	}
+
 	// Special handling for aggregate queries
 	if queryIntent.Action == "aggregate" {
 		slog.Info("Processing aggregation query")
@@ -1723,7 +1747,8 @@ Extract these fields:
    - "aggregate": for queries with top/bottom N, sum, count, average, grouping, rankings (ONLY when explicit math/aggregation keywords)
    - "report": when asking to run a specific ERPNext report by name
    - "get": when asking for ONE specific document by name/ID
-   - "search": when searching with criteria
+   - "search": when searching within ONE specific doctype with criteria
+   - "global_search": when user wants to search ACROSS ALL doctypes (e.g. "search everything for X", "find X anywhere", "global search for X")
    - "analyze": when asking for analysis/status/metrics of a specific document
    - "create/update/delete": for modifications
 3. doctype: the ERPNext document type (User, Customer, Company, Project, Item, Task, Sales Order, Sales Invoice, Warehouse, etc.)
@@ -1830,6 +1855,15 @@ Response: {"is_erpnext_related":true,"action":"update","doctype":"Project","enti
 
 Query: "delete customer CUST-00123"
 Response: {"is_erpnext_related":true,"action":"delete","doctype":"Customer","entity_name":"CUST-00123","requires_search":false,"confidence":0.9}
+
+Query: "search everything for Website Redesign"
+Response: {"is_erpnext_related":true,"action":"global_search","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "find Website Redesign anywhere in the system"
+Response: {"is_erpnext_related":true,"action":"global_search","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
+
+Query: "global search for Acme"
+Response: {"is_erpnext_related":true,"action":"global_search","doctype":"","entity_name":"","requires_search":false,"confidence":0.95}
 
 Query: "what's the default currency?"
 Response: {"is_erpnext_related":true,"action":"list","doctype":"Company","entity_name":"","requires_search":false,"confidence":0.9}
@@ -1990,6 +2024,8 @@ func (s *MCPServer) mapActionToTool(action string) string {
 		"list_all":           "list_documents",
 		"search":             "search_documents",
 		"find":               "search_documents",
+		"global_search":      "global_search",
+		"search_all":         "global_search",
 		"get_document":       "get_document",
 		"get":                "get_document",
 		"details":            "get_document",
@@ -2026,6 +2062,19 @@ func (s *MCPServer) fallbackQueryRouting(query string) *QueryIntent {
 	intent.EntityName = entityName
 	
 	// Simple keyword matching
+	if strings.Contains(lowerQuery, "global search") ||
+		strings.Contains(lowerQuery, "search everywhere") ||
+		strings.Contains(lowerQuery, "search everything") ||
+		strings.Contains(lowerQuery, "find anywhere") {
+		intent.Action = "global_search"
+		intent.Tool = "global_search"
+		intent.IsERPNextRelated = true
+		params := map[string]interface{}{"text": query}
+		paramsJSON, _ := json.Marshal(params)
+		intent.Params = paramsJSON
+		return intent
+	}
+
 	if strings.Contains(lowerQuery, "portfolio") || strings.Contains(lowerQuery, "dashboard") {
 		intent.Action = "dashboard"
 		intent.Tool = "portfolio_dashboard"
