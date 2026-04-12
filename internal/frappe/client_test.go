@@ -436,3 +436,51 @@ func BenchmarkGetDocument(b *testing.B) {
 		}
 	}
 }
+
+func TestGlobalSearch(t *testing.T) {
+	mockServer := testutils.MockERPNextServer(t)
+	defer mockServer.Close()
+
+	cfg := config.ERPNextConfig{
+		BaseURL:   mockServer.URL,
+		APIKey:    "test_key",
+		APISecret: "test_secret",
+		Timeout:   30 * time.Second,
+		RateLimit: config.RateLimitConfig{
+			RequestsPerSecond: 10,
+			Burst:             20,
+		},
+		Retry: config.RetryConfig{
+			MaxAttempts:  3,
+			InitialDelay: 1 * time.Second,
+			MaxDelay:     10 * time.Second,
+		},
+	}
+
+	client, err := NewClient(cfg)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	t.Run("returns results for valid text", func(t *testing.T) {
+		results, err := client.GlobalSearch(ctx, GlobalSearchRequest{Text: "test"})
+		assert.NoError(t, err)
+		assert.Len(t, results, 2)
+		assert.Equal(t, "TEST-PROJ-001", results[0].Name)
+		assert.Equal(t, "Project", results[0].DocType)
+	})
+
+	t.Run("defaults limit to 20", func(t *testing.T) {
+		req := GlobalSearchRequest{Text: "project"}
+		assert.Equal(t, 0, req.Limit) // zero before call
+		results, err := client.GlobalSearch(ctx, req)
+		assert.NoError(t, err)
+		assert.NotNil(t, results)
+	})
+
+	t.Run("returns error for empty text", func(t *testing.T) {
+		_, err := client.GlobalSearch(ctx, GlobalSearchRequest{Text: ""})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "text is required")
+	})
+}

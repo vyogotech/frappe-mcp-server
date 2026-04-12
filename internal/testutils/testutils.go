@@ -29,6 +29,8 @@ func MockERPNextServer(t *testing.T) *httptest.Server {
 		handleEmployeeList(w, r)
 	case "/api/method/frappe.desk.search.search_link":
 		handleSearch(w, r)
+	case "/api/method/frappe.utils.global_search.search":
+		handleGlobalSearch(w, r)
 	default:
 		handleDefault(w, r)
 	}
@@ -237,6 +239,34 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		"message": results,
 	}
 
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+// handleGlobalSearch handles POST requests to the Frappe global search endpoint.
+func handleGlobalSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	results := []map[string]interface{}{
+		{
+			"name":    "TEST-PROJ-001",
+			"doctype": "Project",
+			"content": "Test Project 1 – Open",
+			"route":   "project/TEST-PROJ-001",
+		},
+		{
+			"name":    "TEST-TASK-001",
+			"doctype": "Task",
+			"content": "Design Homepage",
+			"route":   "task/TEST-TASK-001",
+		},
+	}
+
+	response := map[string]interface{}{
+		"message": results,
+	}
 	_ = json.NewEncoder(w).Encode(response)
 }
 
