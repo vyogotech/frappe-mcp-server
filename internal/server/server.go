@@ -366,6 +366,9 @@ func (s *MCPServer) registerTools() error {
 	s.server.RegisterTool("aggregate_documents", s.tools.AggregateDocuments)
 	s.server.RegisterTool("run_report", s.tools.RunReport)
 
+	// Cross-doctype search
+	s.server.RegisterTool("global_search", s.tools.GlobalSearch)
+
 	// Generic analysis tool (1 - Replaces 9 doctype-specific tools!)
 	s.server.RegisterTool("analyze_document", s.tools.AnalyzeDocument)
 
@@ -517,6 +520,21 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 			"name":        "run_report",
 			"description": "Execute Frappe/ERPNext reports (Sales Analytics, Purchase Register, etc.)",
 		},
+		{
+			"name":        "global_search",
+			"description": "Full-text search across all indexed Frappe/ERPNext doctypes",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"text":    map[string]interface{}{"type": "string", "description": "Search keyword or phrase (required)"},
+					"doctype": map[string]interface{}{"type": "string", "description": "Restrict results to a single doctype (optional)"},
+					"scope":   map[string]interface{}{"description": "One doctype or list of doctypes to search within (optional)"},
+					"limit":   map[string]interface{}{"type": "integer", "description": "Maximum number of results (default 20)"},
+					"start":   map[string]interface{}{"type": "integer", "description": "Offset for pagination (default 0)"},
+				},
+				"required": []string{"text"},
+			},
+		},
 	}
 	// Deprecated tools are omitted from the listing but remain callable for backward compatibility.
 
@@ -611,6 +629,9 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	case "budget_variance_analysis":
 		slog.Info("Calling ERPNext BudgetVarianceAnalysis", "params", request.Params)
 		result, err = s.tools.BudgetVarianceAnalysis(ctx, request)
+	case "global_search":
+		slog.Info("Calling ERPNext GlobalSearch", "params", request.Params)
+		result, err = s.tools.GlobalSearch(ctx, request)
 	default:
 		http.Error(w, "Tool not found", http.StatusNotFound)
 		slog.Warn("Tool not found", "tool", toolName)
@@ -2158,6 +2179,8 @@ func (s *MCPServer) executeTool(ctx context.Context, toolName string, params jso
 		return s.tools.AggregateDocuments(ctx, request)
 	case "run_report":
 		return s.tools.RunReport(ctx, request)
+	case "global_search":
+		return s.tools.GlobalSearch(ctx, request)
 		
 	// Legacy tools (deprecated - use analyze_document instead)
 	case "get_project_status":

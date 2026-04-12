@@ -303,6 +303,55 @@ func (c *Client) SearchDocuments(ctx context.Context, req types.SearchRequest) (
 	return result, nil
 }
 
+// GlobalSearchResult is a single result from the Frappe global search.
+type GlobalSearchResult struct {
+	Name    string `json:"name"`
+	DocType string `json:"doctype"`
+	Content string `json:"content"`
+	Route   string `json:"route"`
+}
+
+// GlobalSearchRequest holds the parameters for a global search call.
+type GlobalSearchRequest struct {
+	Text    string      `json:"text"`
+	Doctype string      `json:"doctype,omitempty"`  // restrict to one doctype
+	Scope   interface{} `json:"scope,omitempty"`    // one doctype or []string
+	Limit   int         `json:"limit,omitempty"`
+	Start   int         `json:"start,omitempty"`
+}
+
+// GlobalSearch performs a full-text search across all indexed doctypes using
+// the Frappe global search endpoint (/api/method/frappe.utils.global_search.search).
+func (c *Client) GlobalSearch(ctx context.Context, req GlobalSearchRequest) ([]GlobalSearchResult, error) {
+	if req.Text == "" {
+		return nil, fmt.Errorf("text is required for global search")
+	}
+	if req.Limit <= 0 {
+		req.Limit = 20
+	}
+
+	body := map[string]interface{}{
+		"text":  req.Text,
+		"limit": req.Limit,
+		"start": req.Start,
+	}
+	if req.Doctype != "" {
+		body["doctype"] = req.Doctype
+	} else if req.Scope != nil {
+		body["scope"] = req.Scope
+	}
+
+	var response struct {
+		Message []GlobalSearchResult `json:"message"`
+	}
+
+	if err := c.makeRequest(ctx, "POST", "/api/method/frappe.utils.global_search.search", body, &response); err != nil {
+		return nil, fmt.Errorf("global search failed: %w", err)
+	}
+
+	return response.Message, nil
+}
+
 // makeRequest makes an HTTP request to Frappe API with retry logic
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
 	// Apply rate limiting
