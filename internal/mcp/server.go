@@ -27,6 +27,16 @@ type Server struct {
 	// toolNames and resourceURIs are tracked locally for legacy helper methods.
 	toolNames    []string
 	resourceURIs []string
+	// toolMeta stores the description + input schema for each registered tool
+	// so the MCP tools/list handler can return real schemas to clients.
+	toolMeta map[string]ToolMeta
+}
+
+// ToolMeta is the public metadata for a registered MCP tool — the pieces a
+// client needs to know when the server answers tools/list.
+type ToolMeta struct {
+	Description string
+	InputSchema map[string]interface{}
 }
 
 // ToolHandler defines the interface for MCP tools.
@@ -70,6 +80,7 @@ func NewServer(name, version string) *Server {
 		name:      name,
 		version:   version,
 		sdkServer: sdkServer,
+		toolMeta:  make(map[string]ToolMeta),
 	}
 }
 
@@ -78,16 +89,40 @@ func (s *Server) SDKServer() *gosdk.Server {
 	return s.sdkServer
 }
 
-// RegisterTool registers a tool by bridging the internal ToolHandler to the
-// go-sdk ToolHandler signature.
+// RegisterTool registers a tool with no published metadata — clients calling
+// tools/list will see an empty description and a permissive input schema.
+// Prefer RegisterToolWithSchema; this wrapper remains for callers that have
+// no catalogued metadata to hand over.
 func (s *Server) RegisterTool(name string, handler ToolHandler) {
+	s.RegisterToolWithSchema(name, "", nil, handler)
+}
+
+// RegisterToolWithSchema registers a tool along with the description and input
+// schema that tools/list should publish. inputSchema may be nil, in which case
+// a permissive {"type":"object"} is used.
+func (s *Server) RegisterToolWithSchema(name, description string, inputSchema map[string]interface{}, handler ToolHandler) {
+	if s.toolMeta == nil {
+		s.toolMeta = make(map[string]ToolMeta)
+	}
+	if inputSchema == nil {
+		inputSchema = map[string]interface{}{"type": "object"}
+	}
+	s.toolMeta[name] = ToolMeta{Description: description, InputSchema: inputSchema}
 	s.toolNames = append(s.toolNames, name)
+
+	schemaBytes, err := json.Marshal(inputSchema)
+	if err != nil {
+		// Fall back to permissive schema if the provided one can't be marshalled.
+		slog.Warn("Failed to marshal tool input schema; using permissive fallback", "tool", name, "err", err)
+		schemaBytes = []byte(`{"type":"object"}`)
+	}
+	// Wrap as json.RawMessage so the go-sdk emits the bytes as a JSON object
+	// rather than base64-encoding them as a string (the default for []byte).
 	s.sdkServer.AddTool(
 		&gosdk.Tool{
-			Name: name,
-			// Provide a permissive schema so the go-sdk accepts the tool.
-			// Individual tool implementations validate their own parameters.
-			InputSchema: json.RawMessage(`{"type":"object"}`),
+			Name:        name,
+			Description: description,
+			InputSchema: json.RawMessage(schemaBytes),
 		},
 		func(ctx context.Context, req *gosdk.CallToolRequest) (*gosdk.CallToolResult, error) {
 			toolReq := ToolRequest{
@@ -110,7 +145,16 @@ func (s *Server) RegisterTool(name string, handler ToolHandler) {
 			return &gosdk.CallToolResult{Content: content}, nil
 		},
 	)
-	slog.Debug("Registered MCP tool", "name", name)
+	slog.Debug("Registered MCP tool", "name", name, "has_schema", len(inputSchema) > 1)
+}
+
+// ToolMetadata returns the description and input schema registered for a tool,
+// or an empty ToolMeta with a permissive schema if the tool had no metadata.
+func (s *Server) ToolMetadata(name string) ToolMeta {
+	if meta, ok := s.toolMeta[name]; ok {
+		return meta
+	}
+	return ToolMeta{InputSchema: map[string]interface{}{"type": "object"}}
 }
 
 // RegisterResource registers a resource with the go-sdk server.

@@ -349,41 +349,161 @@ func (s *MCPServer) corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// registerTools registers all MCP tools
+// toolCatalog returns the canonical description + input schema for every MCP
+// tool that has a published schema. Both registerTools (MCP protocol) and
+// listTools (REST /tools endpoint) consume this so clients and operators see
+// the same metadata. Tools not present here are still registered but with an
+// empty description and a permissive {"type":"object"} schema.
+func toolCatalog() map[string]mcp.ToolMeta {
+	strProp := func(desc string) map[string]interface{} {
+		return map[string]interface{}{"type": "string", "description": desc}
+	}
+	objSchema := func(props map[string]interface{}, required ...string) map[string]interface{} {
+		schema := map[string]interface{}{
+			"type":       "object",
+			"properties": props,
+		}
+		if len(required) > 0 {
+			schema["required"] = required
+		}
+		return schema
+	}
+	return map[string]mcp.ToolMeta{
+		"get_document": {
+			Description: "Retrieve a single ERPNext document by doctype and name",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("ERPNext document type (e.g., Customer, Sales Order)"),
+				"name":    strProp("Document name or ID"),
+			}, "doctype", "name"),
+		},
+		"list_documents": {
+			Description: "List ERPNext documents with optional filters and pagination",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype":     strProp("ERPNext document type"),
+				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
+				"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
+				"fields":      map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Fields to return"},
+				"order_by":    strProp("Sort order (e.g., 'creation desc')"),
+			}, "doctype"),
+		},
+		"create_document": {
+			Description: "Create a new ERPNext document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args).",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("ERPNext document type (e.g., Customer, Sales Order)"),
+				"data":    map[string]interface{}{"type": "object", "description": "Field values for the new document, as an object of fieldname→value"},
+			}, "doctype", "data"),
+		},
+		"update_document": {
+			Description: "Update an existing ERPNext document. `data` is a flat object of fieldname→value pairs for fields to change.",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("ERPNext document type"),
+				"name":    strProp("Document name or ID"),
+				"data":    map[string]interface{}{"type": "object", "description": "Fields to update, as an object of fieldname→value"},
+			}, "doctype", "name", "data"),
+		},
+		"delete_document": {
+			Description: "Delete an ERPNext document (requires confirm: true)",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("ERPNext document type"),
+				"name":    strProp("Document name or ID"),
+				"confirm": map[string]interface{}{"type": "boolean", "description": "Must be true to confirm deletion"},
+			}, "doctype", "name"),
+		},
+		"search_documents": {
+			Description: "Search ERPNext documents of a given doctype using full-text search",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype":     strProp("Document type to search"),
+				"search":      strProp("Search query string"),
+				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
+				"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
+			}, "doctype"),
+		},
+		"analyze_document": {
+			Description: "Analyze any ERPNext document with optional related data",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype":         strProp("ERPNext document type"),
+				"name":            strProp("Document name or ID"),
+				"include_related": map[string]interface{}{"type": "boolean", "description": "Include related documents", "default": false},
+			}, "doctype", "name"),
+		},
+		"aggregate_documents": {
+			Description: "Perform aggregation queries (SUM, COUNT, AVG, GROUP BY, TOP N) on ERPNext data",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype":  strProp("Document type to aggregate over"),
+				"group_by": strProp("Field to group by (optional)"),
+				"metric":   strProp("Aggregation: sum|count|avg|min|max"),
+				"field":    strProp("Field to aggregate (required when metric != count)"),
+				"filters":  map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
+				"top_n":    map[string]interface{}{"type": "integer", "description": "Return top N groups only"},
+			}, "doctype", "metric"),
+		},
+		"run_report": {
+			Description: "Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.)",
+			InputSchema: objSchema(map[string]interface{}{
+				"report_name": strProp("Exact report name (e.g. 'Sales Analytics')"),
+				"filters":     map[string]interface{}{"type": "object", "description": "Report filter values"},
+			}, "report_name"),
+		},
+		"global_search": {
+			Description: "Full-text search across all indexed Frappe/ERPNext doctypes",
+			InputSchema: objSchema(map[string]interface{}{
+				"text":    strProp("Search keyword or phrase"),
+				"doctype": strProp("Restrict results to a single doctype (optional)"),
+				"scope":   map[string]interface{}{"description": "One doctype or list of doctypes to search within (optional)"},
+				"limit":   map[string]interface{}{"type": "integer", "description": "Maximum number of results (default 20)"},
+				"start":   map[string]interface{}{"type": "integer", "description": "Offset for pagination (default 0)"},
+			}, "text"),
+		},
+	}
+}
+
+// registerTools registers all MCP tools. Tools with catalogued metadata are
+// registered via RegisterToolWithSchema so tools/list returns real schemas;
+// uncatalogued tools fall through to the bare RegisterTool (empty description,
+// permissive schema) to preserve pre-existing behaviour.
 func (s *MCPServer) registerTools() error {
 	slog.Info("Registering MCP tools...")
 
+	catalog := toolCatalog()
+	reg := func(name string, handler mcp.ToolHandler) {
+		if meta, ok := catalog[name]; ok {
+			s.server.RegisterToolWithSchema(name, meta.Description, meta.InputSchema, handler)
+		} else {
+			s.server.RegisterTool(name, handler)
+		}
+	}
+
 	// Core CRUD tools (6 - Generic, work with ANY doctype)
-	s.server.RegisterTool("get_document", s.tools.GetDocument)
-	s.server.RegisterTool("list_documents", s.tools.ListDocuments)
-	s.server.RegisterTool("create_document", s.tools.CreateDocument)
-	s.server.RegisterTool("update_document", s.tools.UpdateDocument)
-	s.server.RegisterTool("delete_document", s.tools.DeleteDocument)
-	s.server.RegisterTool("search_documents", s.tools.SearchDocuments)
+	reg("get_document", s.tools.GetDocument)
+	reg("list_documents", s.tools.ListDocuments)
+	reg("create_document", s.tools.CreateDocument)
+	reg("update_document", s.tools.UpdateDocument)
+	reg("delete_document", s.tools.DeleteDocument)
+	reg("search_documents", s.tools.SearchDocuments)
 
 	// Aggregation and reporting tools (2 - For analytics and reports)
-	s.server.RegisterTool("aggregate_documents", s.tools.AggregateDocuments)
-	s.server.RegisterTool("run_report", s.tools.RunReport)
+	reg("aggregate_documents", s.tools.AggregateDocuments)
+	reg("run_report", s.tools.RunReport)
 
 	// Cross-doctype search
-	s.server.RegisterTool("global_search", s.tools.GlobalSearch)
+	reg("global_search", s.tools.GlobalSearch)
 
 	// Generic analysis tool (1 - Replaces 9 doctype-specific tools!)
-	s.server.RegisterTool("analyze_document", s.tools.AnalyzeDocument)
+	reg("analyze_document", s.tools.AnalyzeDocument)
 
 	// Legacy tools (kept for backward compatibility)
 	// These will be deprecated in v2.0 - use analyze_document instead
-	s.server.RegisterTool("get_project_status", s.tools.GetProjectStatus)
-	s.server.RegisterTool("analyze_project_timeline", s.tools.AnalyzeProjectTimeline)
-	s.server.RegisterTool("calculate_project_metrics", s.tools.CalculateProjectMetrics)
-	s.server.RegisterTool("get_resource_allocation", s.tools.GetResourceAllocation)
-	s.server.RegisterTool("project_risk_assessment", s.tools.ProjectRiskAssessment)
-	s.server.RegisterTool("generate_project_report", s.tools.GenerateProjectReport)
-	s.server.RegisterTool("portfolio_dashboard", s.tools.PortfolioDashboard)
-	s.server.RegisterTool("resource_utilization_analysis", s.tools.ResourceUtilizationAnalysis)
-	s.server.RegisterTool("budget_variance_analysis", s.tools.BudgetVarianceAnalysis)
+	reg("get_project_status", s.tools.GetProjectStatus)
+	reg("analyze_project_timeline", s.tools.AnalyzeProjectTimeline)
+	reg("calculate_project_metrics", s.tools.CalculateProjectMetrics)
+	reg("get_resource_allocation", s.tools.GetResourceAllocation)
+	reg("project_risk_assessment", s.tools.ProjectRiskAssessment)
+	reg("generate_project_report", s.tools.GenerateProjectReport)
+	reg("portfolio_dashboard", s.tools.PortfolioDashboard)
+	reg("resource_utilization_analysis", s.tools.ResourceUtilizationAnalysis)
+	reg("budget_variance_analysis", s.tools.BudgetVarianceAnalysis)
 
-	slog.Info("Registered MCP tools", "count", 18, "core", 9, "legacy", 9)
+	slog.Info("Registered MCP tools", "count", 19, "with_schema", len(catalog), "legacy", 19-len(catalog))
 	return nil
 }
 
@@ -413,129 +533,35 @@ func (s *MCPServer) registerResources() error {
 	return nil
 }
 
-// listTools provides HTTP endpoint for listing available tools
+// listTools provides the REST /tools endpoint for listing available tools.
+// It consumes the same toolCatalog() that registerTools uses, so the REST
+// response and the MCP tools/list response stay in sync. Deprecated/legacy
+// tools without catalogued schemas are omitted from this listing but remain
+// callable.
 func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/tools endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr)
 	w.Header().Set("Content-Type", "application/json")
 
-	tools := []map[string]interface{}{
-		{
-			"name":        "get_document",
-			"description": "Retrieve a single ERPNext document by doctype and name",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"doctype": map[string]interface{}{"type": "string", "description": "ERPNext document type (e.g., Customer, Sales Order)"},
-					"name":    map[string]interface{}{"type": "string", "description": "Document name or ID"},
-				},
-				"required": []string{"doctype", "name"},
-			},
-		},
-		{
-			"name":        "list_documents",
-			"description": "List ERPNext documents with optional filters and pagination",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"doctype":     map[string]interface{}{"type": "string", "description": "ERPNext document type"},
-					"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
-					"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
-					"fields":      map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Fields to return"},
-					"order_by":    map[string]interface{}{"type": "string", "description": "Sort order (e.g., 'creation desc')"},
-				},
-				"required": []string{"doctype"},
-			},
-		},
-		{
-			"name":        "search_documents",
-			"description": "Search ERPNext documents using full-text search",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"doctype":     map[string]interface{}{"type": "string", "description": "Document type to search"},
-					"search":      map[string]interface{}{"type": "string", "description": "Search query string"},
-					"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
-					"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
-				},
-				"required": []string{"doctype"},
-			},
-		},
-		{
-			"name":        "analyze_document",
-			"description": "Analyze any ERPNext document with optional related data",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"doctype":         map[string]interface{}{"type": "string", "description": "ERPNext document type"},
-					"name":            map[string]interface{}{"type": "string", "description": "Document name or ID"},
-					"include_related": map[string]interface{}{"type": "boolean", "description": "Include related documents", "default": false},
-				},
-				"required": []string{"doctype", "name"},
-			},
-		},
-		{
-			"name":        "create_document",
-			"description": "Create a new ERPNext document",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"doctype": map[string]interface{}{"type": "string"},
-					"data":    map[string]interface{}{"type": "object", "description": "Field values for the new document"},
-				},
-				"required": []string{"doctype", "data"},
-			},
-		},
-		{
-			"name":        "update_document",
-			"description": "Update an existing ERPNext document",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"doctype": map[string]interface{}{"type": "string"},
-					"name":    map[string]interface{}{"type": "string"},
-					"data":    map[string]interface{}{"type": "object", "description": "Fields to update"},
-				},
-				"required": []string{"doctype", "name", "data"},
-			},
-		},
-		{
-			"name":        "delete_document",
-			"description": "Delete an ERPNext document (requires confirm: true)",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"doctype": map[string]interface{}{"type": "string"},
-					"name":    map[string]interface{}{"type": "string"},
-					"confirm": map[string]interface{}{"type": "boolean", "description": "Must be true to confirm deletion"},
-				},
-				"required": []string{"doctype", "name"},
-			},
-		},
-		{
-			"name":        "aggregate_documents",
-			"description": "Perform aggregation queries (SUM, COUNT, AVG, GROUP BY, TOP N) on ERPNext data",
-		},
-		{
-			"name":        "run_report",
-			"description": "Execute Frappe/ERPNext reports (Sales Analytics, Purchase Register, etc.)",
-		},
-		{
-			"name":        "global_search",
-			"description": "Full-text search across all indexed Frappe/ERPNext doctypes",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"text":    map[string]interface{}{"type": "string", "description": "Search keyword or phrase (required)"},
-					"doctype": map[string]interface{}{"type": "string", "description": "Restrict results to a single doctype (optional)"},
-					"scope":   map[string]interface{}{"description": "One doctype or list of doctypes to search within (optional)"},
-					"limit":   map[string]interface{}{"type": "integer", "description": "Maximum number of results (default 20)"},
-					"start":   map[string]interface{}{"type": "integer", "description": "Offset for pagination (default 0)"},
-				},
-				"required": []string{"text"},
-			},
-		},
+	catalog := toolCatalog()
+	// Emit in the same order as registerTools so the REST listing is stable.
+	order := []string{
+		"get_document", "list_documents", "create_document", "update_document",
+		"delete_document", "search_documents", "aggregate_documents", "run_report",
+		"global_search", "analyze_document",
 	}
-	// Deprecated tools are omitted from the listing but remain callable for backward compatibility.
+	tools := make([]map[string]interface{}, 0, len(order))
+	for _, name := range order {
+		meta, ok := catalog[name]
+		if !ok {
+			continue
+		}
+		entry := map[string]interface{}{
+			"name":        name,
+			"description": meta.Description,
+			"inputSchema": meta.InputSchema,
+		}
+		tools = append(tools, entry)
+	}
 
 	response := map[string]interface{}{
 		"tools": tools,
