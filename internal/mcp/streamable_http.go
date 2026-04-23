@@ -92,16 +92,17 @@ func (s *Server) dispatchInitialize(req JSONRPCRequest) JSONRPCResponse {
 }
 
 // dispatchToolsList handles the JSON-RPC "tools/list" method. Returns each
-// registered tool with a permissive inputSchema.
+// registered tool with the description and input schema supplied at
+// registration time. Tools registered via the bare RegisterTool (no metadata)
+// still get a permissive {"type":"object"} schema, preserving legacy behaviour.
 func (s *Server) dispatchToolsList(req JSONRPCRequest) JSONRPCResponse {
 	tools := make([]toolDefinition, 0, len(s.toolNames))
 	for _, name := range s.toolNames {
+		meta := s.ToolMetadata(name)
 		tools = append(tools, toolDefinition{
 			Name:        name,
-			Description: "",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-			},
+			Description: meta.Description,
+			InputSchema: meta.InputSchema,
 		})
 	}
 	return newJSONRPCResult(req.ID, toolsListResult{Tools: tools})
