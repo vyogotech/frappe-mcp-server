@@ -429,15 +429,14 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 			Value: user.SessionID,
 		})
 		slog.Info("DEBUG Client: Using sid cookie", "user", user.Email, "method", method, "csrf_token_len", len(user.CSRFToken))
-		// Add CSRF token for POST/PUT/DELETE requests
-		if method == "POST" || method == "PUT" || method == "DELETE" {
-			if user.CSRFToken != "" {
-				req.Header.Set("X-Frappe-CSRF-Token", user.CSRFToken)
-				slog.Info("DEBUG Client: Set CSRF token header", "user", user.Email, "method", method, "token", user.CSRFToken[:min(20, len(user.CSRFToken))]+"...")
-			} else {
-				slog.Error("CSRF token missing for mutating operation", "user", user.Email, "method", method, "endpoint", endpoint)
-				return fmt.Errorf("CSRF token required for %s operation but not available for user %s. This usually indicates a session validation issue", method, user.Email)
-			}
+		// Forward the CSRF token only if session validation captured one. Frappe
+		// does NOT require CSRF for sid-authenticated REST API calls — its
+		// /api/method/frappe.auth.get_logged_user response does not emit an
+		// X-Frappe-CSRF-Token header, so the token is usually empty. The sid
+		// cookie alone is sufficient for mutating operations.
+		if (method == "POST" || method == "PUT" || method == "DELETE") && user.CSRFToken != "" {
+			req.Header.Set("X-Frappe-CSRF-Token", user.CSRFToken)
+			slog.Info("DEBUG Client: Set CSRF token header", "user", user.Email, "method", method, "token", user.CSRFToken[:min(20, len(user.CSRFToken))]+"...")
 		}
 	} else if user != nil && user.Token != "" {
 		// Priority 2: Use user's OAuth2 token for user-level permissions in Frappe
