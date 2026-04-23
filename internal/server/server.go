@@ -406,7 +406,7 @@ func (s *MCPServer) registerResources() error {
 	}
 
 	for _, doctype := range doctypes {
-		s.server.RegisterResource(fmt.Sprintf("erpnext://%s", doctype), fmt.Sprintf("ERPNext %s documents", doctype))
+		s.server.RegisterResource(fmt.Sprintf("erpnext://%s", strings.ReplaceAll(doctype, " ", "-")), fmt.Sprintf("ERPNext %s documents", doctype))
 	}
 
 	slog.Info("Registered MCP resources", "count", len(doctypes))
