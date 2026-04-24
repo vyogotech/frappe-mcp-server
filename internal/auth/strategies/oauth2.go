@@ -6,14 +6,22 @@ import (
 	"errors"
 	"fmt"
 	"frappe-mcp-server/internal/types"
+	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/patrickmn/go-cache"
 )
+
+// csrfTokenPattern matches the `csrf_token = "<hex>"` assignment embedded in
+// Frappe's desk HTML. Frappe only emits this on desk page loads, and
+// `frappe.sessions.get_csrf_token` is not whitelisted — so scraping the desk
+// HTML is the only first-party way to obtain the token for a known sid.
+var csrfTokenPattern = regexp.MustCompile(`csrf_token\s*=\s*"([a-f0-9]{20,64})"`)
 
 // OAuth2Strategy handles OAuth2 token validation
 type OAuth2Strategy struct {
@@ -236,10 +244,6 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 		return nil, fmt.Errorf("invalid session: status %d", resp.StatusCode)
 	}
 
-	// Extract CSRF token from response headers
-	csrfToken := resp.Header.Get("X-Frappe-CSRF-Token")
-	log.Printf("DEBUG validateSession: Extracted CSRF token from Frappe response: %q (len=%d)", csrfToken, len(csrfToken))
-
 	var result struct {
 		Message string `json:"message"` // The user email
 	}
@@ -248,16 +252,60 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 		return nil, fmt.Errorf("failed to decode session info: %w", err)
 	}
 
+	// Frappe enforces CSRF on POST/PUT/DELETE under sid auth once
+	// frappe.session.data.csrf_token is populated server-side, which happens
+	// lazily on desk page render. `/api/method/frappe.auth.get_logged_user`
+	// does NOT emit X-Frappe-CSRF-Token, and frappe.sessions.get_csrf_token is
+	// not whitelisted, so we scrape the token out of the desk HTML.
+	csrfToken, err := s.fetchCSRFToken(ctx, sidCookie)
+	if err != nil {
+		// Don't fail auth — reads still work without a CSRF token. Writes will
+		// hit CSRFTokenError downstream, which is already the existing broken
+		// behaviour; this way a CSRF-fetch outage doesn't take down GETs too.
+		log.Printf("WARN validateSession: failed to fetch CSRF token, writes will fail: %v", err)
+	}
+
 	user := &types.User{
 		ID:        result.Message,
 		Email:     result.Message,
 		SessionID: sidCookie.Value, // Store for pass-through to Frappe API calls
-		CSRFToken: csrfToken,       // Store CSRF token from validation response
+		CSRFToken: csrfToken,
 	}
 
 	log.Printf("DEBUG validateSession: Created user with CSRF token (len=%d)", len(user.CSRFToken))
 
 	return user, nil
+}
+
+// fetchCSRFToken retrieves the per-session CSRF token by requesting the desk
+// page with the sid cookie and pulling the token out of the embedded JS.
+func (s *OAuth2Strategy) fetchCSRFToken(ctx context.Context, sidCookie *http.Cookie) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", s.issuerURL+"/app", nil)
+	if err != nil {
+		return "", fmt.Errorf("build desk request: %w", err)
+	}
+	req.AddCookie(sidCookie)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("desk request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("desk returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read desk body: %w", err)
+	}
+
+	m := csrfTokenPattern.FindSubmatch(body)
+	if m == nil {
+		return "", errors.New("csrf_token not found in desk HTML")
+	}
+	return string(m[1]), nil
 }
 
 // ClearCache clears the token cache

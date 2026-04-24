@@ -429,11 +429,10 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 			Value: user.SessionID,
 		})
 		slog.Info("DEBUG Client: Using sid cookie", "user", user.Email, "method", method, "csrf_token_len", len(user.CSRFToken))
-		// Forward the CSRF token only if session validation captured one. Frappe
-		// does NOT require CSRF for sid-authenticated REST API calls — its
-		// /api/method/frappe.auth.get_logged_user response does not emit an
-		// X-Frappe-CSRF-Token header, so the token is usually empty. The sid
-		// cookie alone is sufficient for mutating operations.
+		// Frappe enforces CSRF on POST/PUT/DELETE under sid auth whenever the
+		// session has a csrf_token populated (which happens the first time the
+		// sid loads any /app/* page — i.e. always, for browser-driven users).
+		// The token is fetched in validateSessionCookie by scraping /app HTML.
 		if (method == "POST" || method == "PUT" || method == "DELETE") && user.CSRFToken != "" {
 			req.Header.Set("X-Frappe-CSRF-Token", user.CSRFToken)
 			slog.Info("DEBUG Client: Set CSRF token header", "user", user.Email, "method", method, "token", user.CSRFToken[:min(20, len(user.CSRFToken))]+"...")
