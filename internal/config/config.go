@@ -279,12 +279,10 @@ func (c *Config) validate() error {
 	// API key and secret are optional if OAuth2 is enabled and required
 	// In that case, we'll use user OAuth2 tokens for authentication
 	if !c.Auth.Enabled || !c.Auth.RequireAuth {
-		// If auth is not enabled or not required, we need API key/secret
-		if c.ERPNext.APIKey == "" {
-			return fmt.Errorf("frappe API key is required when auth is disabled")
-		}
-		if c.ERPNext.APISecret == "" {
-			return fmt.Errorf("frappe API secret is required when auth is disabled")
+		// If auth is not enabled or not required, API key/secret are optional
+		// as the server may rely on forwarded session cookies (sid)
+		if c.ERPNext.APIKey == "" || c.ERPNext.APISecret == "" {
+			fmt.Println("INFO: Frappe API key/secret not provided. Ensure session cookies (sid) are provided in requests if required.")
 		}
 	} else {
 		// Auth is enabled and required - API key/secret is optional but warn if missing
