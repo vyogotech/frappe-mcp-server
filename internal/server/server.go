@@ -515,6 +515,12 @@ func toolCatalog() map[string]mcp.ToolMeta {
 				"doctype": strProp("Exact doctype name"),
 			}, "doctype"),
 		},
+		"ff_get_doctype_blueprint": {
+			Description: "[FrappeForge] Get a comprehensive blueprint (fields, controllers, hooks) in one call",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("Exact doctype name"),
+			}, "doctype"),
+		},
 	}
 }
 
@@ -560,6 +566,7 @@ func (s *MCPServer) registerTools() error {
 	reg("ff_get_doctype_links", s.tools.FfGetDoctypeLinks)
 	reg("ff_search_methods", s.tools.FfSearchMethods)
 	reg("ff_get_hooks", s.tools.FfGetHooks)
+	reg("ff_get_doctype_blueprint", s.tools.FfGetDoctypeBlueprint)
 
 	// Generic analysis tool (1 - Replaces 9 doctype-specific tools!)
 	reg("analyze_document", s.tools.AnalyzeDocument)
@@ -597,7 +604,7 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 		"global_search", "analyze_document",
 		"ff_graph_stats", "ff_list_ingested_projects", "ff_search_doctype",
 		"ff_get_doctype_detail", "ff_get_doctype_controllers", "ff_get_doctype_client_scripts",
-		"ff_find_doctypes_with_field", "ff_get_doctype_links", "ff_search_methods", "ff_get_hooks",
+		"ff_find_doctypes_with_field", "ff_get_doctype_links", "ff_search_methods", "ff_get_hooks", "ff_get_doctype_blueprint",
 	}
 	tools := make([]map[string]interface{}, 0, len(order))
 	for _, name := range order {
@@ -727,6 +734,8 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 		result, err = s.tools.FfSearchMethods(ctx, request)
 	case "ff_get_hooks":
 		result, err = s.tools.FfGetHooks(ctx, request)
+	case "ff_get_doctype_blueprint":
+		result, err = s.tools.FfGetDoctypeBlueprint(ctx, request)
 	default:
 		http.Error(w, "Tool not found", http.StatusNotFound)
 		slog.Warn("Tool not found", "tool", toolName)
