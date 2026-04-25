@@ -4,8 +4,6 @@
 BINARY_NAME=frappe-mcp-server
 MAIN_PATH=./main.go
 BUILD_DIR=./bin
-DOCKER_IMAGE=frappe-mcp-server
-VERSION?=1.0.0
 
 # Go parameters
 GOCMD=go
@@ -164,12 +162,33 @@ tools:
 	$(GOGET) -u github.com/cosmtrek/air@latest
 	@echo "$(GREEN)Development tools installed$(NC)"
 
+DOCKER_REGISTRY=ghcr.io/vyogotech
+DOCKER_IMAGE=frappe-mcp-server
+FULL_IMAGE_NAME=$(DOCKER_REGISTRY)/$(DOCKER_IMAGE)
+VERSION?=latest
+
+# Build for Linux (static binary for Docker)
+build-linux:
+	@echo "$(GREEN)Building $(BINARY_NAME) for Linux...$(NC)"
+	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o $(BINARY_NAME) $(MAIN_PATH)
+
 # Docker build
-docker-build:
+docker-build: build-linux
 	@echo "$(GREEN)Building Docker image...$(NC)"
-	docker build -t $(DOCKER_IMAGE):$(VERSION) .
-	docker tag $(DOCKER_IMAGE):$(VERSION) $(DOCKER_IMAGE):latest
-	@echo "$(GREEN)Docker image built: $(DOCKER_IMAGE):$(VERSION)$(NC)"
+	docker build -t $(FULL_IMAGE_NAME):$(VERSION) .
+	@if [ "$(VERSION)" != "latest" ]; then \
+		docker tag $(FULL_IMAGE_NAME):$(VERSION) $(FULL_IMAGE_NAME):latest; \
+	fi
+	@echo "$(GREEN)Docker image built: $(FULL_IMAGE_NAME):$(VERSION)$(NC)"
+
+# Docker push
+docker-push:
+	@echo "$(GREEN)Pushing Docker image...$(NC)"
+	docker push $(FULL_IMAGE_NAME):$(VERSION)
+	@if [ "$(VERSION)" != "latest" ]; then \
+		docker push $(FULL_IMAGE_NAME):latest; \
+	fi
+	@echo "$(GREEN)Docker image pushed: $(FULL_IMAGE_NAME):$(VERSION)$(NC)"
 
 # Docker run
 docker-run:
