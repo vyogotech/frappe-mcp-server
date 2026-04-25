@@ -1,26 +1,3 @@
-# Multi-stage Docker build for ERPNext MCP Server
-
-# Build stage
-FROM golang:1.25-alpine AS builder
-
-# Install git (required for some Go modules)
-RUN apk add --no-cache git
-
-# Set working directory
-WORKDIR /app
-
-# Copy go mod files
-COPY go.mod go.sum ./
-
-# Download dependencies
-RUN go mod download
-
-# Copy source code
-COPY . .
-
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o frappe-mcp-server main.go
-
 # Final stage
 FROM alpine:latest
 
@@ -30,8 +7,8 @@ RUN apk --no-cache add ca-certificates tzdata curl
 # Set working directory first
 WORKDIR /app
 
-# Copy the binary from builder stage
-COPY --from=builder /app/frappe-mcp-server /app/frappe-mcp-server
+# Copy the pre-built binary
+COPY frappe-mcp-server /app/frappe-mcp-server
 
 # Create logs directory and set permissions before creating user
 RUN mkdir -p /app/logs
