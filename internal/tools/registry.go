@@ -9,18 +9,21 @@ import (
 
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/mcp"
+	"frappe-mcp-server/internal/neo4j"
 	"frappe-mcp-server/internal/types"
 )
 
 // ToolRegistry contains all the MCP tools
 type ToolRegistry struct {
 	frappeClient *frappe.Client
+	neo4jClient  *neo4j.Client
 }
 
 // NewRegistry creates a new tool registry
-func NewRegistry(frappeClient *frappe.Client) *ToolRegistry {
+func NewRegistry(frappeClient *frappe.Client, neo4jClient *neo4j.Client) *ToolRegistry {
 	return &ToolRegistry{
 		frappeClient: frappeClient,
+		neo4jClient:  neo4jClient,
 	}
 }
 

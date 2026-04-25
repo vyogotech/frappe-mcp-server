@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.4.0
+	github.com/neo4j/neo4j-go-driver/v5 v5.28.4
 	github.com/ollama/ollama v0.9.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/stretchr/testify v1.11.1
