@@ -169,6 +169,14 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to load from environment: %w", err)
 	}
 
+	// Set default rate limits if not provided
+	if config.ERPNext.RateLimit.RequestsPerSecond == 0 {
+		config.ERPNext.RateLimit.RequestsPerSecond = 10
+	}
+	if config.ERPNext.RateLimit.Burst == 0 {
+		config.ERPNext.RateLimit.Burst = 20
+	}
+
 	// Validate configuration
 	if err := config.validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
