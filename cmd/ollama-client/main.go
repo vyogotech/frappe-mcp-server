@@ -124,18 +124,27 @@ func NewOllamaERPNextClient(mcpServerPath, ollamaModel string, debugMode bool) *
 func (c *OllamaERPNextClient) StartMCPServer() error {
 	log.Printf("[DEBUG] Starting MCP server subprocess: %s", c.mcpServerPath)
 
-	// Resolve to a clean absolute path to satisfy security requirements (gosec G204).
+	// Resolve to a clean absolute path and evaluate symlinks to satisfy security requirements (gosec G204).
 	// This prevents path traversal and ensures the binary is an actual file on disk.
 	cleanPath, err := filepath.Abs(filepath.Clean(c.mcpServerPath))
 	if err != nil {
 		return fmt.Errorf("failed to resolve MCP server path: %w", err)
 	}
-	if _, statErr := os.Stat(cleanPath); statErr != nil {
-		return fmt.Errorf("MCP server binary not found at %s: %w", cleanPath, statErr)
+	realPath, err := filepath.EvalSymlinks(cleanPath)
+	if err != nil {
+		realPath = cleanPath // If symlink evaluation fails, use the clean absolute path
+	}
+	
+	info, statErr := os.Stat(realPath)
+	if statErr != nil {
+		return fmt.Errorf("MCP server binary not found at %s: %w", realPath, statErr)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("MCP server path %s is a directory, not a binary", realPath)
 	}
 
 	// Start the MCP server process
-	c.mcpProcess = exec.Command(cleanPath) // #nosec G204 -- path is resolved to absolute and validated above
+	c.mcpProcess = exec.Command(realPath) // #nosec G204 -- path is resolved, symlinks evaluated, and validated as a non-directory file above
 	c.mcpProcess.Stderr = os.Stderr // Forward stderr for debugging
 
 	stdin, err := c.mcpProcess.StdinPipe()

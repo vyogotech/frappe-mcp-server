@@ -424,10 +424,17 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	
 	if user != nil && user.SessionID != "" {
 		// Priority 1: Use Frappe session cookie (user-level permissions)
-		req.AddCookie(&http.Cookie{
-			Name:  "sid",
-			Value: user.SessionID,
-		})
+		cookie := &http.Cookie{
+			Name:     "sid",
+			Value:    user.SessionID,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		}
+		// Only set Secure flag if we're using HTTPS
+		if strings.HasPrefix(c.baseURL, "https://") {
+			cookie.Secure = true
+		}
+		req.AddCookie(cookie)
 		slog.Info("DEBUG Client: Using sid cookie", "user", user.Email, "method", method, "csrf_token_len", len(user.CSRFToken))
 		// Frappe enforces CSRF on POST/PUT/DELETE under sid auth whenever the
 		// session has a csrf_token populated (which happens the first time the
