@@ -127,7 +127,7 @@ jobs:
     name: Build & Push Container
     runs-on: ubuntu-latest
     needs: [test, lint]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/feature/mcp-go-sdk')
     permissions:
       contents: read
       packages: write
