@@ -14,7 +14,7 @@ Get Frappe MCP Server running in 5 minutes.
 
 ```bash
 # One-command installation
-curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 ```
 
 This will:
@@ -25,7 +25,7 @@ This will:
 
 ### Option B: Manual Download
 
-1. Go to [Releases](https://github.com/varkrish/frappe-mcp-server/releases/latest)
+1. Go to [Releases](https://github.com/vyogotech/frappe-mcp-server/releases/latest)
 2. Download the binary for your platform:
    - **Linux (Intel)**: `frappe-mcp-server-stdio-linux-amd64.tar.gz`
    - **Linux (ARM)**: `frappe-mcp-server-stdio-linux-arm64.tar.gz`
@@ -38,7 +38,7 @@ This will:
 
 ```bash
 # Requires Go 1.24+
-git clone https://github.com/varkrish/frappe-mcp-server
+git clone https://github.com/vyogotech/frappe-mcp-server
 cd frappe-mcp-server
 
 # Install dependencies
@@ -125,6 +125,52 @@ curl -X POST http://localhost:8080/api/v1/chat \
 Open Cursor and type:
 ```
 @erpnext List all ERPNext projects
+```
+
+## Try Analytics Queries 🆕
+
+The server now supports powerful analytics and reporting:
+
+### Aggregation Queries
+
+```bash
+# Top customers by revenue
+curl -X POST http://localhost:8080/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "show me top 5 customers by revenue in table format"}'
+
+# Total sales by item
+curl -X POST http://localhost:8080/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "what are total sales by item this month?"}'
+
+# Direct aggregation tool call
+curl -X POST http://localhost:8080/api/v1/tool/aggregate_documents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "doctype": "Sales Invoice",
+    "fields": ["customer", "SUM(grand_total) as revenue"],
+    "group_by": "customer",
+    "order_by": "revenue desc",
+    "limit": 10
+  }'
+```
+
+### Run Reports
+
+```bash
+# Execute ERPNext report via natural language
+curl -X POST http://localhost:8080/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "run Sales Analytics report"}'
+
+# Direct report tool call
+curl -X POST http://localhost:8080/api/v1/tool/run_report \
+  -H "Content-Type: application/json" \
+  -d '{
+    "report_name": "Sales Analytics",
+    "filters": {"company": "My Company"}
+  }'
 ```
 
 ## Optional: Setup Ollama (AI Features)

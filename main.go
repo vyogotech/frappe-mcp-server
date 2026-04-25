@@ -6,10 +6,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/server"
+	"frappe-mcp-server/internal/telemetry"
 )
 
 func main() {
@@ -25,6 +27,19 @@ func main() {
 		slog.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
 	}
+
+	// Initialize OpenTelemetry tracing (no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set)
+	telemetryShutdown, err := telemetry.Init(context.Background())
+	if err != nil {
+		slog.Warn("Telemetry init returned error; continuing without tracing", "error", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if shutdownErr := telemetryShutdown(shutdownCtx); shutdownErr != nil {
+			slog.Warn("Telemetry shutdown failed", "error", shutdownErr)
+		}
+	}()
 
 	// Create Frappe client
 	frappeClient, err := frappe.NewClient(cfg.ERPNext)

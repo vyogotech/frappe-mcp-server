@@ -137,6 +137,9 @@ docs/_site/
 docs/.jekyll-cache/
 docs/.jekyll-metadata
 
+# MCP client configuration (may contain sensitive credentials)
+.mcp.json
+
 # Compressed files
 *.zip
 *.tar.gz

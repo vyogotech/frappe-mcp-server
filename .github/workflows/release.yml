@@ -36,7 +36,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache: true
 
       - name: Get version from tag
@@ -85,7 +85,7 @@ jobs:
           2. Add to your MCP client configuration (Cursor or Claude Desktop)
           3. Start using natural language queries!
           
-          See full documentation at: https://github.com/varkrish/frappe-mcp-server
+          See full documentation at: https://github.com/vyogotech/frappe-mcp-server
           EOF
           
           # Create archive
@@ -159,4 +159,3 @@ jobs:
           git config user.email "actions@github.com"
           git add install.sh
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update install.sh to version ${GITHUB_REF#refs/tags/v}" && git push)
-
