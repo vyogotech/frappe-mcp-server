@@ -283,3 +283,54 @@ func (t *ToolRegistry) FfGetHooks(ctx context.Context, request mcp.ToolRequest) 
 	p := map[string]any{"doctype": params.DocType}
 	return t.executeGraphQuery(ctx, request.ID, request.Tool, cypher, p, fmt.Sprintf("Hooks for '%s'", params.DocType))
 }
+
+// FfGetDoctypeBlueprint returns a comprehensive "blueprint" of a DocType by combining
+// schema fields, controllers, and hooks into a single tool call.
+func (t *ToolRegistry) FfGetDoctypeBlueprint(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
+	var params struct {
+		DocType string `json:"doctype"`
+	}
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters: %w", err)
+	}
+	if params.DocType == "" {
+		return nil, fmt.Errorf("doctype is required")
+	}
+
+	cypher := `
+		MATCH (d:DocType {name: $doctype})-[:BELONGS_TO]->(p:Project)
+		
+		// 1. Fetch Fields
+		OPTIONAL MATCH (d)-[:HAS_FIELD]->(f:Field)
+		WITH d, p, collect({
+		    fieldname: f.fieldname,
+		    fieldtype: f.fieldtype,
+		    label: f.label,
+		    options: f.options,
+		    mandatory: f.reqd,
+		    hidden: f.hidden
+		}) as fields
+		
+		// 2. Fetch Controllers
+		OPTIONAL MATCH (d)-[:HAS_CONTROLLER]->(c:PythonClass)-[:HAS_METHOD]->(m:PythonMethod)
+		WITH d, p, fields, collect({
+		    class_name: c.name,
+		    file: c.filepath,
+		    method: m.name,
+		    args: m.args
+		}) as controllers
+		
+		// 3. Fetch Hooks
+		OPTIONAL MATCH (proj:Project)-[:HAS_HOOKS]->(h:Hooks)-[:HAS_DOC_EVENT]->(e:DocEvent {doctype: $doctype})
+		WITH d, p, fields, controllers, collect({
+		    project: proj.name,
+		    event: e.event_type,
+		    handler: e.handler
+		}) as hooks
+		
+		RETURN d.name as name, d.module as module, p.name as project,
+		       fields, controllers, hooks
+	`
+	p := map[string]any{"doctype": params.DocType}
+	return t.executeGraphQuery(ctx, request.ID, request.Tool, cypher, p, fmt.Sprintf("Blueprint for DocType '%s'", params.DocType))
+}
