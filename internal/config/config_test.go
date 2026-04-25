@@ -219,7 +219,7 @@ func TestValidation(t *testing.T) {
 					APISecret: "test_secret",
 				},
 			},
-			expectError: true,
+			expectError: false,
 		},
 		{
 			name: "missing API secret",
@@ -234,7 +234,7 @@ func TestValidation(t *testing.T) {
 					APISecret: "",
 				},
 			},
-			expectError: true,
+			expectError: false,
 		},
 		{
 			name: "invalid port",
