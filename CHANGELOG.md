@@ -2,7 +2,70 @@
 
 All notable changes to ERPNext MCP Server.
 
-## [Unreleased] - 2025-11-12
+## [Unreleased] - 2026-04-12
+
+### Added
+- **Global Search Tool** — new `global_search` MCP tool backed by `POST /api/method/frappe.utils.global_search.search`
+  - Full-text search across all indexed Frappe/ERPNext doctypes in a single call
+  - Optional `doctype` param to restrict results to one doctype
+  - Optional `scope` param (string or `[]string`) for multi-doctype filtering
+  - `limit` (default 20) and `start` for pagination
+  - Returns `name`, `doctype`, `content`, and `route` per result
+  - Exposed via Streamable HTTP (`POST /mcp`) and REST (`POST /tool/global_search`)
+  - Full `inputSchema` published in `/tools` listing
+- **Unit tests for Global Search**
+  - `internal/frappe/client_test.go` — `TestGlobalSearch` (valid text, default limit, empty text error)
+  - `internal/tools/registry_test.go` — `TestGlobalSearch` (valid text, optional doctype filter, missing text error, invalid JSON error)
+  - `internal/testutils/testutils.go` — mock handler for `POST /api/method/frappe.utils.global_search.search`
+- **Streamable HTTP Transport** (ported from PR #3)
+  - `POST /mcp` endpoint — JSON-RPC 2.0 Streamable HTTP with SSE support
+  - Registered on the main port-8080 mux; inherits full 3-tier auth middleware (fixes auth gap)
+- **OpenTelemetry Tracing** (ported from PR #3)
+  - `go.opentelemetry.io/otel v1.43.0` with stdout OTLP exporter
+  - Spans on every tool call (`tool.name`, `tool.doctype`, `tool.success` attributes)
+  - Outbound Frappe HTTP wrapped with `otelhttp.NewTransport`
+  - `internal/telemetry` package with `Init` / `Shutdown` helpers
+- **Tool Input Schemas** (ported from PR #3)
+  - `inputSchema` JSON Schema objects published for all active tools in `/tools` listing
+  - Deprecated legacy tools hidden from listing but remain callable for backward compatibility
+- **go-sdk Migration**
+  - Migrated from custom MCP implementation to `github.com/modelcontextprotocol/go-sdk v1.4.0`
+  - Server wraps `gosdk.Server`; all tool handlers use the SDK's `ToolRequest`/`ToolResponse` types
+
+### Fixed
+- **gosec G204** — `cmd/ollama-client`: subprocess path resolved via `filepath.Abs(filepath.Clean(...))` + `os.Stat` validation before `exec.Command`
+- **Auth gap on Streamable HTTP** — `POST /mcp` placed on main mux instead of a separate port, ensuring OAuth2/SID/API-key middleware is always applied
+
+### Changed
+- Go toolchain bumped to **1.25** (required by OTEL v1.43.0 indirect dependency)
+- `Dockerfile` base image updated to `golang:1.25-alpine`
+
+### Removed
+- Deleted unused `create_oauth_client.py` and `create_oauth_client_fixed.py`
+
+## [Unreleased] - 2025-11-13
+
+### Added
+- **OAuth2 Authentication** - Standard OAuth2 security implementation
+  - Bearer token validation with Frappe OAuth2 server
+  - In-memory token caching (configurable TTL, default 5 minutes)
+  - Support for Client Credentials Grant (backend-to-backend)
+  - Support for Authorization Code Grant (user authentication)
+  - Trusted client support for user context delegation
+  - Optional vs required authentication modes (backward compatible)
+  - User context propagation via `context.Context`
+  - Comprehensive test coverage (18 unit tests, all passing)
+  - Full documentation with quick start guide
+  - Environment variable configuration support
+  - Production-ready with proper error handling
+- **Authentication Documentation** - Complete guides for OAuth2 setup
+  - Full authentication guide (`docs/authentication.md`)
+  - 5-minute quick start guide (`docs/auth-quickstart.md`)
+  - Configuration examples and best practices
+  - Troubleshooting guide and common scenarios
+  - Migration path for gradual adoption
+
+## [Previous] - 2025-11-12
 
 ### Added
 - **Generic LLM Configuration** - Simplified 3-field config for ANY provider
@@ -134,13 +197,13 @@ docker compose up -d
 Before:
 ```yaml
 # compose.yml
-ERPNEXT_API_KEY: 0d9f1b19563768b
+FRAPPE_API_KEY: 0d9f1b19563768b
 ```
 
 After:
 ```bash
 # .env file
-ERPNEXT_API_KEY=0d9f1b19563768b
+FRAPPE_API_KEY=0d9f1b19563768b
 ```
 
 **From Multiple Compose Files to Single File**:
@@ -159,5 +222,5 @@ docker compose up -d
 
 ## Documentation
 
-For detailed documentation, visit [GitHub Pages](https://varkrish.github.io/frappe-mcp-server/)
+For detailed documentation, visit [GitHub Pages](https://vyogotech.github.io/frappe-mcp-server/)
 

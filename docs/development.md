@@ -15,7 +15,7 @@ Contributing to and extending ERPNext MCP Server.
 ### Clone and Build
 
 ```bash
-git clone https://github.com/varkrish/frappe-mcp-server
+git clone https://github.com/vyogotech/frappe-mcp-server
 cd frappe-mcp-server
 
 # Install dependencies
@@ -201,9 +201,9 @@ go test -v ./...
 
 ```bash
 # Requires ERPNext running
-export ERPNEXT_BASE_URL="http://localhost:8000"
-export ERPNEXT_API_KEY="your_key"
-export ERPNEXT_API_SECRET="your_secret"
+export FRAPPE_BASE_URL="http://localhost:8000"
+export FRAPPE_API_KEY="your_key"
+export FRAPPE_API_SECRET="your_secret"
 
 go test -tags=integration ./...
 ```
@@ -439,8 +439,8 @@ godoc -http=:6060
 
 ## Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/varkrish/frappe-mcp-server/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/varkrish/frappe-mcp-server/discussions)
+- **Issues**: [GitHub Issues](https://github.com/vyogotech/frappe-mcp-server/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/vyogotech/frappe-mcp-server/discussions)
 - **Email**: Create an issue for questions
 
 ---
