@@ -18,6 +18,14 @@ type Config struct {
 	Cache       CacheConfig       `yaml:"cache"`
 	Performance PerformanceConfig `yaml:"performance"`
 	Auth        AuthConfig        `yaml:"auth"`
+	Neo4j       Neo4jConfig       `yaml:"neo4j"`
+}
+
+// Neo4jConfig represents the configuration for FrappeForge knowledge graph
+type Neo4jConfig struct {
+	BoltURL  string `yaml:"bolt_url"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 // ServerConfig represents server configuration
@@ -217,6 +225,17 @@ func (c *Config) loadFromEnv() error {
 	}
 	if azureAPIVersion := os.Getenv("LLM_AZURE_API_VERSION"); azureAPIVersion != "" {
 		c.LLM.AzureAPIVersion = azureAPIVersion
+	}
+
+	// Neo4j configuration
+	if boltURL := os.Getenv("NEO4J_BOLT_URL"); boltURL != "" {
+		c.Neo4j.BoltURL = boltURL
+	}
+	if username := os.Getenv("NEO4J_USERNAME"); username != "" {
+		c.Neo4j.Username = username
+	}
+	if password := os.Getenv("NEO4J_PASSWORD"); password != "" {
+		c.Neo4j.Password = password
 	}
 
 	// Auth configuration

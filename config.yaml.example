@@ -25,6 +25,13 @@ logging:
   level: "info"
   format: "json"
 
+# Neo4j Graph Database (FrappeForge Code Intelligence)
+# Optional: If omitted, the server will function normally but ff_* graph tools will be disabled.
+neo4j:
+  bolt_url: "bolt://localhost:7687"
+  username: "neo4j"
+  password: "frappeforge"
+
 # LLM Provider Configuration - Generic and Flexible!
 # Works with ANY OpenAI-compatible API: Ollama, OpenAI, Together.ai, Groq, etc.
 llm:

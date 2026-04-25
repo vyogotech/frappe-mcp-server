@@ -17,6 +17,7 @@ import (
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/llm"
 	"frappe-mcp-server/internal/mcp"
+	"frappe-mcp-server/internal/neo4j"
 	"frappe-mcp-server/internal/tools"
 	"frappe-mcp-server/internal/types"
 )
@@ -83,8 +84,18 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	// Create MCP server
 	server := mcp.NewServer("frappe-mcp-server", "1.0.0")
 
+	// Create Neo4j client
+	neo4jClient, err := neo4j.NewClient(cfg.Neo4j.BoltURL, cfg.Neo4j.Username, cfg.Neo4j.Password)
+	if err != nil {
+		slog.Warn("Failed to initialize Neo4j client", "error", err)
+	} else if neo4jClient == nil {
+		slog.Info("Neo4j Bolt URL not configured; graph features will be disabled")
+	} else {
+		slog.Info("Neo4j client initialized successfully")
+	}
+
 	// Create tool registry
-	toolRegistry := tools.NewRegistry(frappeClient)
+	toolRegistry := tools.NewRegistry(frappeClient, neo4jClient)
 
 	// Create LLM client (legacy)
 	llmClient, err := llm.NewClient(cfg.LLM)
@@ -180,7 +191,6 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	mux.HandleFunc("/metrics", mcpServer.metrics)
 	mux.HandleFunc("/tools", mcpServer.listTools)
 	mux.HandleFunc("/tool/", mcpServer.handleToolCall)
-	mux.HandleFunc("/resources", mcpServer.listResources)
 
 	mcpServer.httpServer = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
@@ -193,11 +203,6 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	// Register all tools
 	if err := mcpServer.registerTools(); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
-	}
-
-	// Register resources
-	if err := mcpServer.registerResources(); err != nil {
-		return nil, fmt.Errorf("failed to register resources: %w", err)
 	}
 
 	return mcpServer, nil
@@ -454,6 +459,62 @@ func toolCatalog() map[string]mcp.ToolMeta {
 				"start":   map[string]interface{}{"type": "integer", "description": "Offset for pagination (default 0)"},
 			}, "text"),
 		},
+		"ff_graph_stats": {
+			Description: "[FrappeForge] Get total node and relationship counts in the knowledge graph",
+			InputSchema: objSchema(map[string]interface{}{}),
+		},
+		"ff_list_ingested_projects": {
+			Description: "[FrappeForge] List all projects/repos currently indexed in the graph",
+			InputSchema: objSchema(map[string]interface{}{}),
+		},
+		"ff_search_doctype": {
+			Description: "[FrappeForge] Find doctypes matching a partial string (e.g. 'Purchase')",
+			InputSchema: objSchema(map[string]interface{}{
+				"query": strProp("Partial doctype name or module to search for"),
+			}, "query"),
+		},
+		"ff_get_doctype_detail": {
+			Description: "[FrappeForge] Get the full field schema of a doctype",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("Exact doctype name (e.g., 'Sales Invoice')"),
+			}, "doctype"),
+		},
+		"ff_get_doctype_controllers": {
+			Description: "[FrappeForge] Get Python controller methods for a doctype",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("Exact doctype name"),
+			}, "doctype"),
+		},
+		"ff_get_doctype_client_scripts": {
+			Description: "[FrappeForge] Get JavaScript client script events for a doctype",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("Exact doctype name"),
+			}, "doctype"),
+		},
+		"ff_find_doctypes_with_field": {
+			Description: "[FrappeForge] Find any doctype that contains a specific fieldname",
+			InputSchema: objSchema(map[string]interface{}{
+				"fieldname": strProp("Field name to search for (e.g., 'customer')"),
+			}, "fieldname"),
+		},
+		"ff_get_doctype_links": {
+			Description: "[FrappeForge] Find other doctypes that link TO the specified doctype",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("Doctype being linked to (e.g., 'Customer')"),
+			}, "doctype"),
+		},
+		"ff_search_methods": {
+			Description: "[FrappeForge] Find Python methods across the graph by name",
+			InputSchema: objSchema(map[string]interface{}{
+				"query": strProp("Partial method name (e.g., 'validate')"),
+			}, "query"),
+		},
+		"ff_get_hooks": {
+			Description: "[FrappeForge] Get Frappe hooks registered for a doctype",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("Exact doctype name"),
+			}, "doctype"),
+		},
 	}
 }
 
@@ -488,6 +549,18 @@ func (s *MCPServer) registerTools() error {
 	// Cross-doctype search
 	reg("global_search", s.tools.GlobalSearch)
 
+	// FrappeForge Graph Tools (Code Intelligence)
+	reg("ff_graph_stats", s.tools.FfGraphStats)
+	reg("ff_list_ingested_projects", s.tools.FfListIngestedProjects)
+	reg("ff_search_doctype", s.tools.FfSearchDoctype)
+	reg("ff_get_doctype_detail", s.tools.FfGetDoctypeDetail)
+	reg("ff_get_doctype_controllers", s.tools.FfGetDoctypeControllers)
+	reg("ff_get_doctype_client_scripts", s.tools.FfGetDoctypeClientScripts)
+	reg("ff_find_doctypes_with_field", s.tools.FfFindDoctypesWithField)
+	reg("ff_get_doctype_links", s.tools.FfGetDoctypeLinks)
+	reg("ff_search_methods", s.tools.FfSearchMethods)
+	reg("ff_get_hooks", s.tools.FfGetHooks)
+
 	// Generic analysis tool (1 - Replaces 9 doctype-specific tools!)
 	reg("analyze_document", s.tools.AnalyzeDocument)
 
@@ -507,32 +580,6 @@ func (s *MCPServer) registerTools() error {
 	return nil
 }
 
-// registerResources registers MCP resources
-func (s *MCPServer) registerResources() error {
-	slog.Info("Registering MCP resources...")
-	// Register ERPNext doctypes as resources
-	doctypes := []string{
-		"Project",
-		"Task",
-		"Timesheet",
-		"Sales Order",
-		"Sales Invoice",
-		"Purchase Order",
-		"Item",
-		"Customer",
-		"Supplier",
-		"Employee",
-		"User",
-	}
-
-	for _, doctype := range doctypes {
-		s.server.RegisterResource(fmt.Sprintf("erpnext://%s", strings.ReplaceAll(doctype, " ", "-")), fmt.Sprintf("ERPNext %s documents", doctype))
-	}
-
-	slog.Info("Registered MCP resources", "count", len(doctypes))
-	return nil
-}
-
 // listTools provides the REST /tools endpoint for listing available tools.
 // It consumes the same toolCatalog() that registerTools uses, so the REST
 // response and the MCP tools/list response stay in sync. Deprecated/legacy
@@ -548,6 +595,9 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 		"get_document", "list_documents", "create_document", "update_document",
 		"delete_document", "search_documents", "aggregate_documents", "run_report",
 		"global_search", "analyze_document",
+		"ff_graph_stats", "ff_list_ingested_projects", "ff_search_doctype",
+		"ff_get_doctype_detail", "ff_get_doctype_controllers", "ff_get_doctype_client_scripts",
+		"ff_find_doctypes_with_field", "ff_get_doctype_links", "ff_search_methods", "ff_get_hooks",
 	}
 	tools := make([]map[string]interface{}, 0, len(order))
 	for _, name := range order {
@@ -657,6 +707,26 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	case "global_search":
 		slog.Info("Calling ERPNext GlobalSearch", "params", request.Params)
 		result, err = s.tools.GlobalSearch(ctx, request)
+	case "ff_graph_stats":
+		result, err = s.tools.FfGraphStats(ctx, request)
+	case "ff_list_ingested_projects":
+		result, err = s.tools.FfListIngestedProjects(ctx, request)
+	case "ff_search_doctype":
+		result, err = s.tools.FfSearchDoctype(ctx, request)
+	case "ff_get_doctype_detail":
+		result, err = s.tools.FfGetDoctypeDetail(ctx, request)
+	case "ff_get_doctype_controllers":
+		result, err = s.tools.FfGetDoctypeControllers(ctx, request)
+	case "ff_get_doctype_client_scripts":
+		result, err = s.tools.FfGetDoctypeClientScripts(ctx, request)
+	case "ff_find_doctypes_with_field":
+		result, err = s.tools.FfFindDoctypesWithField(ctx, request)
+	case "ff_get_doctype_links":
+		result, err = s.tools.FfGetDoctypeLinks(ctx, request)
+	case "ff_search_methods":
+		result, err = s.tools.FfSearchMethods(ctx, request)
+	case "ff_get_hooks":
+		result, err = s.tools.FfGetHooks(ctx, request)
 	default:
 		http.Error(w, "Tool not found", http.StatusNotFound)
 		slog.Warn("Tool not found", "tool", toolName)
@@ -675,46 +745,6 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 		slog.Error("Failed to encode tool response", "error", err)
 	}
 	slog.Info("/tool/ response sent", "tool", toolName, "request_id", request.ID)
-}
-
-// listResources provides HTTP endpoint for listing available resources
-func (s *MCPServer) listResources(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/resources endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr)
-	w.Header().Set("Content-Type", "application/json")
-
-	resources := []map[string]interface{}{
-		{
-			"uri":         "erpnext://projects",
-			"name":        "ERPNext Projects",
-			"description": "Access to ERPNext project data",
-		},
-		{
-			"uri":         "erpnext://tasks",
-			"name":        "ERPNext Tasks",
-			"description": "Access to ERPNext task data",
-		},
-		{
-			"uri":         "erpnext://customers",
-			"name":        "ERPNext Customers",
-			"description": "Access to ERPNext customer data",
-		},
-		{
-			"uri":         "erpnext://items",
-			"name":        "ERPNext Items",
-			"description": "Access to ERPNext item data",
-		},
-	}
-
-	response := map[string]interface{}{
-		"resources": resources,
-		"count":     len(resources),
-	}
-
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		slog.Error("Failed to encode resources response", "error", err)
-	}
-	slog.Info("/resources response sent", "count", len(resources))
 }
 
 // handleChat handles natural language chat queries.

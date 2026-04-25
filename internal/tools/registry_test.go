@@ -42,14 +42,14 @@ func createTestClient(t *testing.T) *frappe.Client {
 
 func TestNewRegistry(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	assert.NotNil(t, registry)
 }
 
 func TestGetDocument(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	// Test valid request
 	params := map[string]interface{}{
@@ -78,7 +78,7 @@ func TestGetDocument(t *testing.T) {
 
 func TestGetDocumentInvalidParams(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	// Test invalid JSON
 	request := mcp.ToolRequest{
@@ -96,7 +96,7 @@ func TestGetDocumentInvalidParams(t *testing.T) {
 
 func TestGetDocumentMissingParams(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	// Test missing doctype
 	params := map[string]interface{}{
@@ -121,7 +121,7 @@ func TestGetDocumentMissingParams(t *testing.T) {
 
 func TestListDocuments(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	params := map[string]interface{}{
 		"doctype": "Project",
@@ -148,7 +148,7 @@ func TestListDocuments(t *testing.T) {
 
 func TestCreateDocument(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	params := map[string]interface{}{
 		"doctype": "Project",
@@ -176,7 +176,7 @@ func TestCreateDocument(t *testing.T) {
 
 func TestUpdateDocument(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	params := map[string]interface{}{
 		"doctype": "Project",
@@ -204,7 +204,7 @@ func TestUpdateDocument(t *testing.T) {
 
 func TestDeleteDocument(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	// Test without confirmation
 	params := map[string]interface{}{
@@ -243,7 +243,7 @@ func TestDeleteDocument(t *testing.T) {
 
 func TestSearchDocuments(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	params := map[string]interface{}{
 		"doctype": "Customer",
@@ -269,7 +269,7 @@ func TestSearchDocuments(t *testing.T) {
 
 func TestGetProjectStatus(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	params := map[string]interface{}{
 		"project_name": "TEST-PROJ-001",
@@ -293,7 +293,7 @@ func TestGetProjectStatus(t *testing.T) {
 
 func TestAnalyzeProjectTimeline(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	params := map[string]interface{}{
 		"project_name": "TEST-PROJ-001",
@@ -317,7 +317,7 @@ func TestAnalyzeProjectTimeline(t *testing.T) {
 
 func TestCalculateProjectMetrics(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	params := map[string]interface{}{
 		"project_name": "TEST-PROJ-001",
@@ -341,7 +341,7 @@ func TestCalculateProjectMetrics(t *testing.T) {
 
 func TestGetResourceAllocation(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	request := mcp.ToolRequest{
 		ID:     "test-1",
@@ -359,7 +359,7 @@ func TestGetResourceAllocation(t *testing.T) {
 
 func TestProjectRiskAssessment(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	params := map[string]interface{}{
 		"project_name": "TEST-PROJ-001",
@@ -383,7 +383,7 @@ func TestProjectRiskAssessment(t *testing.T) {
 
 func TestGenerateProjectReport(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	tests := []struct {
 		name       string
@@ -437,7 +437,7 @@ func TestGenerateProjectReport(t *testing.T) {
 
 func TestPortfolioDashboard(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	request := mcp.ToolRequest{
 		ID:     "test-1",
@@ -455,7 +455,7 @@ func TestPortfolioDashboard(t *testing.T) {
 
 func TestResourceUtilizationAnalysis(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	request := mcp.ToolRequest{
 		ID:     "test-1",
@@ -473,7 +473,7 @@ func TestResourceUtilizationAnalysis(t *testing.T) {
 
 func TestBudgetVarianceAnalysis(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	request := mcp.ToolRequest{
 		ID:     "test-1",
@@ -491,7 +491,7 @@ func TestBudgetVarianceAnalysis(t *testing.T) {
 
 func BenchmarkGetDocument(b *testing.B) {
 	client := createTestClient(&testing.T{})
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 
 	params := map[string]interface{}{
 		"doctype": "Project",
@@ -518,7 +518,7 @@ func BenchmarkGetDocument(b *testing.B) {
 
 func TestGlobalSearch(t *testing.T) {
 	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry := NewRegistry(client, nil)
 	ctx := context.Background()
 
 	t.Run("returns results for valid text", func(t *testing.T) {
