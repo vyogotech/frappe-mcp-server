@@ -175,3 +175,20 @@ func TestFfGetHooks_Neo4jUnavailable(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, resp.Content[0].Text, "unavailable")
 }
+
+// ── ff_get_doctype_blueprint ──────────────────────────────────────────────────
+
+func TestFfGetDoctypeBlueprint_MissingDoctype(t *testing.T) {
+	r := newNilNeo4jRegistry(t)
+	_, err := r.FfGetDoctypeBlueprint(context.Background(), mcp.ToolRequest{ID: "t1", Params: []byte(`{}`)})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "doctype")
+}
+
+func TestFfGetDoctypeBlueprint_Neo4jUnavailable(t *testing.T) {
+	r := newNilNeo4jRegistry(t)
+	params, _ := json.Marshal(map[string]string{"doctype": "Sales Invoice"})
+	resp, err := r.FfGetDoctypeBlueprint(context.Background(), mcp.ToolRequest{ID: "t1", Params: params})
+	require.NoError(t, err)
+	assert.Contains(t, resp.Content[0].Text, "unavailable")
+}
