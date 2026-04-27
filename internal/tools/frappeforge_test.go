@@ -192,3 +192,12 @@ func TestFfGetDoctypeBlueprint_Neo4jUnavailable(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, resp.Content[0].Text, "unavailable")
 }
+
+// TestFfGetDoctypeBlueprint_HappyPath_TODO marks that a happy-path test for
+// the FrappeForge tools requires extracting an interface for *neo4j.Client.Query
+// so we can stub the result. Tracked for Phase 2 alongside the PM tool
+// reimplementation. Do not delete this marker without filing the followup or
+// implementing the test.
+func TestFfGetDoctypeBlueprint_HappyPath_TODO(t *testing.T) {
+	t.Skip("requires queryRunner interface extraction for *neo4j.Client.Query — Phase 2")
+}
