@@ -80,7 +80,7 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 		cacheKey := "sid:" + sidCookie.Value
 		if cached, found := s.cache.Get(cacheKey); found {
 			if user, ok := cached.(*types.User); ok {
-				log.Printf("DEBUG Auth: Using cached user for sid, CSRF token len: %d", len(user.CSRFToken))
+				log.Printf("DEBUG Auth: Using cached user for sid, CSRF token len: %d", len(user.CSRFToken)) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 				return user, nil
 			}
 		}

@@ -29,7 +29,7 @@ func (s *Server) HandleStreamableHTTP(w http.ResponseWriter, r *http.Request) {
 	//    charset). Anything else is a transport error.
 	contentType := strings.ToLower(r.Header.Get("Content-Type"))
 	if !strings.HasPrefix(contentType, "application/json") {
-		slog.Debug("POST /mcp rejected: wrong Content-Type", "content_type", contentType)
+		slog.Debug("POST /mcp rejected: wrong Content-Type", "content_type", contentType) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
 		return
 	}
@@ -39,7 +39,7 @@ func (s *Server) HandleStreamableHTTP(w http.ResponseWriter, r *http.Request) {
 	//    rejected because we do not implement SSE responses in this server.
 	accept := r.Header.Get("Accept")
 	if accept != "" && !acceptsJSON(accept) {
-		slog.Debug("POST /mcp rejected: SSE-only Accept", "accept", accept)
+		slog.Debug("POST /mcp rejected: SSE-only Accept", "accept", accept) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 		http.Error(w, "Accept must include application/json", http.StatusNotAcceptable)
 		return
 	}

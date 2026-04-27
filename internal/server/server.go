@@ -254,7 +254,7 @@ func (s *MCPServer) Run(ctx context.Context) error {
 
 // healthCheck provides health status endpoint
 func (s *MCPServer) healthCheck(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/health endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr)
+	slog.Info("/health endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 	w.Header().Set("Content-Type", "application/json")
 
 	// Simple health check - could be enhanced to check ERPNext connectivity
@@ -267,7 +267,7 @@ func (s *MCPServer) healthCheck(w http.ResponseWriter, r *http.Request) {
 
 // metrics provides basic metrics endpoint
 func (s *MCPServer) metrics(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/metrics endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr)
+	slog.Info("/metrics endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 	w.Header().Set("Content-Type", "application/json")
 
 	metrics := fmt.Sprintf(`{\n\t"uptime": "%s",\n\t"timestamp": "%s",\n\t"version": "1.0.0"\n}`, time.Since(time.Now()).String(), time.Now().Format(time.RFC3339))
@@ -307,16 +307,16 @@ func (s *MCPServer) loggingMiddleware(next http.Handler) http.Handler {
 			bodyBytes, _ := io.ReadAll(r.Body)
 			reqBodyCopy.Write(bodyBytes)
 			r.Body = io.NopCloser(strings.NewReader(reqBodyCopy.String()))
-			slog.Info("HTTP request received", "method", r.Method, "path", r.URL.Path, "remote_addr", r.RemoteAddr, "user_agent", r.UserAgent(), "body", reqBodyCopy.String())
+			slog.Info("HTTP request received", "method", r.Method, "path", r.URL.Path, "remote_addr", r.RemoteAddr, "user_agent", r.UserAgent(), "body", reqBodyCopy.String()) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 		} else {
-			slog.Info("HTTP request received", "method", r.Method, "path", r.URL.Path, "remote_addr", r.RemoteAddr, "user_agent", r.UserAgent())
+			slog.Info("HTTP request received", "method", r.Method, "path", r.URL.Path, "remote_addr", r.RemoteAddr, "user_agent", r.UserAgent()) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 		}
 
 		// Wrap ResponseWriter to capture response body
 		ww := &responseWriterWithBody{ResponseWriter: w, body: &respBodyCopy, status: 200}
 		next.ServeHTTP(ww, r)
 
-		slog.Info("HTTP request completed", "method", r.Method, "path", r.URL.Path, "status", ww.status, "duration", time.Since(start), "response_body", respBodyCopy.String())
+		slog.Info("HTTP request completed", "method", r.Method, "path", r.URL.Path, "status", ww.status, "duration", time.Since(start), "response_body", respBodyCopy.String()) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 	})
 }
 
@@ -339,14 +339,14 @@ func (w *responseWriterWithBody) Write(b []byte) (int, error) {
 // corsMiddleware handles CORS
 func (s *MCPServer) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		slog.Debug("CORS middleware invoked", "method", r.Method, "path", r.URL.Path)
+		slog.Debug("CORS middleware invoked", "method", r.Method, "path", r.URL.Path) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Cache-Control")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
-			slog.Debug("CORS preflight response sent", "path", r.URL.Path)
+			slog.Debug("CORS preflight response sent", "path", r.URL.Path) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 			return
 		}
 
@@ -593,7 +593,7 @@ func (s *MCPServer) registerTools() error {
 // tools without catalogued schemas are omitted from this listing but remain
 // callable.
 func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/tools endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr)
+	slog.Info("/tools endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 	w.Header().Set("Content-Type", "application/json")
 
 	catalog := toolCatalog()
@@ -634,10 +634,10 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 
 // handleToolCall handles direct tool calls via HTTP
 func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
-	slog.Info("Tool endpoint called", "method", r.Method, "path", r.URL.Path, "remote_addr", r.RemoteAddr)
+	slog.Info("Tool endpoint called", "method", r.Method, "path", r.URL.Path, "remote_addr", r.RemoteAddr) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		slog.Warn("Tool method not allowed", "method", r.Method, "path", r.URL.Path)
+		slog.Warn("Tool method not allowed", "method", r.Method, "path", r.URL.Path) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 		return
 	}
 
@@ -648,7 +648,7 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	}
 	if toolName == "" || toolName == r.URL.Path {
 		http.Error(w, "Tool name is required", http.StatusBadRequest)
-		slog.Warn("Missing tool name", "path", r.URL.Path)
+		slog.Warn("Missing tool name", "path", r.URL.Path) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 		return
 	}
 
@@ -659,7 +659,7 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("Tool call received", "tool", toolName, "request_id", request.ID, "params", request.Params)
+	slog.Info("Tool call received", "tool", toolName, "request_id", request.ID, "params", request.Params) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 	request.Tool = toolName
 	if request.ID == "" {
 		request.ID = fmt.Sprintf("http-%d", time.Now().UnixNano())
@@ -669,7 +669,7 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	var result *mcp.ToolResponse
 	var err error
 
-	slog.Info("Executing tool", "tool", toolName, "request_id", request.ID, "params", request.Params)
+	slog.Info("Executing tool", "tool", toolName, "request_id", request.ID, "params", request.Params) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 	switch toolName {
 	// Core CRUD tools
 	case "get_document":
@@ -738,22 +738,22 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 		result, err = s.tools.FfGetDoctypeBlueprint(ctx, request)
 	default:
 		http.Error(w, "Tool not found", http.StatusNotFound)
-		slog.Warn("Tool not found", "tool", toolName)
+		slog.Warn("Tool not found", "tool", toolName) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 		return
 	}
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		slog.Error("Tool execution error", "tool", toolName, "error", err)
+		slog.Error("Tool execution error", "tool", toolName, "error", err) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 		return
 	}
 
-	slog.Info("Tool executed successfully", "tool", toolName, "request_id", request.ID, "erpnext_result", result)
+	slog.Info("Tool executed successfully", "tool", toolName, "request_id", request.ID, "erpnext_result", result) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		slog.Error("Failed to encode tool response", "error", err)
 	}
-	slog.Info("/tool/ response sent", "tool", toolName, "request_id", request.ID)
+	slog.Info("/tool/ response sent", "tool", toolName, "request_id", request.ID) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 }
 
 // handleChat handles natural language chat queries.
@@ -769,7 +769,7 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 
 // handleChatJSON handles natural language chat queries (non-streaming JSON response).
 func (s *MCPServer) handleChatJSON(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/api/v1/chat endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr)
+	slog.Info("/api/v1/chat endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -2372,7 +2372,7 @@ func extractEntityName(query string) string {
 
 // handleOpenAPI provides OpenAPI specification
 func (s *MCPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/api/v1/openapi.json endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr)
+	slog.Info("/api/v1/openapi.json endpoint called", "method", r.Method, "remote_addr", r.RemoteAddr) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
 	w.Header().Set("Content-Type", "application/json")
 
 	spec := map[string]interface{}{

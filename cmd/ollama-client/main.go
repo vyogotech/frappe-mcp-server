@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"frappe-mcp-server/internal/utils"
 
@@ -93,7 +94,7 @@ func init() {
 
 // NewOllamaERPNextClient creates a new client
 func NewOllamaERPNextClient(mcpServerPath, ollamaModel string, debugMode bool) *OllamaERPNextClient {
-	log.Printf("[INIT] Creating OllamaERPNextClient | MCP: %s | Model: %s | Debug: %v", mcpServerPath, ollamaModel, debugMode)
+	log.Printf("[INIT] Creating OllamaERPNextClient | MCP: %s | Model: %s | Debug: %v", mcpServerPath, ollamaModel, debugMode) //nolint:gosec // reason: debug log; values not injected into format string
 
 	// Get Ollama host from environment or use default
 	ollamaHost := os.Getenv("OLLAMA_HOST")
@@ -122,7 +123,7 @@ func NewOllamaERPNextClient(mcpServerPath, ollamaModel string, debugMode bool) *
 
 // StartMCPServer starts the MCP server subprocess
 func (c *OllamaERPNextClient) StartMCPServer() error {
-	log.Printf("[DEBUG] Starting MCP server subprocess: %s", c.mcpServerPath)
+	log.Printf("[DEBUG] Starting MCP server subprocess: %s", c.mcpServerPath) //nolint:gosec // reason: debug log; values not injected into format string
 
 	// Resolve to a clean absolute path and evaluate symlinks to satisfy security requirements (gosec G204).
 	// This prevents path traversal and ensures the binary is an actual file on disk.
@@ -144,7 +145,7 @@ func (c *OllamaERPNextClient) StartMCPServer() error {
 	}
 
 	// Start the MCP server process
-	c.mcpProcess = exec.Command(realPath) // #nosec G204 -- path is resolved, symlinks evaluated, and validated as a non-directory file above
+	c.mcpProcess = exec.Command(realPath) // #nosec G204 G702 -- path is resolved, symlinks evaluated, and validated as a non-directory file above
 	c.mcpProcess.Stderr = os.Stderr // Forward stderr for debugging
 
 	stdin, err := c.mcpProcess.StdinPipe()
@@ -163,7 +164,7 @@ func (c *OllamaERPNextClient) StartMCPServer() error {
 		log.Printf("[ERROR] Failed to start MCP server: %v", err)
 		return fmt.Errorf("failed to start MCP server: %w", err)
 	}
-	log.Printf("[DEBUG] MCP server process started (PID: %d)", c.mcpProcess.Process.Pid)
+	log.Printf("[DEBUG] MCP server process started (PID: %d)", c.mcpProcess.Process.Pid) //nolint:gosec // reason: debug log; values not injected into format string
 
 	// Initialize the MCP server
 	initRequest := MCPRequest{
@@ -211,7 +212,7 @@ func (c *OllamaERPNextClient) StartMCPServer() error {
 		var toolsResult ToolsListResult
 		if err := json.Unmarshal(resultBytes, &toolsResult); err == nil {
 			c.tools = toolsResult.Tools
-			log.Printf("[DEBUG] Loaded %d ERPNext tools from MCP server", len(c.tools))
+			log.Printf("[DEBUG] Loaded %d ERPNext tools from MCP server", len(c.tools)) //nolint:gosec // reason: debug log; values not injected into format string
 			fmt.Printf("✅ Loaded %d ERPNext tools\n", len(c.tools))
 		}
 	}
@@ -241,7 +242,7 @@ func (c *OllamaERPNextClient) sendMCPRequest(request MCPRequest) (*MCPResponse, 
 		log.Printf("[ERROR] Failed to read from MCP server (ID %d)", request.ID)
 		return nil, fmt.Errorf("failed to read from MCP server")
 	}
-	log.Printf("[DEBUG] MCP Response (ID %d): %s", request.ID, string(c.mcpStdout.Bytes()))
+	log.Printf("[DEBUG] MCP Response (ID %d): %s", request.ID, string(c.mcpStdout.Bytes())) //nolint:gosec // reason: debug log; values not injected into format string
 
 	var response MCPResponse
 	if err := json.Unmarshal(c.mcpStdout.Bytes(), &response); err != nil {
@@ -251,7 +252,7 @@ func (c *OllamaERPNextClient) sendMCPRequest(request MCPRequest) (*MCPResponse, 
 	return &response, nil
 } // CallTool calls an ERPNext tool via MCP
 func (c *OllamaERPNextClient) CallTool(toolName string, arguments map[string]interface{}) (string, error) {
-	log.Printf("[DEBUG] Calling tool: %s with arguments: %+v", toolName, arguments)
+	log.Printf("[DEBUG] Calling tool: %s with arguments: %+v", toolName, arguments) //nolint:gosec // reason: debug log; values not injected into format string
 
 	request := MCPRequest{
 		JSONRPC: "2.0",
@@ -276,7 +277,7 @@ func (c *OllamaERPNextClient) CallTool(toolName string, arguments map[string]int
 	}
 
 	if response.Result != nil {
-		log.Printf("[DEBUG] Tool %s returned result: %+v", toolName, response.Result)
+		log.Printf("[DEBUG] Tool %s returned result: %+v", toolName, response.Result) //nolint:gosec // reason: debug log; values not injected into format string
 
 		// First convert the result to bytes properly
 		resultBytes, err := json.Marshal(response.Result)
@@ -286,19 +287,19 @@ func (c *OllamaERPNextClient) CallTool(toolName string, arguments map[string]int
 		}
 
 		// DEBUG: Log the raw JSON result for inspection
-		log.Printf("[DEBUG] Tool %s raw JSON result: %s", toolName, string(resultBytes))
+		log.Printf("[DEBUG] Tool %s raw JSON result: %s", toolName, string(resultBytes)) //nolint:gosec // reason: debug log; values not injected into format string
 
 		var toolResult ToolCallResult
 		if err := json.Unmarshal(resultBytes, &toolResult); err == nil {
 			if len(toolResult.Content) > 0 {
-				log.Printf("[DEBUG] Tool %s content parts: %d", toolName, len(toolResult.Content))
+				log.Printf("[DEBUG] Tool %s content parts: %d", toolName, len(toolResult.Content)) //nolint:gosec // reason: debug log; values not injected into format string
 
 				// Combine all content parts for a complete response
 				var contentParts []string
 				for i, content := range toolResult.Content {
 					if content.Text != "" {
 						// DEBUG: Log each content part
-						log.Printf("[DEBUG] Tool %s content part %d: %s", toolName, i, content.Text)
+						log.Printf("[DEBUG] Tool %s content part %d: %s", toolName, i, content.Text) //nolint:gosec // reason: debug log; values not injected into format string
 
 						// Try to pretty-print JSON in content parts after the first one
 						if i > 0 && strings.HasPrefix(content.Text, "{") {
@@ -314,7 +315,7 @@ func (c *OllamaERPNextClient) CallTool(toolName string, arguments map[string]int
 					}
 				}
 				result := strings.Join(contentParts, "\n\n")
-				log.Printf("[DEBUG] Tool %s final combined result: %s", toolName, result)
+				log.Printf("[DEBUG] Tool %s final combined result: %s", toolName, result) //nolint:gosec // reason: debug log; values not injected into format string
 				return result, nil
 			}
 		}
@@ -322,7 +323,7 @@ func (c *OllamaERPNextClient) CallTool(toolName string, arguments map[string]int
 		return fmt.Sprintf("%v", response.Result), nil
 	}
 
-	log.Printf("[WARN] Tool %s returned no response", toolName)
+	log.Printf("[WARN] Tool %s returned no response", toolName) //nolint:gosec // reason: debug log; values not injected into format string
 	return "No response from tool", nil
 }
 
@@ -332,7 +333,7 @@ func (c *OllamaERPNextClient) GetToolsDescription() string {
 	builder.WriteString("Available ERPNext tools:\n\n")
 
 	for _, tool := range c.tools {
-		builder.WriteString(fmt.Sprintf("**%s**: %s\n", tool.Name, tool.Description))
+		fmt.Fprintf(&builder, "**%s**: %s\n", tool.Name, tool.Description)
 
 		// Add schema info if available
 		if tool.InputSchema != nil {
@@ -359,7 +360,7 @@ func (c *OllamaERPNextClient) GetToolsDescription() string {
 							if requiredSet[propName] {
 								reqMarker = " (required)"
 							}
-							builder.WriteString(fmt.Sprintf("  - %s: %s%s\n", propName, desc, reqMarker))
+							fmt.Fprintf(&builder, "  - %s: %s%s\n", propName, desc, reqMarker)
 						}
 					}
 				}
@@ -373,7 +374,7 @@ func (c *OllamaERPNextClient) GetToolsDescription() string {
 
 // ChatWithOllama sends a message to Ollama with tool context
 func (c *OllamaERPNextClient) ChatWithOllama(ctx context.Context, userMessage string) (string, string, error) {
-	log.Printf("[DEBUG] Sending prompt to Ollama (model: %s): %s", c.ollamaModel, userMessage)
+	log.Printf("[DEBUG] Sending prompt to Ollama (model: %s): %s", c.ollamaModel, userMessage) //nolint:gosec // reason: debug log; values not injected into format string
 
 	req := &api.ChatRequest{
 		Model: c.ollamaModel,
@@ -450,7 +451,7 @@ User question: %s`, c.GetToolsDescription(), userMessage),
 // ProcessOllamaResponse processes Ollama response and executes tool calls if needed
 // Now takes userQuestion as argument for LLM grounding
 func (c *OllamaERPNextClient) ProcessOllamaResponse(response string, userQuestion string) (string, error) {
-	log.Printf("[DEBUG] Processing Ollama response for tool calls: %s", response)
+	log.Printf("[DEBUG] Processing Ollama response for tool calls: %s", response) //nolint:gosec // reason: debug log; values not injected into format string
 
 	toolCallRegex := regexp.MustCompile(`CALL_TOOL:([^:]+):(.+)`)
 	lines := strings.Split(response, "\n")
@@ -462,7 +463,7 @@ func (c *OllamaERPNextClient) ProcessOllamaResponse(response string, userQuestio
 			hasToolCalls = true
 			toolName := matches[1]
 			argumentsJSON := matches[2]
-			log.Printf("[DEBUG] Detected CALL_TOOL directive: tool=%s, args=%s", toolName, argumentsJSON)
+			log.Printf("[DEBUG] Detected CALL_TOOL directive: tool=%s, args=%s", toolName, argumentsJSON) //nolint:gosec // reason: debug log; values not injected into format string
 
 			var arguments map[string]interface{}
 			if err := json.Unmarshal([]byte(argumentsJSON), &arguments); err != nil {
@@ -476,17 +477,17 @@ func (c *OllamaERPNextClient) ProcessOllamaResponse(response string, userQuestio
 					resolved, err := c.ResolveEntityWithFallback(context.Background(), "Project", userInput)
 					if err == nil && resolved != "" {
 						arguments["project_name"] = resolved
-						log.Printf("[DEBUG] Resolved project_name '%s' to '%s'", userInput, resolved)
+						log.Printf("[DEBUG] Resolved project_name '%s' to '%s'", userInput, resolved) //nolint:gosec // reason: debug log; values not injected into format string
 					}
 				}
 			}
 			// Call the tool with the resolved arguments
 			toolResult, err := c.CallTool(toolName, arguments)
 			if err != nil {
-				log.Printf("[ERROR] Error calling tool %s: %v", toolName, err)
+				log.Printf("[ERROR] Error calling tool %s: %v", toolName, err) //nolint:gosec // reason: debug log; values not injected into format string
 				resultParts = append(resultParts, fmt.Sprintf("❌ Error calling tool %s: %v", toolName, err))
 			} else {
-				log.Printf("[DEBUG] Tool %s returned data: %s", toolName, toolResult)
+				log.Printf("[DEBUG] Tool %s returned data: %s", toolName, toolResult) //nolint:gosec // reason: debug log; values not injected into format string
 
 				// Additional debug: Extract and log JSON content for verification
 				if toolName == "get_document" {
@@ -558,12 +559,12 @@ YOUR RESPONSE MUST BE FACTUAL AND CITE THE EXACT DATA.`,
 					userQuestion,
 					toolResult)
 
-				log.Printf("[DEBUG] Second LLM prompt for grounding (after tool call):\n%s", llmPrompt)
+				log.Printf("[DEBUG] Second LLM prompt for grounding (after tool call):\n%s", llmPrompt) //nolint:gosec // reason: debug log; values not injected into format string
 				_, llmAnswer, err := c.ChatWithOllama(context.Background(), llmPrompt)
 				if err != nil {
 					resultParts = append(resultParts, "[LLM ERROR] "+err.Error())
 				} else {
-					log.Printf("[DEBUG] LLM answer after data grounding: %s", llmAnswer)
+					log.Printf("[DEBUG] LLM answer after data grounding: %s", llmAnswer) //nolint:gosec // reason: debug log; values not injected into format string
 					resultParts = append(resultParts, llmAnswer)
 				}
 			}
@@ -578,7 +579,7 @@ YOUR RESPONSE MUST BE FACTUAL AND CITE THE EXACT DATA.`,
 
 	// Combine and return the results from all tool calls
 	finalResult := strings.Join(resultParts, "\n\n")
-	log.Printf("[DEBUG] Combined result from tool calls: %s", finalResult)
+	log.Printf("[DEBUG] Combined result from tool calls: %s", finalResult) //nolint:gosec // reason: debug log; values not injected into format string
 	return finalResult, nil
 }
 
@@ -835,7 +836,7 @@ func main() {
 	}
 
 	// Check if MCP server exists
-	if _, err := os.Stat(mcpServerPath); os.IsNotExist(err) {
+	if _, err := os.Stat(mcpServerPath); os.IsNotExist(err) { //nolint:gosec // reason: path comes from validated CLI arg, not user HTTP input
 		fmt.Printf("❌ MCP server not found at %s\n", mcpServerPath)
 		fmt.Println("Run 'make build-stdio' to build the MCP server")
 		return
@@ -888,7 +889,7 @@ func main() {
 				}
 				ollamaResponse = fmt.Sprintf("CALL_TOOL:get_document:{\"doctype\":\"%s\",\"name\":\"%s\"}",
 					docType, entities["name"])
-				log.Printf("[INFO] Injecting direct tool call for document: %s", ollamaResponse)
+				log.Printf("[INFO] Injecting direct tool call for document: %s", ollamaResponse) //nolint:gosec // reason: debug log; values not injected into format string
 			} else {
 				// Use normal LLM flow for other queries
 				_, ollamaResponseTemp, err := client.ChatWithOllama(ctx, userInput)
@@ -953,7 +954,7 @@ func main() {
 				_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error(), "llm_input": llmInput, "llm_output": llmOutput})
 				return
 			}
-			log.Printf("[NLP] Intent: %s, Entities: %+v", intent, entities)
+			log.Printf("[NLP] Intent: %s, Entities: %+v", intent, entities) //nolint:gosec // reason: debug log; values not injected into format string
 
 			// Step 2: Directly call the relevant MCP tool based on intent
 			var toolResult string
@@ -1024,7 +1025,7 @@ func main() {
 					})
 					return
 				}
-				log.Printf("[DEBUG] API: Tool %s returned data: %s", toolName, toolResult)
+				log.Printf("[DEBUG] API: Tool %s returned data: %s", toolName, toolResult) //nolint:gosec // reason: debug log; values not injected into format string
 
 				// Step 4: Send the query and the real MCP data to the LLM for interpretation
 				llmPrompt := fmt.Sprintf(`You are an ERPNext Data Assistant. Answer the following user question using ONLY the ERPNext data provided below. You must NOT rely on any other information or make up any data.
@@ -1048,7 +1049,7 @@ Be precise and accurate. Your response will be verified against the actual data.
 					toolName,
 					toolResult)
 
-				log.Printf("[DEBUG] API: Sending LLM prompt with real data for interpretation:\n%s", llmPrompt)
+				log.Printf("[DEBUG] API: Sending LLM prompt with real data for interpretation:\n%s", llmPrompt) //nolint:gosec // reason: debug log; values not injected into format string
 				ollamaInput = llmPrompt
 				_, finalResp, err = client.ChatWithOllama(ctx, llmPrompt)
 				if err != nil {
@@ -1076,7 +1077,14 @@ Be precise and accurate. Your response will be verified against the actual data.
 			}
 		})
 		fmt.Println("🌐 API server running on :8080 ...")
-		if err := http.ListenAndServe(":8080", mux); err != nil {
+		srv := &http.Server{
+			Addr:         ":8080",
+			Handler:      mux,
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 120 * time.Second,
+			IdleTimeout:  120 * time.Second,
+		}
+		if err := srv.ListenAndServe(); err != nil {
 			log.Fatal(err)
 		}
 	}

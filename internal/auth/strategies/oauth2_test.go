@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewOAuth2Strategy(t *testing.T) {
-	config := OAuth2StrategyConfig{
+	config := OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
 		TokenInfoURL:   "http://localhost:8000/userinfo",
 		IssuerURL:      "http://localhost:8000",
 		TrustedClients: []string{"client1", "client2"},
@@ -76,7 +76,7 @@ func TestExtractBearerToken(t *testing.T) {
 }
 
 func TestAuthenticate_MissingToken(t *testing.T) {
-	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{
+	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
 		TokenInfoURL:   "http://localhost:8000/userinfo",
 		ValidateRemote: true,
 	})
@@ -252,7 +252,7 @@ func TestAuthenticate_WithTrustedClientHeaders(t *testing.T) {
 }
 
 func TestAuthenticate_SkipRemoteValidation(t *testing.T) {
-	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{
+	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
 		TokenInfoURL:   "http://localhost:8000/userinfo",
 		ValidateRemote: false, // Skip remote validation
 		Timeout:        5 * time.Second,
@@ -273,7 +273,7 @@ func TestAuthenticate_SkipRemoteValidation(t *testing.T) {
 }
 
 func TestClearCache(t *testing.T) {
-	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{
+	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
 		TokenInfoURL:   "http://localhost:8000/userinfo",
 		ValidateRemote: false,
 		Timeout:        5 * time.Second,

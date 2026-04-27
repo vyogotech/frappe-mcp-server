@@ -2,3 +2,24 @@ version: "2"
 
 run:
   go: "1.25"
+  timeout: 3m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosec
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - (io.Closer).Close
+      - (net/http.ResponseWriter).Write
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
