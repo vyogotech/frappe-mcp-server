@@ -13,12 +13,11 @@ linters:
     - staticcheck
     - unused
     - gosec
-
-linters-settings:
-  errcheck:
-    exclude-functions:
-      - (io.Closer).Close
-      - (net/http.ResponseWriter).Write
+  settings:
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - (net/http.ResponseWriter).Write
 
 issues:
   max-issues-per-linter: 0
