@@ -283,17 +283,34 @@ func (s *MCPServer) metrics(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/metrics response sent")
 }
 
-// withMiddleware applies middleware to HTTP handlers
+// publicPaths are HTTP paths that bypass authentication. These are health
+// and metrics probes that need to work for docker/k8s/load-balancer probes
+// without managing credentials. Tool dispatch and chat paths are NOT in
+// this set — those always require auth when authMiddleware is enabled.
+var publicPaths = map[string]bool{
+	"/health":        true,
+	"/api/v1/health": true,
+	"/metrics":       true,
+}
+
+// withMiddleware applies middleware to HTTP handlers. Order: logging → CORS
+// → (conditionally) auth → handler. Auth is skipped for paths in publicPaths.
 func (s *MCPServer) withMiddleware(handler http.Handler) http.Handler {
-	// Chain middleware: logging -> CORS -> auth -> handler
 	h := handler
 
-	// Apply auth middleware if enabled
+	// Apply auth middleware if enabled, but skip for public paths.
 	if s.authMiddleware != nil {
-		h = s.authMiddleware.Handler(h)
+		authed := s.authMiddleware.Handler(handler)
+		h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if publicPaths[r.URL.Path] {
+				handler.ServeHTTP(w, r)
+				return
+			}
+			authed.ServeHTTP(w, r)
+		})
 	}
 
-	// Apply CORS and logging
+	// Apply CORS and logging (these always run, including for public paths).
 	h = s.corsMiddleware(h)
 	h = s.loggingMiddleware(h)
 
