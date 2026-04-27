@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"frappe-mcp-server/internal/llm"
@@ -35,3 +36,25 @@ func TestGenerateWithLLM_LegacyClientFallback(t *testing.T) {
 }
 
 var _ llm.Client = stubLLMClient{} // compile-time check
+
+// TestExecuteTool_FabricatedPMToolsHidden verifies that the three fabricated
+// PM tools are NOT dispatchable through executeTool. They remain as exported
+// methods on ToolRegistry but are unwired from MCP, REST, intent routing,
+// and dispatch. Phase 2 will reimplement their bodies and re-wire them.
+func TestExecuteTool_FabricatedPMToolsHidden(t *testing.T) {
+	s := &MCPServer{}
+	for _, name := range []string{
+		"calculate_project_metrics",
+		"project_risk_assessment",
+		"portfolio_dashboard",
+	} {
+		_, err := s.executeTool(context.Background(), name, []byte(`{}`))
+		if err == nil {
+			t.Errorf("executeTool(%q) returned nil error; want 'tool not found'", name)
+			continue
+		}
+		if !strings.Contains(err.Error(), "tool not found") {
+			t.Errorf("executeTool(%q) error = %v; want contains 'tool not found'", name, err)
+		}
+	}
+}

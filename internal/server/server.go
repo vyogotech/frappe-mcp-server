@@ -575,11 +575,8 @@ func (s *MCPServer) registerTools() error {
 	// These will be deprecated in v2.0 - use analyze_document instead
 	reg("get_project_status", s.tools.GetProjectStatus)
 	reg("analyze_project_timeline", s.tools.AnalyzeProjectTimeline)
-	reg("calculate_project_metrics", s.tools.CalculateProjectMetrics)
 	reg("get_resource_allocation", s.tools.GetResourceAllocation)
-	reg("project_risk_assessment", s.tools.ProjectRiskAssessment)
 	reg("generate_project_report", s.tools.GenerateProjectReport)
-	reg("portfolio_dashboard", s.tools.PortfolioDashboard)
 	reg("resource_utilization_analysis", s.tools.ResourceUtilizationAnalysis)
 	reg("budget_variance_analysis", s.tools.BudgetVarianceAnalysis)
 
@@ -696,15 +693,9 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	case "get_project_status":
 		slog.Info("Calling ERPNext GetProjectStatus", "params", request.Params)
 		result, err = s.tools.GetProjectStatus(ctx, request)
-	case "portfolio_dashboard":
-		slog.Info("Calling ERPNext PortfolioDashboard", "params", request.Params)
-		result, err = s.tools.PortfolioDashboard(ctx, request)
 	case "analyze_project_timeline":
 		slog.Info("Calling ERPNext AnalyzeProjectTimeline", "params", request.Params)
 		result, err = s.tools.AnalyzeProjectTimeline(ctx, request)
-	case "calculate_project_metrics":
-		slog.Info("Calling ERPNext CalculateProjectMetrics", "params", request.Params)
-		result, err = s.tools.CalculateProjectMetrics(ctx, request)
 	case "resource_utilization_analysis":
 		slog.Info("Calling ERPNext ResourceUtilizationAnalysis", "params", request.Params)
 		result, err = s.tools.ResourceUtilizationAnalysis(ctx, request)
@@ -2082,10 +2073,6 @@ func (s *MCPServer) mapActionToTool(action string) string {
 		"aggregate": "aggregate_documents",
 		"report":    "run_report",
 
-		// Dashboard/portfolio - can also use analyze_document for specific documents
-		"portfolio": "portfolio_dashboard", // Keep for now (lists all)
-		"dashboard": "portfolio_dashboard",
-
 		// CRUD operations - generic by design
 		"list":          "list_documents",
 		"list_all":      "list_documents",
@@ -2139,13 +2126,6 @@ func (s *MCPServer) fallbackQueryRouting(query string) *QueryIntent {
 		params := map[string]interface{}{"text": query}
 		paramsJSON, _ := json.Marshal(params)
 		intent.Params = paramsJSON
-		return intent
-	}
-
-	if strings.Contains(lowerQuery, "portfolio") || strings.Contains(lowerQuery, "dashboard") {
-		intent.Action = "dashboard"
-		intent.Tool = "portfolio_dashboard"
-		intent.Params = json.RawMessage(`{}`)
 		return intent
 	}
 
@@ -2245,7 +2225,7 @@ func (s *MCPServer) executeToolWithEntity(ctx context.Context, toolName, doctype
 			"name":            entityName,
 			"include_related": true, // Fetch related docs for richer analysis
 		}
-	case "get_project_status", "analyze_project_timeline", "calculate_project_metrics", "project_risk_assessment", "generate_project_report":
+	case "get_project_status", "analyze_project_timeline", "generate_project_report":
 		// Legacy project-specific tools
 		params = map[string]interface{}{
 			"project_name": entityName,
@@ -2301,18 +2281,12 @@ func (s *MCPServer) executeTool(ctx context.Context, toolName string, params jso
 	// Legacy tools (deprecated - use analyze_document instead)
 	case "get_project_status":
 		return s.tools.GetProjectStatus(ctx, request)
-	case "portfolio_dashboard":
-		return s.tools.PortfolioDashboard(ctx, request)
 	case "analyze_project_timeline":
 		return s.tools.AnalyzeProjectTimeline(ctx, request)
-	case "calculate_project_metrics":
-		return s.tools.CalculateProjectMetrics(ctx, request)
 	case "resource_utilization_analysis":
 		return s.tools.ResourceUtilizationAnalysis(ctx, request)
 	case "budget_variance_analysis":
 		return s.tools.BudgetVarianceAnalysis(ctx, request)
-	case "project_risk_assessment":
-		return s.tools.ProjectRiskAssessment(ctx, request)
 	case "generate_project_report":
 		return s.tools.GenerateProjectReport(ctx, request)
 	case "get_resource_allocation":
