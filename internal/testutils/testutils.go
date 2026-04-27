@@ -81,6 +81,8 @@ func handleProjectList(w http.ResponseWriter, r *http.Request) {
 			"status":           "Open",
 			"percent_complete": 25.5,
 			"priority":         "High",
+			"total_budget":     100000.0,
+			"actual_cost":      80000.0,
 		},
 		{
 			"name":             "TEST-PROJ-002",
@@ -88,6 +90,8 @@ func handleProjectList(w http.ResponseWriter, r *http.Request) {
 			"status":           "Completed",
 			"percent_complete": 100.0,
 			"priority":         "Medium",
+			"total_budget":     50000.0,
+			"actual_cost":      60000.0,
 		},
 	}
 
