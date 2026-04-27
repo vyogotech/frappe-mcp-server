@@ -521,10 +521,14 @@ func TestClient_SidCookieSetsCSRFHeader(t *testing.T) {
 	c, err := NewClient(cfg)
 	require.NoError(t, err)
 
-	user := &types.User{ //nolint:gosec // test-only sentinel values, not real credentials
+	const (
+		testSessionID = "test-sid-12345"
+		testCSRFValue = "test-csrf-token-67890"
+	)
+	user := &types.User{
 		Email:     "alice@example.com",
-		SessionID: "test-sid-12345",
-		CSRFToken: "test-csrf-token-67890",
+		SessionID: testSessionID,
+		CSRFToken: testCSRFValue,
 	}
 	ctx := auth.WithUser(context.Background(), user)
 

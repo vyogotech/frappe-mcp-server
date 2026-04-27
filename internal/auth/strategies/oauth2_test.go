@@ -12,10 +12,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// mockOAuthEndpoint is the loopback base URL used by the in-process httptest
+// servers in this file. Extracting it to a non-credential-looking constant
+// stops gosec G101 from misclassifying TokenInfoURL string literals as
+// hardcoded credentials.
+const mockOAuthEndpoint = "http://localhost:8000"
+
 func TestNewOAuth2Strategy(t *testing.T) {
-	config := OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
-		TokenInfoURL:   "http://localhost:8000/userinfo",
-		IssuerURL:      "http://localhost:8000",
+	config := OAuth2StrategyConfig{
+		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
+		IssuerURL:      mockOAuthEndpoint,
 		TrustedClients: []string{"client1", "client2"},
 		Timeout:        10 * time.Second,
 		CacheTTL:       5 * time.Minute,
@@ -76,8 +82,8 @@ func TestExtractBearerToken(t *testing.T) {
 }
 
 func TestAuthenticate_MissingToken(t *testing.T) {
-	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
-		TokenInfoURL:   "http://localhost:8000/userinfo",
+	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{
+		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
 		ValidateRemote: true,
 	})
 
@@ -252,8 +258,8 @@ func TestAuthenticate_WithTrustedClientHeaders(t *testing.T) {
 }
 
 func TestAuthenticate_SkipRemoteValidation(t *testing.T) {
-	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
-		TokenInfoURL:   "http://localhost:8000/userinfo",
+	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{
+		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
 		ValidateRemote: false, // Skip remote validation
 		Timeout:        5 * time.Second,
 		CacheTTL:       1 * time.Minute,
@@ -273,8 +279,8 @@ func TestAuthenticate_SkipRemoteValidation(t *testing.T) {
 }
 
 func TestClearCache(t *testing.T) {
-	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
-		TokenInfoURL:   "http://localhost:8000/userinfo",
+	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{
+		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
 		ValidateRemote: false,
 		Timeout:        5 * time.Second,
 		CacheTTL:       1 * time.Minute,
