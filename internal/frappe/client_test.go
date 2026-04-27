@@ -2,12 +2,15 @@ package frappe
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"frappe-mcp-server/internal/auth"
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/testutils"
 	"frappe-mcp-server/internal/types"
@@ -483,4 +486,61 @@ func TestGlobalSearch(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "text is required")
 	})
+}
+
+// TestClient_SidCookieSetsCSRFHeader verifies that when an authenticated user
+// with SessionID and CSRFToken is in context, the Client adds the sid cookie
+// AND sets X-Frappe-CSRF-Token on writes (POST in this case).
+//
+// This locks in the priority-1 hybrid auth path: sid cookie pass-through with
+// the per-session CSRF token scraped from /app HTML.
+func TestClient_SidCookieSetsCSRFHeader(t *testing.T) {
+	var (
+		capturedReq    *http.Request
+		capturedCookie *http.Cookie
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedReq = r.Clone(r.Context())
+		// Snapshot the sid cookie if present, before the response writer drains the body.
+		if c, err := r.Cookie("sid"); err == nil {
+			capturedCookie = c
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data": {"name": "BOB-001"}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := config.ERPNextConfig{
+		BaseURL:   srv.URL,
+		APIKey:    "fallback-key",
+		APISecret: "fallback-secret",
+		Timeout:   5 * time.Second,
+		RateLimit: config.RateLimitConfig{RequestsPerSecond: 100, Burst: 100},
+		Retry:     config.RetryConfig{MaxAttempts: 1, InitialDelay: 1 * time.Millisecond, MaxDelay: 1 * time.Millisecond},
+	}
+	c, err := NewClient(cfg)
+	require.NoError(t, err)
+
+	user := &types.User{ //nolint:gosec // test-only sentinel values, not real credentials
+		Email:     "alice@example.com",
+		SessionID: "test-sid-12345",
+		CSRFToken: "test-csrf-token-67890",
+	}
+	ctx := auth.WithUser(context.Background(), user)
+
+	_, err = c.CreateDocument(ctx, types.CreateDocumentRequest{
+		DocType: "User",
+		Data:    types.Document{"email": "bob@example.com"},
+	})
+	// We don't assert on the response — the captured request is what matters.
+	_ = err
+
+	require.NotNil(t, capturedReq, "no request reached test server")
+	require.NotNil(t, capturedCookie, "sid cookie missing on outbound request")
+	assert.Equal(t, "test-sid-12345", capturedCookie.Value, "sid value mismatch")
+	assert.Equal(t, "test-csrf-token-67890", capturedReq.Header.Get("X-Frappe-CSRF-Token"),
+		"X-Frappe-CSRF-Token header missing or wrong on POST")
+	assert.Equal(t, "POST", capturedReq.Method)
+	// Authorization header should NOT be set when sid takes priority.
+	assert.Empty(t, capturedReq.Header.Get("Authorization"), "Authorization header should not be set when sid is used")
 }
