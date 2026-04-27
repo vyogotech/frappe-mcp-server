@@ -283,6 +283,33 @@ func TestLoadMissingFile(t *testing.T) {
 	assert.Nil(t, cfg)
 }
 
+// TestLoadFromEnv_ERPNextLegacyShim verifies that the deprecated ERPNEXT_*
+// environment variable names are still honoured (with a deprecation warn)
+// when the new FRAPPE_* names are not set. Drop this shim no earlier than
+// 2026-10-01 once operators have migrated.
+func TestLoadFromEnv_ERPNextLegacyShim(t *testing.T) {
+	t.Setenv("FRAPPE_BASE_URL", "")
+	t.Setenv("FRAPPE_API_KEY", "")
+	t.Setenv("FRAPPE_API_SECRET", "")
+	t.Setenv("ERPNEXT_BASE_URL", "https://legacy.example.com")
+	t.Setenv("ERPNEXT_API_KEY", "legacy-key")
+	t.Setenv("ERPNEXT_API_SECRET", "legacy-secret")
+
+	c := &Config{}
+	if err := c.loadFromEnv(); err != nil {
+		t.Fatalf("loadFromEnv: %v", err)
+	}
+	if c.ERPNext.BaseURL != "https://legacy.example.com" {
+		t.Errorf("BaseURL = %q; want fallback to ERPNEXT_BASE_URL", c.ERPNext.BaseURL)
+	}
+	if c.ERPNext.APIKey != "legacy-key" {
+		t.Errorf("APIKey = %q; want fallback to ERPNEXT_API_KEY", c.ERPNext.APIKey)
+	}
+	if c.ERPNext.APISecret != "legacy-secret" {
+		t.Errorf("APISecret = %q; want fallback to ERPNEXT_API_SECRET", c.ERPNext.APISecret)
+	}
+}
+
 func BenchmarkLoad(b *testing.B) {
 	// Create a test config file
 	configContent := `
