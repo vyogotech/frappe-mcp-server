@@ -435,14 +435,14 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 			cookie.Secure = true
 		}
 		req.AddCookie(cookie)
-		slog.Info("DEBUG Client: Using sid cookie", "user", user.Email, "method", method, "csrf_token_len", len(user.CSRFToken))
+		slog.Debug("Using sid cookie for outbound request", "user", user.Email, "method", method, "csrf_token_len", len(user.CSRFToken))
 		// Frappe enforces CSRF on POST/PUT/DELETE under sid auth whenever the
 		// session has a csrf_token populated (which happens the first time the
 		// sid loads any /app/* page — i.e. always, for browser-driven users).
 		// The token is fetched in validateSessionCookie by scraping /app HTML.
 		if (method == "POST" || method == "PUT" || method == "DELETE") && user.CSRFToken != "" {
 			req.Header.Set("X-Frappe-CSRF-Token", user.CSRFToken)
-			slog.Info("DEBUG Client: Set CSRF token header", "user", user.Email, "method", method, "token", user.CSRFToken[:min(20, len(user.CSRFToken))]+"...")
+			slog.Debug("Set X-Frappe-CSRF-Token header", "user", user.Email, "method", method, "token_len", len(user.CSRFToken))
 		}
 	} else if user != nil && user.Token != "" {
 		// Priority 2: Use user's OAuth2 token for user-level permissions in Frappe
@@ -459,8 +459,6 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 		// Warn if using placeholder credentials
 		if c.apiKey == "your_api_key_here" || c.apiSecret == "your_api_secret_here" {
 			slog.Warn("Using placeholder API credentials - authentication will fail",
-				"api_key", c.apiKey,
-				"api_secret", c.apiSecret,
 				"endpoint", endpoint)
 		}
 		slog.Debug("Using API key/secret authentication")
