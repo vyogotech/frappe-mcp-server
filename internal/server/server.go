@@ -532,12 +532,14 @@ func (s *MCPServer) registerTools() error {
 	slog.Info("Registering MCP tools...")
 
 	catalog := toolCatalog()
+	registered := 0
 	reg := func(name string, handler mcp.ToolHandler) {
 		if meta, ok := catalog[name]; ok {
 			s.server.RegisterToolWithSchema(name, meta.Description, meta.InputSchema, handler)
 		} else {
 			s.server.RegisterTool(name, handler)
 		}
+		registered++
 	}
 
 	// Core CRUD tools (6 - Generic, work with ANY doctype)
@@ -580,7 +582,7 @@ func (s *MCPServer) registerTools() error {
 	reg("resource_utilization_analysis", s.tools.ResourceUtilizationAnalysis)
 	reg("budget_variance_analysis", s.tools.BudgetVarianceAnalysis)
 
-	slog.Info("Registered MCP tools", "count", 19, "with_schema", len(catalog), "legacy", 19-len(catalog))
+	slog.Info("Registered MCP tools", "count", registered, "with_schema", len(catalog), "legacy", registered-len(catalog))
 	return nil
 }
 
