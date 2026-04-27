@@ -57,9 +57,11 @@ func newSSEWriter(w http.ResponseWriter) (*sseWriter, bool) {
 func (sw *sseWriter) emit(ev sseEvent) {
 	b, err := json.Marshal(ev)
 	if err != nil {
+		slog.Warn("sse: failed to marshal event", "type", ev.Type, "error", err)
 		return
 	}
 	if _, err := fmt.Fprintf(sw.w, "data: %s\n\n", b); err != nil {
+		slog.Warn("sse: failed to write event (client likely disconnected)", "type", ev.Type, "error", err)
 		return
 	}
 	sw.f.Flush()
@@ -382,10 +384,18 @@ func (s *MCPServer) streamFormatResponse(ctx context.Context, sw *sseWriter, use
 		return false
 	}
 
-	for token := range tokenCh {
-		sw.content(token)
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Debug("sse: client disconnected; stopping stream", "error", ctx.Err())
+			return true
+		case token, ok := <-tokenCh:
+			if !ok {
+				return true
+			}
+			sw.content(token)
+		}
 	}
-	return true
 }
 
 // buildFormatPrompt constructs the same formatting prompt used by
