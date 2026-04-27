@@ -59,7 +59,7 @@ func TestMiddleware_RequiredAuth_ValidToken(t *testing.T) {
 }
 
 func TestMiddleware_RequiredAuth_MissingToken(t *testing.T) {
-	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{
+	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
 		TokenInfoURL:   "http://localhost:8000/userinfo",
 		ValidateRemote: true,
 		Timeout:        5 * time.Second,
@@ -130,7 +130,7 @@ func TestMiddleware_OptionalAuth_ValidToken(t *testing.T) {
 }
 
 func TestMiddleware_OptionalAuth_MissingToken(t *testing.T) {
-	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{
+	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
 		TokenInfoURL:   "http://localhost:8000/userinfo",
 		ValidateRemote: true,
 		Timeout:        5 * time.Second,
@@ -197,7 +197,7 @@ func TestMiddleware_OptionalAuth_InvalidToken(t *testing.T) {
 
 func TestMiddleware_WithUserContext(t *testing.T) {
 	// Test that the user context is properly passed through the middleware chain
-	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{
+	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
 		TokenInfoURL:   "http://localhost:8000/userinfo",
 		ValidateRemote: false, // Skip validation for this test
 		Timeout:        5 * time.Second,

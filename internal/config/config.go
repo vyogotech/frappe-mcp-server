@@ -154,7 +154,7 @@ func Load() (*Config, error) {
 		configFile = envFile
 	}
 
-	data, err := os.ReadFile(configFile)
+	data, err := os.ReadFile(configFile) //nolint:gosec // reason: path comes from admin config/env; not user input
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}

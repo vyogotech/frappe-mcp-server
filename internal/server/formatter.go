@@ -138,7 +138,7 @@ func formatUserFriendlyError(errorMsg, userQuery string) string {
 
 	} else {
 		// Generic error - show the cleaned message
-		response.WriteString(fmt.Sprintf("**What happened**: %s\n\n", errorMsg))
+		fmt.Fprintf(&response, "**What happened**: %s\n\n", errorMsg)
 		response.WriteString("**How to fix it**:\n")
 		response.WriteString("1. Try rephrasing your question\n")
 		response.WriteString("2. Check if all required information is provided\n")
@@ -221,7 +221,7 @@ func tryFormatAsReport(data map[string]interface{}, formatType string) string {
 	var response strings.Builder
 
 	if reportName != "" {
-		response.WriteString(fmt.Sprintf("📊 **%s**\n\n", reportName))
+		fmt.Fprintf(&response, "📊 **%s**\n\n", reportName)
 	} else {
 		response.WriteString("📊 **Report Results**\n\n")
 	}
@@ -238,7 +238,7 @@ func tryFormatAsReport(data map[string]interface{}, formatType string) string {
 	response.WriteString(table)
 
 	// Add summary
-	response.WriteString(fmt.Sprintf("\n\n📈 **Summary**: %d row(s) returned", len(rows)))
+	fmt.Fprintf(&response, "\n\n📈 **Summary**: %d row(s) returned", len(rows))
 
 	return response.String()
 }
@@ -273,7 +273,7 @@ func buildMarkdownTable(columns []interface{}, rows []interface{}) string {
 	// Build header row
 	table.WriteString("|")
 	for i := 0; i < displayCols; i++ {
-		table.WriteString(fmt.Sprintf(" %s |", headers[i]))
+		fmt.Fprintf(&table, " %s |", headers[i])
 	}
 	table.WriteString("\n")
 
@@ -296,7 +296,7 @@ func buildMarkdownTable(columns []interface{}, rows []interface{}) string {
 			table.WriteString("|")
 			for j := 0; j < displayCols && j < len(rowData); j++ {
 				cellValue := formatCellValue(rowData[j])
-				table.WriteString(fmt.Sprintf(" %s |", cellValue))
+				fmt.Fprintf(&table, " %s |", cellValue)
 			}
 			table.WriteString("\n")
 		}
@@ -304,10 +304,10 @@ func buildMarkdownTable(columns []interface{}, rows []interface{}) string {
 
 	// Add note if truncated
 	if len(rows) > maxRows {
-		table.WriteString(fmt.Sprintf("\n*...and %d more rows*", len(rows)-maxRows))
+		fmt.Fprintf(&table, "\n*...and %d more rows*", len(rows)-maxRows)
 	}
 	if len(headers) > maxCols {
-		table.WriteString(fmt.Sprintf(" (showing %d of %d columns)", displayCols, len(headers)))
+		fmt.Fprintf(&table, " (showing %d of %d columns)", displayCols, len(headers))
 	}
 
 	return table.String()
@@ -359,7 +359,7 @@ func tryFormatAsList(data map[string]interface{}, formatType string) string {
 	}
 
 	var response strings.Builder
-	response.WriteString(fmt.Sprintf("Found %d item(s):\n\n", len(items)))
+	fmt.Fprintf(&response, "Found %d item(s):\n\n", len(items))
 
 	// Limit display
 	maxItems := 20
@@ -375,9 +375,9 @@ func tryFormatAsList(data map[string]interface{}, formatType string) string {
 			description := extractField(itemMap, "description", "company_name", "customer_name", "title")
 
 			if name != "" {
-				response.WriteString(fmt.Sprintf("• **%s**", name))
+				fmt.Fprintf(&response, "• **%s**", name)
 				if description != "" && description != name {
-					response.WriteString(fmt.Sprintf(": %s", description))
+					fmt.Fprintf(&response, ": %s", description)
 				}
 				response.WriteString("\n")
 			} else {
@@ -388,7 +388,7 @@ func tryFormatAsList(data map[string]interface{}, formatType string) string {
 					if fieldCount >= 3 {
 						break
 					}
-					response.WriteString(fmt.Sprintf("%s: %v, ", key, val))
+					fmt.Fprintf(&response, "%s: %v, ", key, val)
 					fieldCount++
 				}
 				response.WriteString("\n")
@@ -397,7 +397,7 @@ func tryFormatAsList(data map[string]interface{}, formatType string) string {
 	}
 
 	if len(items) > maxItems {
-		response.WriteString(fmt.Sprintf("\n*...and %d more items*", len(items)-maxItems))
+		fmt.Fprintf(&response, "\n*...and %d more items*", len(items)-maxItems)
 	}
 
 	return response.String()
@@ -429,21 +429,21 @@ func tryFormatAsDocument(data map[string]interface{}) string {
 	name := extractField(data, "name", "id")
 
 	if doctype != "" && name != "" {
-		response.WriteString(fmt.Sprintf("📄 **%s**: %s\n\n", doctype, name))
+		fmt.Fprintf(&response, "📄 **%s**: %s\n\n", doctype, name)
 	} else if name != "" {
-		response.WriteString(fmt.Sprintf("📄 **%s**\n\n", name))
+		fmt.Fprintf(&response, "📄 **%s**\n\n", name)
 	}
 
 	// Display key fields
 	keyFields := []string{"status", "company", "customer", "supplier", "project", "title", "description"}
 	for _, field := range keyFields {
 		if val := extractField(data, field); val != "" {
-			response.WriteString(fmt.Sprintf("**%s**: %s\n", strings.ToUpper(field[:1])+field[1:], val))
+			fmt.Fprintf(&response, "**%s**: %s\n", strings.ToUpper(field[:1])+field[1:], val)
 		}
 	}
 
 	// Show field count
-	response.WriteString(fmt.Sprintf("\n*Document has %d fields total*", len(data)))
+	fmt.Fprintf(&response, "\n*Document has %d fields total*", len(data))
 
 	return response.String()
 }
@@ -456,7 +456,7 @@ func formatAsStructuredSummary(data map[string]interface{}, userQuery string) st
 
 	// Count items/records
 	if items, ok := data["data"].([]interface{}); ok {
-		response.WriteString(fmt.Sprintf("Found %d record(s)\n\n", len(items)))
+		fmt.Fprintf(&response, "Found %d record(s)\n\n", len(items))
 
 		if len(items) > 0 {
 			response.WriteString("**Sample data**:\n")
@@ -467,7 +467,7 @@ func formatAsStructuredSummary(data map[string]interface{}, userQuery string) st
 					if count >= 5 {
 						break
 					}
-					response.WriteString(fmt.Sprintf("- %s: %v\n", key, val))
+					fmt.Fprintf(&response, "- %s: %v\n", key, val)
 					count++
 				}
 			}
@@ -480,7 +480,7 @@ func formatAsStructuredSummary(data map[string]interface{}, userQuery string) st
 			if count >= 5 {
 				break
 			}
-			response.WriteString(fmt.Sprintf("- %s: %v\n", key, val))
+			fmt.Fprintf(&response, "- %s: %v\n", key, val)
 			count++
 		}
 	}
@@ -523,7 +523,7 @@ func formatErrorMessage(errorText string) string {
 
 	// Show technical details in a collapsed way
 	response.WriteString("\n<details>\n<summary>Technical details</summary>\n\n")
-	response.WriteString(fmt.Sprintf("```\n%s\n```\n", errorText))
+	fmt.Fprintf(&response, "```\n%s\n```\n", errorText)
 	response.WriteString("</details>")
 
 	return response.String()
