@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"frappe-mcp-server/internal/types"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -80,7 +80,7 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 		cacheKey := "sid:" + sidCookie.Value
 		if cached, found := s.cache.Get(cacheKey); found {
 			if user, ok := cached.(*types.User); ok {
-				log.Printf("DEBUG Auth: Using cached user for sid, CSRF token len: %d", len(user.CSRFToken)) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
+				slog.Debug("Using cached user for sid", "csrf_token_len", len(user.CSRFToken)) //nolint:gosec // G706 false positive: slog structured-log key is a string literal, not user input
 				return user, nil
 			}
 		}
@@ -88,7 +88,7 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 		// Validate session and get CSRF token from Frappe
 		user, err := s.validateSessionCookie(ctx, sidCookie)
 		if err == nil {
-			log.Printf("DEBUG Auth: Session validation successful, CSRF token len: %d", len(user.CSRFToken))
+			slog.Debug("Session validation successful", "csrf_token_len", len(user.CSRFToken))
 			// Cache the validated user with shorter expiration for CSRF token freshness
 			// CSRF tokens can expire, so use 2 minutes instead of default 5 minutes
 			s.cache.Set(cacheKey, user, 2*time.Minute)
@@ -262,7 +262,7 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 		// Don't fail auth — reads still work without a CSRF token. Writes will
 		// hit CSRFTokenError downstream, which is already the existing broken
 		// behaviour; this way a CSRF-fetch outage doesn't take down GETs too.
-		log.Printf("WARN validateSession: failed to fetch CSRF token, writes will fail: %v", err)
+		slog.Warn("validateSession: failed to fetch CSRF token; writes will fail", "error", err)
 	}
 
 	user := &types.User{
@@ -272,7 +272,7 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 		CSRFToken: csrfToken,
 	}
 
-	log.Printf("DEBUG validateSession: Created user with CSRF token (len=%d)", len(user.CSRFToken))
+	slog.Debug("validateSession: created user", "csrf_token_len", len(user.CSRFToken))
 
 	return user, nil
 }
