@@ -43,7 +43,7 @@ func (s *MCPServer) generateWithLLM(ctx context.Context, prompt string) (string,
 	}
 	// Fall back to legacy client
 	if s.llmClient != nil {
-		return s.generateWithLLM(ctx, prompt)
+		return s.llmClient.Generate(ctx, prompt)
 	}
 	return "", fmt.Errorf("no LLM client available")
 }
