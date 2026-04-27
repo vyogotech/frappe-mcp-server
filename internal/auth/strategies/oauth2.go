@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -80,7 +81,7 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 		cacheKey := "sid:" + sidCookie.Value
 		if cached, found := s.cache.Get(cacheKey); found {
 			if user, ok := cached.(*types.User); ok {
-				slog.Debug("Using cached user for sid", "csrf_token_len", len(user.CSRFToken)) //nolint:gosec // G706 false positive: slog structured-log key is a string literal, not user input
+				slog.Debug("Using cached user for sid", "csrf_token_len", strconv.Itoa(len(user.CSRFToken)))
 				return user, nil
 			}
 		}

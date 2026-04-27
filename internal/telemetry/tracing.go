@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -61,7 +62,7 @@ func Init(ctx context.Context) (func(context.Context) error, error) {
 	)
 	if err != nil {
 		if !errors.Is(err, resource.ErrPartialResource) {
-			slog.Warn("OpenTelemetry resource init failed; tracing disabled", "error", err, "endpoint", endpoint) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
+			slog.Warn("OpenTelemetry resource init failed; tracing disabled", "error", err, "endpoint", strings.ReplaceAll(endpoint, "\n", " "))
 			return noopShutdown, nil
 		}
 		slog.Warn("OpenTelemetry resource init returned partial resource; continuing", "error", err)
@@ -73,7 +74,7 @@ func Init(ctx context.Context) (func(context.Context) error, error) {
 	)
 	otel.SetTracerProvider(provider)
 
-	slog.Info("OpenTelemetry enabled", "endpoint", endpoint) //nolint:gosec // reason: structured log fields; values are not user-controlled format strings
+	slog.Info("OpenTelemetry enabled", "endpoint", strings.ReplaceAll(endpoint, "\n", " "))
 
 	return func(shutdownCtx context.Context) error {
 		shutdownCtx, cancel := context.WithTimeout(shutdownCtx, 5*time.Second)

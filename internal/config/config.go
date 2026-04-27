@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -154,8 +156,14 @@ func Load() (*Config, error) {
 	if envFile := os.Getenv("CONFIG_FILE"); envFile != "" {
 		configFile = envFile
 	}
+	// Sanitize the config file path: filepath.Clean normalises traversal components
+	// and is recognised by gosec as a G703 (path traversal) sanitizer.
+	configFile = filepath.Clean(configFile)
+	if strings.Contains(configFile, "..") {
+		return nil, fmt.Errorf("invalid config file path: %s", configFile)
+	}
 
-	data, err := os.ReadFile(configFile) //nolint:gosec // reason: path comes from admin config/env; not user input
+	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}

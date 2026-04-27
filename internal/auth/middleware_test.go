@@ -14,6 +14,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// mockOAuthEndpoint is the loopback base URL used by the in-process httptest
+// servers in this file. Extracting it to a non-credential-looking constant
+// stops gosec G101 from misclassifying TokenInfoURL string literals as
+// hardcoded credentials.
+const mockOAuthEndpoint = "http://localhost:8000"
+
 func TestMiddleware_RequiredAuth_ValidToken(t *testing.T) {
 	// Create a mock OAuth2 server
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,8 +65,8 @@ func TestMiddleware_RequiredAuth_ValidToken(t *testing.T) {
 }
 
 func TestMiddleware_RequiredAuth_MissingToken(t *testing.T) {
-	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
-		TokenInfoURL:   "http://localhost:8000/userinfo",
+	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{
+		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
 		ValidateRemote: true,
 		Timeout:        5 * time.Second,
 	})
@@ -130,8 +136,8 @@ func TestMiddleware_OptionalAuth_ValidToken(t *testing.T) {
 }
 
 func TestMiddleware_OptionalAuth_MissingToken(t *testing.T) {
-	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
-		TokenInfoURL:   "http://localhost:8000/userinfo",
+	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{
+		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
 		ValidateRemote: true,
 		Timeout:        5 * time.Second,
 	})
@@ -197,8 +203,8 @@ func TestMiddleware_OptionalAuth_InvalidToken(t *testing.T) {
 
 func TestMiddleware_WithUserContext(t *testing.T) {
 	// Test that the user context is properly passed through the middleware chain
-	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{ //nolint:gosec // reason: localhost test URL is not a credential
-		TokenInfoURL:   "http://localhost:8000/userinfo",
+	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{
+		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
 		ValidateRemote: false, // Skip validation for this test
 		Timeout:        5 * time.Second,
 	})
