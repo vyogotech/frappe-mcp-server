@@ -489,6 +489,32 @@ func TestBudgetVarianceAnalysis(t *testing.T) {
 	assert.Contains(t, response.Content[0].Text, "Budget Variance Analysis")
 }
 
+func TestBudgetVarianceAnalysis_ComputesSums(t *testing.T) {
+	client := createTestClient(t)
+	reg := NewRegistry(client, nil)
+
+	resp, err := reg.BudgetVarianceAnalysis(context.Background(), mcp.ToolRequest{
+		ID: "t1", Tool: "budget_variance_analysis", Params: []byte(`{}`),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Len(t, resp.Content, 2, "expected 2 content blocks")
+
+	var got struct {
+		Summary struct {
+			TotalBudget     float64 `json:"total_budget"`
+			TotalActual     float64 `json:"total_actual"`
+			OverallVariance float64 `json:"overall_variance"`
+		} `json:"summary"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(resp.Content[1].Text), &got))
+
+	// Mock returns 2 projects: budget 100000+50000=150000, actual 80000+60000=140000.
+	assert.InDelta(t, 150000.0, got.Summary.TotalBudget, 0.001)
+	assert.InDelta(t, 140000.0, got.Summary.TotalActual, 0.001)
+	assert.InDelta(t, 10000.0, got.Summary.OverallVariance, 0.001)
+}
+
 func BenchmarkGetDocument(b *testing.B) {
 	client := createTestClient(&testing.T{})
 	registry := NewRegistry(client, nil)

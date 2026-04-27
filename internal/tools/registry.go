@@ -770,7 +770,20 @@ func (t *ToolRegistry) BudgetVarianceAnalysis(ctx context.Context, request mcp.T
 		return nil, fmt.Errorf("failed to get projects: %w", err)
 	}
 
-	// Analyze budget variance
+	// Compute totals across the returned projects. Frappe returns numeric
+	// fields as float64 via JSON unmarshal; missing or non-numeric values
+	// are skipped so a partial dataset still produces a best-effort sum
+	// rather than failing.
+	var totalBudget, totalActual float64
+	for _, p := range projects.Data {
+		if v, ok := p["total_budget"].(float64); ok {
+			totalBudget += v
+		}
+		if v, ok := p["actual_cost"].(float64); ok {
+			totalActual += v
+		}
+	}
+
 	analysis := map[string]interface{}{
 		"budget_analysis": map[string]interface{}{
 			"total_projects_analyzed": len(projects.Data),
@@ -778,9 +791,9 @@ func (t *ToolRegistry) BudgetVarianceAnalysis(ctx context.Context, request mcp.T
 		},
 		"projects": projects.Data,
 		"summary": map[string]interface{}{
-			"total_budget":     0.0, // TODO: Calculate sum
-			"total_actual":     0.0, // TODO: Calculate sum
-			"overall_variance": 0.0, // TODO: Calculate
+			"total_budget":     totalBudget,
+			"total_actual":     totalActual,
+			"overall_variance": totalBudget - totalActual,
 		},
 	}
 
