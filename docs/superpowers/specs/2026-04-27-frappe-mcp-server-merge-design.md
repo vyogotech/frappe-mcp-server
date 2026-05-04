@@ -9,15 +9,15 @@
 
 ## 1. Context
 
-`feature/mcp-go-sdk` (HEAD `da2f382`) is 34 commits ahead of `origin/main` (`160f3d3`); main has 6 commits not in feature. Common ancestor `ed4a532`. Feature branch carries the SDK migration, OAuth/sid hybrid auth, SSE streaming, OpenTelemetry, FrappeForge graph intelligence + Neo4j, gosec fixes, Go 1.25 + golangci-lint v2, and a number of LLM/chat quality improvements. Main's six commits are surgical: rate-limit defaults, an `ff_get_doctype_blueprint` tool, optional API key validation, docker CI, and PR #5 (streamable HTTP/OAuth/global_search).
+`feature/mcp-go-sdk` (HEAD `da2f382`) is 34 commits ahead of `origin/main` (`160f3d3`); main has 6 commits not in feature. Common ancestor `ed4a532`. Feature branch carries the SDK migration, OAuth/sid hybrid auth, SSE streaming, OpenTelemetry, gosec fixes, Go 1.25 + golangci-lint v2, and a number of LLM/chat quality improvements. Main's six commits are surgical: rate-limit defaults, optional API key validation, docker CI, and PR #5 (streamable HTTP/OAuth/global_search).
 
 The parent repo `frappe-ai-assistant` pins this submodule at `da2f382`. Strategy choices that rewrite SHAs would invalidate that pin.
 
 ## 2. Goals
 
 - Land all feature-branch work on `main` without losing any feature from either branch.
-- Resolve the 5 predicted merge conflicts deliberately.
-- Carry the two main-only commits that are not already covered by feature (`121eddf` rate-limit defaults; `160f3d3` `ff_get_doctype_blueprint`).
+- Resolve the predicted merge conflicts deliberately.
+- Carry the main-only commit that is not already covered by feature (`121eddf` rate-limit defaults).
 - Fix the BLOCKER bugs and HIGH-severity issues found by the audit before main moves.
 - Preserve `da2f382` SHA so the parent submodule pin remains valid until intentionally bumped.
 
@@ -30,20 +30,19 @@ The parent repo `frappe-ai-assistant` pins this submodule at `da2f382`. Strategy
 
 ## 4. Branch comparison summary
 
-**No deletions in either direction.** `git diff --name-status origin/main...HEAD | grep ^D` is empty. Every change is `A` (added) or `M` (modified). Feature branch is functionally a strict superset of main except for the two main-only commits below.
+**No deletions in either direction.** `git diff --name-status origin/main...HEAD | grep ^D` is empty. Every change is `A` (added) or `M` (modified). Feature branch is functionally a strict superset of main except for the main-only commit below.
 
 ### Main-only commits — disposition
 | Commit | Subject | Disposition |
 |---|---|---|
 | `121eddf` | Default rate limits in config loader | **Cherry-pick** — not present on feature; without it `rate.NewLimiter(0,0)` blocks all requests. |
-| `160f3d3` | `ff_get_doctype_blueprint` composite tool | **Cherry-pick** — net-new tool absent from feature. |
 | `f429e36` | Test config validation for optional API keys | Skip — feature's variant subsumes; `config_test.go` auto-merges. |
 | `ab0db47` | Optional API key/secret in config validation | Skip — feature's hybrid auth validation subsumes. |
 | `613a5a8` | Docker build/push CI | Skip — byte-identical to feature's `baacaad`. |
 | `deb203d` | Streamable HTTP / OAuth / global_search (PR #5) | Skip — equivalent functionality on feature via `4ad36c3`, `675ddab`, `internal/auth/`. |
 
 ### Tool catalog effect on main after merge
-Net **+11 tools**: 10 FrappeForge tools from feature (`ff_graph_stats`, `ff_list_ingested_projects`, `ff_search_doctype`, `ff_get_doctype_detail`, `ff_get_doctype_controllers`, `ff_get_doctype_client_scripts`, `ff_find_doctypes_with_field`, `ff_get_doctype_links`, `ff_search_methods`, `ff_get_hooks`) plus `ff_get_doctype_blueprint` cherry-picked from main. All real, all Neo4j-backed with nil-safe degradation.
+Net **0 tools**. This merge focuses on architectural improvements, authentication, and bug fixes. The existing tool catalog, including the Project Management stubs, is not changed.
 
 ## 5. Merge strategy: B (cherry-pick onto feature, fast-forward main)
 
@@ -59,16 +58,11 @@ Net **+11 tools**: 10 FrappeForge tools from feature (`ff_graph_stats`, `ff_list
 |---|---|---|
 | `.github/workflows/ci.yml` | content | KEEP-MAIN — drop `feature/mcp-go-sdk` from container-push allowlist (branch will no longer exist). |
 | `internal/config/config.go` | content | UNION-BOTH — keep feature's hybrid validation; insert main's rate-limit defaults inside `Load()` before validation. |
-| `internal/server/server.go` | content | MANUAL — keep feature as base; insert main's 4 blueprint snippets at: `toolCatalog()` map, `registerTools()` `reg(...)`, `listTools()` `order` slice, `handleToolCall()` `case` branch. |
-| `internal/tools/frappeforge.go` | add/add | KEEP-MAIN — strict superset (adds `FfGetDoctypeBlueprint` method to identical 285-line base). |
-| `internal/tools/frappeforge_test.go` | add/add | KEEP-MAIN — adds 2 tests for blueprint to identical 177-line base. |
 | `internal/config/config_test.go` | auto-merge | No action — git auto-resolves. |
 
 **Verification per file:**
 - `ci.yml`: `grep -c 'refs/heads/feature/mcp-go-sdk' .github/workflows/ci.yml` → 0.
 - `config.go`: `grep -A2 'RequestsPerSecond == 0' internal/config/config.go` shows the default-10 line; `go test ./internal/config/...` passes.
-- `server.go`: `grep -c FfGetDoctypeBlueprint internal/server/server.go` → 2; `grep -c ff_get_doctype_blueprint internal/server/server.go` → 4 (catalog + reg + listing + dispatch).
-- `frappeforge.go` / `frappeforge_test.go`: `diff <(git show origin/main:<path>) <path>` → empty; `go test ./internal/tools/... -run TestFfGetDoctypeBlueprint` passes 2 tests.
 
 ## 7. Pre-merge fixes (Tier 3 scope)
 
@@ -111,7 +105,6 @@ One commit per fix on `merge/main-into-feature` after the cherry-picks land — 
 
 ### Tests added
 12. Sid/CSRF auth flow integration test — exercise `/api/v1/chat` POST with a `Cookie: sid=…` header, assert `X-Frappe-CSRF-Token` is set on outbound Frappe HTTP. Goes in `internal/frappe/client_test.go` (or an auth integration test file).
-13. FrappeForge happy-path test — at minimum stub the `Query` method on `*neo4j.Client` so we can assert the Cypher generation for one tool. Goes in `internal/tools/frappeforge_test.go`.
 
 ## 8. Merge sequence (concrete commands)
 
@@ -129,21 +122,11 @@ git log --oneline ed4a532..HEAD             # 34 commits expected
 git checkout -b merge/main-into-feature feature/mcp-go-sdk
 ```
 
-### Step 3 — Cherry-pick the two commits not already covered
+### Step 3 — Cherry-pick the commit not already covered
 ```bash
 # A. Rate-limit defaults — touches only config.go; expect no conflict
 git cherry-pick 121eddf
 go build ./... && go test ./internal/config/...
-
-# B. Blueprint tool — touches frappeforge.go, frappeforge_test.go, server.go
-git cherry-pick 160f3d3
-# Conflicts resolved per §6:
-git checkout --theirs internal/tools/frappeforge.go
-git checkout --theirs internal/tools/frappeforge_test.go
-# server.go: manual edit per §6 — keep feature, add 4 blueprint snippets
-git add internal/tools/frappeforge.go internal/tools/frappeforge_test.go internal/server/server.go
-git cherry-pick --continue
-go build ./... && go test ./internal/tools/...
 ```
 
 ### Step 4 — Apply pre-merge fixes (one commit per fix, scope §7)
@@ -219,12 +202,6 @@ $EDITOR internal/frappe/client_test.go
 go test ./internal/frappe/...
 git add internal/frappe/client_test.go
 git commit -m "test(frappe): cover sid cookie + CSRF-from-desk flow on writes"
-
-# 4.13 — Tests §7.13 frappeforge happy-path test
-$EDITOR internal/tools/frappeforge_test.go
-go test ./internal/tools/...
-git add internal/tools/frappeforge_test.go
-git commit -m "test(frappeforge): cover happy-path Cypher generation with stub Query"
 ```
 
 ### Step 5 — Local verification gates
@@ -235,7 +212,6 @@ golangci-lint run --timeout=3m
 gosec ./... 2>/dev/null || echo "gosec not installed; CI will run it"
 make build && make build-linux
 docker build -t frappe-mcp-server:test .
-# Boot smoke: serve, hit GET /api/v1/tools, expect ff_get_doctype_blueprint visible
 # Boot smoke: tools/list MUST NOT contain calculate_project_metrics, project_risk_assessment, portfolio_dashboard
 ```
 
@@ -304,8 +280,7 @@ make build-linux && make docker-build
 ### Per-feature smoke
 | Feature | Probe | Expected |
 |---|---|---|
-| `ff_get_doctype_blueprint` | `tools/call` with `{"doctype":"Sales Invoice"}` | If neo4j down: "FrappeForge graph database is unavailable". If up: JSON with fields/controllers/hooks. |
-| Streamable HTTP `/mcp` | `POST /mcp` with `tools/list` | Returns array including `ff_get_doctype_blueprint`; PM stubs (`calculate_project_metrics` etc.) absent. |
+| Streamable HTTP `/mcp` | `POST /mcp` with `tools/list` | Returns array; PM stubs (`calculate_project_metrics` etc.) absent. |
 | Sid auth | `/api/v1/chat` with `Cookie: sid=…` | 200; outbound POST has `X-Frappe-CSRF-Token`; no token bytes in stdout logs. |
 | OAuth Bearer | `/api/v1/chat` with `Authorization: Bearer …` | 200; "Using user OAuth2 token" log at debug. |
 | `global_search` | chat: "search for 'invoice 12345'" | Routes to `global_search`. |
