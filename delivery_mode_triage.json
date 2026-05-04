@@ -1,0 +1,5 @@
+{
+  "delivery_mode": "import_iterate",
+  "confidence": "high",
+  "reason": "The user is requesting a modification to an existing public codebase available on GitHub. The task involves removing specific tools ('ff_*') from the existing server, which is an iterative change rather than a new project from scratch."
+}
