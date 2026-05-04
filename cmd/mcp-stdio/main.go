@@ -71,18 +71,6 @@ func main() {
 	mcpServer.RegisterTool("resource_utilization_analysis", toolRegistry.ResourceUtilizationAnalysis)
 	mcpServer.RegisterTool("budget_variance_analysis", toolRegistry.BudgetVarianceAnalysis)
 
-	// FrappeForge tools
-	mcpServer.RegisterTool("ff_graph_stats", toolRegistry.FfGraphStats)
-	mcpServer.RegisterTool("ff_list_ingested_projects", toolRegistry.FfListIngestedProjects)
-	mcpServer.RegisterTool("ff_search_doctype", toolRegistry.FfSearchDoctype)
-	mcpServer.RegisterTool("ff_get_doctype_detail", toolRegistry.FfGetDoctypeDetail)
-	mcpServer.RegisterTool("ff_get_doctype_controllers", toolRegistry.FfGetDoctypeControllers)
-	mcpServer.RegisterTool("ff_get_doctype_client_scripts", toolRegistry.FfGetDoctypeClientScripts)
-	mcpServer.RegisterTool("ff_find_doctypes_with_field", toolRegistry.FfFindDoctypesWithField)
-	mcpServer.RegisterTool("ff_get_doctype_links", toolRegistry.FfGetDoctypeLinks)
-	mcpServer.RegisterTool("ff_search_methods", toolRegistry.FfSearchMethods)
-	mcpServer.RegisterTool("ff_get_hooks", toolRegistry.FfGetHooks)
-
 	// Handle graceful shutdown.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
