@@ -13,7 +13,6 @@ import (
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/mcp"
-	"frappe-mcp-server/internal/neo4j"
 	"frappe-mcp-server/internal/tools"
 )
 
@@ -46,13 +45,12 @@ func main() {
 	mcpServer := mcp.NewServer("frappe-mcp-server", "1.0.0")
 
 	// Create Neo4j client
-	neo4jClient, err := neo4j.NewClient(cfg.Neo4j.BoltURL, cfg.Neo4j.Username, cfg.Neo4j.Password)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize Neo4j client: %v", err)
 	}
 
 	// Create tool registry and register all tools.
-	toolRegistry := tools.NewRegistry(frappeClient, neo4jClient)
+	toolRegistry := tools.NewRegistry(frappeClient)
 	mcpServer.RegisterTool("get_document", toolRegistry.GetDocument)
 	mcpServer.RegisterTool("list_documents", toolRegistry.ListDocuments)
 	mcpServer.RegisterTool("create_document", toolRegistry.CreateDocument)
@@ -70,18 +68,6 @@ func main() {
 	mcpServer.RegisterTool("portfolio_dashboard", toolRegistry.PortfolioDashboard)
 	mcpServer.RegisterTool("resource_utilization_analysis", toolRegistry.ResourceUtilizationAnalysis)
 	mcpServer.RegisterTool("budget_variance_analysis", toolRegistry.BudgetVarianceAnalysis)
-
-	// FrappeForge tools
-	mcpServer.RegisterTool("ff_graph_stats", toolRegistry.FfGraphStats)
-	mcpServer.RegisterTool("ff_list_ingested_projects", toolRegistry.FfListIngestedProjects)
-	mcpServer.RegisterTool("ff_search_doctype", toolRegistry.FfSearchDoctype)
-	mcpServer.RegisterTool("ff_get_doctype_detail", toolRegistry.FfGetDoctypeDetail)
-	mcpServer.RegisterTool("ff_get_doctype_controllers", toolRegistry.FfGetDoctypeControllers)
-	mcpServer.RegisterTool("ff_get_doctype_client_scripts", toolRegistry.FfGetDoctypeClientScripts)
-	mcpServer.RegisterTool("ff_find_doctypes_with_field", toolRegistry.FfFindDoctypesWithField)
-	mcpServer.RegisterTool("ff_get_doctype_links", toolRegistry.FfGetDoctypeLinks)
-	mcpServer.RegisterTool("ff_search_methods", toolRegistry.FfSearchMethods)
-	mcpServer.RegisterTool("ff_get_hooks", toolRegistry.FfGetHooks)
 
 	// Handle graceful shutdown.
 	ctx, cancel := context.WithCancel(context.Background())

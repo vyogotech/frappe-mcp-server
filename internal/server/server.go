@@ -17,7 +17,6 @@ import (
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/llm"
 	"frappe-mcp-server/internal/mcp"
-	"frappe-mcp-server/internal/neo4j"
 	"frappe-mcp-server/internal/tools"
 	"frappe-mcp-server/internal/types"
 )
@@ -84,18 +83,8 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	// Create MCP server
 	server := mcp.NewServer("frappe-mcp-server", "1.0.0")
 
-	// Create Neo4j client
-	neo4jClient, err := neo4j.NewClient(cfg.Neo4j.BoltURL, cfg.Neo4j.Username, cfg.Neo4j.Password)
-	if err != nil {
-		slog.Warn("Failed to initialize Neo4j client", "error", err)
-	} else if neo4jClient == nil {
-		slog.Info("Neo4j Bolt URL not configured; graph features will be disabled")
-	} else {
-		slog.Info("Neo4j client initialized successfully")
-	}
-
 	// Create tool registry
-	toolRegistry := tools.NewRegistry(frappeClient, neo4jClient)
+	toolRegistry := tools.NewRegistry(frappeClient)
 
 	// Create LLM client (legacy)
 	llmClient, err := llm.NewClient(cfg.LLM)
@@ -595,17 +584,6 @@ func (s *MCPServer) registerTools() error {
 	reg("global_search", s.tools.GlobalSearch)
 
 	// FrappeForge Graph Tools (Code Intelligence)
-	reg("ff_graph_stats", s.tools.FfGraphStats)
-	reg("ff_list_ingested_projects", s.tools.FfListIngestedProjects)
-	reg("ff_search_doctype", s.tools.FfSearchDoctype)
-	reg("ff_get_doctype_detail", s.tools.FfGetDoctypeDetail)
-	reg("ff_get_doctype_controllers", s.tools.FfGetDoctypeControllers)
-	reg("ff_get_doctype_client_scripts", s.tools.FfGetDoctypeClientScripts)
-	reg("ff_find_doctypes_with_field", s.tools.FfFindDoctypesWithField)
-	reg("ff_get_doctype_links", s.tools.FfGetDoctypeLinks)
-	reg("ff_search_methods", s.tools.FfSearchMethods)
-	reg("ff_get_hooks", s.tools.FfGetHooks)
-	reg("ff_get_doctype_blueprint", s.tools.FfGetDoctypeBlueprint)
 
 	// Generic analysis tool (1 - Replaces 9 doctype-specific tools!)
 	reg("analyze_document", s.tools.AnalyzeDocument)
@@ -640,9 +618,6 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 		"get_document", "list_documents", "create_document", "update_document",
 		"delete_document", "search_documents", "aggregate_documents", "run_report",
 		"global_search", "analyze_document",
-		"ff_graph_stats", "ff_list_ingested_projects", "ff_search_doctype",
-		"ff_get_doctype_detail", "ff_get_doctype_controllers", "ff_get_doctype_client_scripts",
-		"ff_find_doctypes_with_field", "ff_get_doctype_links", "ff_search_methods", "ff_get_hooks", "ff_get_doctype_blueprint",
 	}
 	tools := make([]map[string]interface{}, 0, len(order))
 	for _, name := range order {
@@ -754,28 +729,6 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	case "global_search":
 		slog.Info("Calling ERPNext GlobalSearch", "params", request.Params)
 		result, err = s.tools.GlobalSearch(ctx, request)
-	case "ff_graph_stats":
-		result, err = s.tools.FfGraphStats(ctx, request)
-	case "ff_list_ingested_projects":
-		result, err = s.tools.FfListIngestedProjects(ctx, request)
-	case "ff_search_doctype":
-		result, err = s.tools.FfSearchDoctype(ctx, request)
-	case "ff_get_doctype_detail":
-		result, err = s.tools.FfGetDoctypeDetail(ctx, request)
-	case "ff_get_doctype_controllers":
-		result, err = s.tools.FfGetDoctypeControllers(ctx, request)
-	case "ff_get_doctype_client_scripts":
-		result, err = s.tools.FfGetDoctypeClientScripts(ctx, request)
-	case "ff_find_doctypes_with_field":
-		result, err = s.tools.FfFindDoctypesWithField(ctx, request)
-	case "ff_get_doctype_links":
-		result, err = s.tools.FfGetDoctypeLinks(ctx, request)
-	case "ff_search_methods":
-		result, err = s.tools.FfSearchMethods(ctx, request)
-	case "ff_get_hooks":
-		result, err = s.tools.FfGetHooks(ctx, request)
-	case "ff_get_doctype_blueprint":
-		result, err = s.tools.FfGetDoctypeBlueprint(ctx, request)
 	default:
 		http.Error(w, "Tool not found", http.StatusNotFound)
 		slog.Warn("Tool not found", "tool", toolName)
