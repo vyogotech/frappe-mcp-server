@@ -485,68 +485,6 @@ func toolCatalog() map[string]mcp.ToolMeta {
 				"start":   map[string]interface{}{"type": "integer", "description": "Offset for pagination (default 0)"},
 			}, "text"),
 		},
-		"ff_graph_stats": {
-			Description: "[FrappeForge] Get total node and relationship counts in the knowledge graph",
-			InputSchema: objSchema(map[string]interface{}{}),
-		},
-		"ff_list_ingested_projects": {
-			Description: "[FrappeForge] List all projects/repos currently indexed in the graph",
-			InputSchema: objSchema(map[string]interface{}{}),
-		},
-		"ff_search_doctype": {
-			Description: "[FrappeForge] Find doctypes matching a partial string (e.g. 'Purchase')",
-			InputSchema: objSchema(map[string]interface{}{
-				"query": strProp("Partial doctype name or module to search for"),
-			}, "query"),
-		},
-		"ff_get_doctype_detail": {
-			Description: "[FrappeForge] Get the full field schema of a doctype",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype": strProp("Exact doctype name (e.g., 'Sales Invoice')"),
-			}, "doctype"),
-		},
-		"ff_get_doctype_controllers": {
-			Description: "[FrappeForge] Get Python controller methods for a doctype",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype": strProp("Exact doctype name"),
-			}, "doctype"),
-		},
-		"ff_get_doctype_client_scripts": {
-			Description: "[FrappeForge] Get JavaScript client script events for a doctype",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype": strProp("Exact doctype name"),
-			}, "doctype"),
-		},
-		"ff_find_doctypes_with_field": {
-			Description: "[FrappeForge] Find any doctype that contains a specific fieldname",
-			InputSchema: objSchema(map[string]interface{}{
-				"fieldname": strProp("Field name to search for (e.g., 'customer')"),
-			}, "fieldname"),
-		},
-		"ff_get_doctype_links": {
-			Description: "[FrappeForge] Find other doctypes that link TO the specified doctype",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype": strProp("Doctype being linked to (e.g., 'Customer')"),
-			}, "doctype"),
-		},
-		"ff_search_methods": {
-			Description: "[FrappeForge] Find Python methods across the graph by name",
-			InputSchema: objSchema(map[string]interface{}{
-				"query": strProp("Partial method name (e.g., 'validate')"),
-			}, "query"),
-		},
-		"ff_get_hooks": {
-			Description: "[FrappeForge] Get Frappe hooks registered for a doctype",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype": strProp("Exact doctype name"),
-			}, "doctype"),
-		},
-		"ff_get_doctype_blueprint": {
-			Description: "[FrappeForge] Get a comprehensive blueprint (fields, controllers, hooks) in one call",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype": strProp("Exact doctype name"),
-			}, "doctype"),
-		},
 	}
 }
 
@@ -583,9 +521,7 @@ func (s *MCPServer) registerTools() error {
 	// Cross-doctype search
 	reg("global_search", s.tools.GlobalSearch)
 
-	// FrappeForge Graph Tools (Code Intelligence)
-
-	// Generic analysis tool (1 - Replaces 9 doctype-specific tools!)
+	// Generic analysis tool
 	reg("analyze_document", s.tools.AnalyzeDocument)
 
 	// Legacy tools (kept for backward compatibility)

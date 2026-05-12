@@ -16,8 +16,6 @@ Connect ERPNext and other Frappe-based apps with AI assistants through natural l
 - 🔌 **MCP Protocol** - Standard protocol for AI tool integration
 - 📊 **Generic Tools** - Works with ANY ERPNext doctype (standard or custom)
 - 📈 **Advanced Analytics** 🆕 - Aggregations (SUM, COUNT, AVG, TOP N) and ERPNext reports
-- 🧠 **FrappeForge Graph Intelligence** 🚀 - Deep codebase introspection via Neo4j
-  - Python Controllers, Client Scripts, Schema Links, Hooks, and more.
 - 🔐 **OAuth2 Authentication** - Standard OAuth2 security with token caching
 - 🔒 **Privacy First** - Local AI option with Ollama
 - 🚀 **Production Ready** - Built with Go for performance
@@ -72,11 +70,6 @@ cp config.yaml.example config.yaml
 @erpnext What are the pending tasks?
 @erpnext Show me top 5 customers by revenue  🆕
 @erpnext Run Sales Analytics report  🆕
-
-@erpnext ff_graph_stats Show me the codebase graph stats
-@erpnext ff_search_doctype Find all doctypes related to "Payment"
-@erpnext ff_get_doctype_controllers Show me the controller logic for "Task"
-@erpnext ff_get_hooks What are the hooks registered for "Sales Invoice"?
 ```
 
 ### HTTP API
@@ -122,18 +115,11 @@ Add to `claude_desktop_config.json`:
 │     Server      │     │  (llama3.2)  │
 └────────┬────────┘     └──────────────┘
          │
-         ├──────────────┐ REST API
-         │              ↓
-         │      ┌─────────────────┐
-         │      │    ERPNext      │
-         │      │   (Frappe API)  │
-         │      └─────────────────┘
-         │
-         └──────────────┐ Bolt Protocol
+         └──────────────┐ REST API
                         ↓
                 ┌─────────────────┐
-                │   FrappeForge   │
-                │   Neo4j Graph   │
+                │    ERPNext      │
+                │   (Frappe API)  │
                 └─────────────────┘
 ```
 
@@ -146,19 +132,10 @@ Add to `claude_desktop_config.json`:
 ## 📋 Available Tools
 
 - **CRUD Operations**: `get_document`, `list_documents`, `create_document`, `update_document`, `delete_document`
-- **Search**: `search_documents` - Find documents by query
+- **Search**: `search_documents` - Find documents by query, `global_search` - Cross-doctype full-text search
+- **Aggregation**: `aggregate_documents` - SUM/COUNT/AVG/MIN/MAX with optional GROUP BY and TOP N
+- **Reports**: `run_report` - Execute Frappe/ERPNext reports (Sales Analytics, Purchase Register, etc.)
 - **Analysis**: `analyze_document` - Deep analysis with related documents (works with ANY doctype)
-- **Project Tools**: `get_project_status`, `portfolio_dashboard`, `analyze_project_timeline`
-
-### 🧠 FrappeForge Graph Intelligence Tools (Neo4j)
-
-These tools provide deep static analysis of the Frappe codebase:
-
-- **Graph Stats**: `ff_graph_stats` - Get node and relationship counts
-- **Code Discovery**: `ff_search_doctype`, `ff_search_methods`, `ff_list_ingested_projects`
-- **Schema & Logic**: `ff_get_doctype_detail`, `ff_get_doctype_controllers`, `ff_get_doctype_client_scripts`
-- **Cross References**: `ff_get_doctype_links`, `ff_find_doctypes_with_field`
-- **Extensibility**: `ff_get_hooks` - Discover Frappe hooks for any doctype
 
 ## 🤝 Contributing
 
