@@ -2,6 +2,8 @@ package strategies
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -104,8 +106,13 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 		return nil, errors.New("missing or invalid Bearer token")
 	}
 
+	// Cache key binds the token AND the X-MCP-User-* impersonation headers so a
+	// trusted backend client cannot retrieve a different user's cached identity
+	// by reusing the same token. See tokenCacheKey.
+	cacheKey := tokenCacheKey(token, r)
+
 	// Check cache first
-	if cached, found := s.cache.Get(token); found {
+	if cached, found := s.cache.Get(cacheKey); found {
 		if user, ok := cached.(*types.User); ok {
 			return user, nil
 		}
@@ -125,7 +132,7 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 	}
 
 	// Cache the validated user
-	s.cache.Set(token, user, cache.DefaultExpiration)
+	s.cache.Set(cacheKey, user, cache.DefaultExpiration)
 
 	return user, nil
 }
@@ -137,6 +144,23 @@ func extractBearerToken(r *http.Request) string {
 		return strings.TrimPrefix(auth, "Bearer ")
 	}
 	return ""
+}
+
+// tokenCacheKey derives the OAuth2 cache key from the bearer token AND the
+// X-MCP-User-* impersonation headers. Without this, a trusted backend client
+// reusing the same OAuth2 token for two different end-users would retrieve
+// the first user's cached identity on the second request — silent
+// impersonation. Hashing keeps the raw token out of the cache key space.
+func tokenCacheKey(token string, r *http.Request) string {
+	h := sha256.New()
+	h.Write([]byte(token))
+	h.Write([]byte{0})
+	h.Write([]byte(r.Header.Get("X-MCP-User-ID")))
+	h.Write([]byte{0})
+	h.Write([]byte(r.Header.Get("X-MCP-User-Email")))
+	h.Write([]byte{0})
+	h.Write([]byte(r.Header.Get("X-MCP-User-Name")))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // validateToken validates the token with the OAuth2 provider

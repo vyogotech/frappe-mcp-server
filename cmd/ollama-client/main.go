@@ -1096,11 +1096,12 @@ Be precise and accurate. Your response will be verified against the actual data.
 		})
 		fmt.Println("🌐 API server running on :8080 ...")
 		srv := &http.Server{
-			Addr:         ":8080",
-			Handler:      mux,
-			ReadTimeout:  30 * time.Second,
-			WriteTimeout: 120 * time.Second,
-			IdleTimeout:  120 * time.Second,
+			Addr:              ":8080",
+			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      120 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		}
 		if err := srv.ListenAndServe(); err != nil {
 			log.Fatal(err)

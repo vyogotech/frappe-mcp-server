@@ -310,3 +310,57 @@ func TestClearCache(t *testing.T) {
 	require.NotNil(t, user3)
 }
 
+// TestTokenCacheKey_DistinguishesImpersonationHeaders is a regression test
+// for the trusted-client cache-collision impersonation bug. Two requests
+// carrying the same bearer token but different X-MCP-User-* headers MUST
+// produce distinct cache keys, otherwise a trusted backend client can
+// retrieve another user's cached identity by reusing the same token.
+func TestTokenCacheKey_DistinguishesImpersonationHeaders(t *testing.T) {
+	token := "shared-bearer-token"
+
+	req1 := httptest.NewRequest("GET", "/test", nil)
+	req1.Header.Set("X-MCP-User-ID", "alice")
+	req1.Header.Set("X-MCP-User-Email", "alice@example.com")
+	req1.Header.Set("X-MCP-User-Name", "Alice")
+
+	req2 := httptest.NewRequest("GET", "/test", nil)
+	req2.Header.Set("X-MCP-User-ID", "bob")
+	req2.Header.Set("X-MCP-User-Email", "bob@example.com")
+	req2.Header.Set("X-MCP-User-Name", "Bob")
+
+	assert.NotEqual(t, tokenCacheKey(token, req1), tokenCacheKey(token, req2),
+		"different impersonation headers must produce different cache keys")
+}
+
+func TestTokenCacheKey_StableForSameContext(t *testing.T) {
+	token := "shared-bearer-token"
+
+	req1 := httptest.NewRequest("GET", "/test", nil)
+	req1.Header.Set("X-MCP-User-ID", "alice")
+	req1.Header.Set("X-MCP-User-Email", "alice@example.com")
+
+	req2 := httptest.NewRequest("GET", "/test", nil)
+	req2.Header.Set("X-MCP-User-ID", "alice")
+	req2.Header.Set("X-MCP-User-Email", "alice@example.com")
+
+	assert.Equal(t, tokenCacheKey(token, req1), tokenCacheKey(token, req2),
+		"same token + same headers must produce the same cache key")
+}
+
+func TestTokenCacheKey_BareTokenNoHeaders(t *testing.T) {
+	token := "shared-bearer-token"
+
+	req1 := httptest.NewRequest("GET", "/test", nil)
+	req2 := httptest.NewRequest("GET", "/test", nil)
+
+	assert.Equal(t, tokenCacheKey(token, req1), tokenCacheKey(token, req2),
+		"non-trusted-client path (no X-MCP-User-*) must yield a stable key")
+}
+
+func TestTokenCacheKey_DifferentTokensDifferentKeys(t *testing.T) {
+	req := httptest.NewRequest("GET", "/test", nil)
+
+	assert.NotEqual(t, tokenCacheKey("token-a", req), tokenCacheKey("token-b", req),
+		"different tokens must produce different cache keys")
+}
+

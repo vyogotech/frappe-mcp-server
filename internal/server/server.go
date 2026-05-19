@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -182,11 +183,12 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	mux.HandleFunc("/tool/", mcpServer.handleToolCall)
 
 	mcpServer.httpServer = &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-		Handler:      mcpServer.withMiddleware(mux),
-		ReadTimeout:  cfg.Server.Timeout,
-		WriteTimeout: cfg.Server.Timeout,
-		IdleTimeout:  120 * time.Second,
+		Addr:              fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+		Handler:           mcpServer.withMiddleware(mux),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       cfg.Server.Timeout,
+		WriteTimeout:      cfg.Server.Timeout,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Register all tools
@@ -302,8 +304,37 @@ func (s *MCPServer) withMiddleware(handler http.Handler) http.Handler {
 	// Apply CORS and logging (these always run, including for public paths).
 	h = s.corsMiddleware(h)
 	h = s.loggingMiddleware(h)
+	// Recovery is outermost so it catches panics in every other middleware.
+	h = s.recoveryMiddleware(h)
 
 	return h
+}
+
+// recoveryMiddleware turns a panic in any handler or downstream middleware
+// into a 500 response + structured log line instead of taking down the
+// HTTP server's goroutine. Outermost in the chain so it covers logging,
+// CORS, and auth middleware as well as the request handler itself.
+func (s *MCPServer) recoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				slog.Error("http handler panic recovered",
+					"panic", fmt.Sprintf("%v", rec),
+					"method", strings.ReplaceAll(r.Method, "\n", " "),
+					"path", strings.ReplaceAll(r.URL.Path, "\n", " "),
+					"stack", string(debug.Stack()),
+				)
+				// If headers have already been written, WriteHeader logs a
+				// duplicate-header warning and is otherwise a no-op — leaving
+				// the connection to close. If they have not, the client gets
+				// a clean 500 instead of a hung request.
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"error":"internal server error"}`))
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 // loggingMiddleware logs HTTP requests
@@ -358,6 +389,24 @@ func (w *responseWriterWithBody) WriteHeader(statusCode int) {
 func (w *responseWriterWithBody) Write(b []byte) (int, error) {
 	w.body.Write(b)
 	return w.ResponseWriter.Write(b)
+}
+
+// Flush forwards to the underlying writer so SSE handlers downstream of the
+// logging middleware can still stream. Without this method the wrapper
+// satisfies http.ResponseWriter but NOT http.Flusher — the SSE handler's
+// `w.(http.Flusher)` type assertion fails and the stream returns
+// "SSE not supported".
+func (w *responseWriterWithBody) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap exposes the underlying ResponseWriter so http.ResponseController
+// (and any other middleware that walks the wrapper chain) can find the
+// original writer for hijacking, deadline control, etc.
+func (w *responseWriterWithBody) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 // corsMiddleware handles CORS
