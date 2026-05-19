@@ -145,3 +145,6 @@ docs/.jekyll-metadata
 *.tar.gz
 *.rar
 
+
+# Scanner output from `make audit`
+audit-out/

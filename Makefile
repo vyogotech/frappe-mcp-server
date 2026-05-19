@@ -19,7 +19,7 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build clean test coverage lint run dev setup help
+.PHONY: all build clean test coverage lint run dev setup help audit audit-clean
 
 # Default target
 all: clean lint test build build-stdio build-test-client build-ollama-client
@@ -214,6 +214,49 @@ security:
 		echo "$(YELLOW)gosec not installed. Install with: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest$(NC)"; \
 	fi
 
+# Reproducible audit scanner suite — dumps raw JSON to $(AUDIT_DIR) so findings
+# can be inspected without an LLM in the loop. Missing tools warn-skip so this
+# runs on any host with whatever subset is installed. Run after every change
+# touching deps, network/auth, or request handling.
+AUDIT_DIR ?= audit-out
+
+audit:
+	@mkdir -p $(AUDIT_DIR)
+	@echo "$(GREEN)==> go vet$(NC)"
+	@$(GOCMD) vet ./... 2>&1 | tee $(AUDIT_DIR)/govet.txt || true
+	@echo "$(GREEN)==> golangci-lint$(NC)"
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run --output.json.path=$(AUDIT_DIR)/golangci.json ./... || true; \
+	else \
+		echo "$(YELLOW)  SKIP: golangci-lint not installed (brew install golangci-lint)$(NC)"; \
+	fi
+	@echo "$(GREEN)==> gosec (security AST)$(NC)"
+	@if command -v gosec >/dev/null 2>&1; then \
+		gosec -fmt json -out $(AUDIT_DIR)/gosec.json -quiet ./... || true; \
+	else \
+		echo "$(YELLOW)  SKIP: gosec not installed$(NC)"; \
+	fi
+	@echo "$(GREEN)==> trivy fs (vuln + misconfig)$(NC)"
+	@if command -v trivy >/dev/null 2>&1; then \
+		trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --format json --output $(AUDIT_DIR)/trivy.json . 2>/dev/null || true; \
+	else \
+		echo "$(YELLOW)  SKIP: trivy not installed (brew install trivy)$(NC)"; \
+	fi
+	@echo "$(GREEN)==> gitleaks (committed secrets)$(NC)"
+	@if command -v gitleaks >/dev/null 2>&1; then \
+		gitleaks detect --source . --no-banner --report-format json --report-path $(AUDIT_DIR)/gitleaks.json 2>/dev/null || true; \
+	else \
+		echo "$(YELLOW)  SKIP: gitleaks not installed (brew install gitleaks)$(NC)"; \
+	fi
+	@echo "$(GREEN)==> go list -u (outdated deps)$(NC)"
+	@$(GOCMD) list -u -m -json all > $(AUDIT_DIR)/deps.json 2>/dev/null || true
+	@echo ""
+	@echo "$(GREEN)Audit output: $(AUDIT_DIR)/$(NC)"
+	@ls -la $(AUDIT_DIR)/ 2>/dev/null || true
+
+audit-clean:
+	rm -rf $(AUDIT_DIR)
+
 # Check for updates
 update-deps:
 	@echo "$(GREEN)Checking for dependency updates...$(NC)"
@@ -251,7 +294,8 @@ help:
 	@echo "  $(YELLOW)docker-build$(NC) - Build Docker image"
 	@echo "  $(YELLOW)docker-run$(NC)   - Run Docker container"
 	@echo "  $(YELLOW)docs$(NC)         - Generate documentation"
-	@echo "  $(YELLOW)security$(NC)     - Run security scan"
+	@echo "  $(YELLOW)security$(NC)     - Run security scan (gosec only)"
+	@echo "  $(YELLOW)audit$(NC)        - Full scanner suite: vet, golangci-lint, gosec, trivy, gitleaks"
 	@echo "  $(YELLOW)update-deps$(NC)  - Check for dependency updates"
 	@echo "  $(YELLOW)pre-commit$(NC)   - Run pre-commit checks"
 	@echo "  $(YELLOW)release$(NC)      - Create release build"
