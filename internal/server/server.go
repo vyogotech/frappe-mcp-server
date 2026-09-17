@@ -457,7 +457,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 			}, "doctype", "name"),
 		},
 		"list_documents": {
-			Description: "List ERPNext documents with optional filters and pagination",
+			Description: "Fetch document rows to read their contents. Returns at most page_length rows (default 20), so it CANNOT be used to count records - use aggregate_documents for counts.",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype":     strProp("ERPNext document type"),
 				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
@@ -507,7 +507,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 			}, "doctype", "name"),
 		},
 		"aggregate_documents": {
-			Description: "Perform aggregation queries (SUM, COUNT, AVG, GROUP BY, TOP N) on ERPNext data",
+			Description: "Count, sum or average ERPNext records. Use this for any \"how many\" question: with metric=\"count\" it returns the exact total of all matching records, not just one page.",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype":  strProp("Document type to aggregate over"),
 				"group_by": strProp("Field to group by (optional)"),
