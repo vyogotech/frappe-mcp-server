@@ -146,6 +146,7 @@ type AggregationRequest struct {
 	GroupBy string                 `json:"group_by,omitempty"`      // "customer"
 	OrderBy string                 `json:"order_by,omitempty"`      // "total desc"
 	Limit   int                    `json:"limit,omitempty"`         // 5
+	Metric  string                 `json:"metric,omitempty"`        // "count", "sum", "avg"
 }
 
 // ReportRequest represents a request to run a Frappe report

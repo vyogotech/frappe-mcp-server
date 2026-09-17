@@ -948,6 +948,39 @@ func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolR
 		return nil, fmt.Errorf("doctype is required")
 	}
 
+	// get_list is paginated, so len(results) under-reports. A grouped count
+	// still needs get_list: it returns one row per group.
+	if strings.EqualFold(strings.TrimSpace(params.Metric), "count") && params.GroupBy == "" {
+		total, err := t.frappeClient.GetCount(ctx, params.DocType, params.Filters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to count documents: %w", err)
+		}
+
+		countJSON, err := json.Marshal(map[string]interface{}{
+			"doctype": params.DocType,
+			"metric":  "count",
+			"count":   total,
+			"filters": params.Filters,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal results: %w", err)
+		}
+
+		return &mcp.ToolResponse{
+			ID: request.ID,
+			Content: []mcp.Content{
+				{
+					Type: "text",
+					Text: fmt.Sprintf("%s has %d matching record(s)", params.DocType, total),
+				},
+				{
+					Type: "text",
+					Text: string(countJSON),
+				},
+			},
+		}, nil
+	}
+
 	// Execute aggregation query
 	results, err := t.frappeClient.RunAggregationQuery(ctx, params)
 	if err != nil {

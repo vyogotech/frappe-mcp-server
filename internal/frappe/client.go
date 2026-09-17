@@ -614,6 +614,29 @@ func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationR
 	return response.Message, nil
 }
 
+// GetCount returns the total number of docType documents matching filters.
+// get_list is paginated, so only get_count yields a true total. Permissions are
+// identical: both run the same DatabaseQuery with ignore_permissions unset.
+func (c *Client) GetCount(ctx context.Context, docType string, filters map[string]interface{}) (int64, error) {
+	// get_count reads the whole body via form_dict; a stray "limit" caps the count.
+	requestBody := map[string]interface{}{"doctype": docType}
+	if len(filters) > 0 {
+		requestBody["filters"] = filters
+	}
+
+	var response struct {
+		Message int64 `json:"message"`
+	}
+
+	if err := c.makeRequest(ctx, "POST", "/api/method/frappe.client.get_count", requestBody, &response); err != nil {
+		return 0, fmt.Errorf("count query failed for %s: %w", docType, err)
+	}
+
+	slog.Info("Count query executed successfully", "doctype", docType, "count", response.Message)
+
+	return response.Message, nil
+}
+
 // GetReportFilters fetches the filter metadata for a report
 func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]types.ReportFilter, error) {
 	// Check cache first
