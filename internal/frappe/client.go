@@ -322,6 +322,31 @@ type GlobalSearchRequest struct {
 
 // GlobalSearch performs a full-text search across all indexed doctypes using
 // the Frappe global search endpoint (/api/method/frappe.utils.global_search.search).
+// SearchKnowledgeBase asks the rag app for the passages closest to a question. The app owns
+// the vector search and the per-user permission filter; this only carries the call.
+func (c *Client) SearchKnowledgeBase(ctx context.Context, query string, limit int) ([]map[string]interface{}, error) {
+	if query == "" {
+		return nil, fmt.Errorf("query is required for a knowledge base search")
+	}
+	if limit <= 0 {
+		limit = 5
+	}
+
+	params := url.Values{}
+	params.Set("query", query)
+	params.Set("limit", fmt.Sprintf("%d", limit))
+
+	var response struct {
+		Message []map[string]interface{} `json:"message"`
+	}
+	endpoint := "/api/method/rag.search.search?" + params.Encode()
+	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
+		return nil, fmt.Errorf("knowledge base search failed: %w", err)
+	}
+
+	return response.Message, nil
+}
+
 func (c *Client) GlobalSearch(ctx context.Context, req GlobalSearchRequest) ([]GlobalSearchResult, error) {
 	if req.Text == "" {
 		return nil, fmt.Errorf("text is required for global search")

@@ -1061,6 +1061,45 @@ func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (
 }
 
 // GlobalSearch performs a full-text search across all Frappe doctypes.
+// SearchKnowledgeBase searches the documents the user has uploaded to Drive.
+func (t *ToolRegistry) SearchKnowledgeBase(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
+	var params struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit,omitempty"`
+	}
+
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters: %w", err)
+	}
+	if params.Query == "" {
+		return nil, fmt.Errorf("query is required")
+	}
+
+	passages, err := t.frappeClient.SearchKnowledgeBase(ctx, params.Query, params.Limit)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := json.Marshal(passages)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return &mcp.ToolResponse{
+		ID: request.ID,
+		Content: []mcp.Content{
+			{
+				Type: "text",
+				Text: fmt.Sprintf("Found %d passage(s) for %q", len(passages), params.Query),
+			},
+			{
+				Type: "text",
+				Text: string(result),
+			},
+		},
+	}, nil
+}
+
 func (t *ToolRegistry) GlobalSearch(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		Text    string      `json:"text"`

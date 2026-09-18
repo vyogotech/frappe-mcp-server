@@ -524,6 +524,13 @@ func toolCatalog() map[string]mcp.ToolMeta {
 				"filters":     map[string]interface{}{"type": "object", "description": "Report filter values"},
 			}, "report_name"),
 		},
+		"search_knowledge_base": {
+			Description: "Search the user's uploaded documents (HR, expense, travel, security and vehicle policies) for a passage answering a question. Use for any policy, entitlement, limit or deadline question.",
+			InputSchema: objSchema(map[string]interface{}{
+				"query": strProp("The user's question, in their own words"),
+				"limit": map[string]interface{}{"type": "integer", "description": "Maximum passages to return (default 5)"},
+			}, "query"),
+		},
 		"global_search": {
 			Description: "Full-text search across all indexed Frappe/ERPNext doctypes",
 			InputSchema: objSchema(map[string]interface{}{
@@ -570,6 +577,9 @@ func (s *MCPServer) registerTools() error {
 	// Cross-doctype search
 	reg("global_search", s.tools.GlobalSearch)
 
+	// Retrieval over the user's own documents
+	reg("search_knowledge_base", s.tools.SearchKnowledgeBase)
+
 	// Generic analysis tool
 	reg("analyze_document", s.tools.AnalyzeDocument)
 
@@ -602,7 +612,7 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	order := []string{
 		"get_document", "list_documents", "create_document", "update_document",
 		"delete_document", "search_documents", "aggregate_documents", "run_report",
-		"global_search", "analyze_document",
+		"global_search", "search_knowledge_base", "analyze_document",
 	}
 	tools := make([]map[string]interface{}, 0, len(order))
 	for _, name := range order {
