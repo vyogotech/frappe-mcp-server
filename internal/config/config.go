@@ -191,6 +191,11 @@ func Load() (*Config, error) {
 	if config.ERPNext.RateLimit.Burst == 0 {
 		config.ERPNext.RateLimit.Burst = 20
 	}
+	// an omitted timeout would leave the server's reads and writes unbounded; two minutes covers sid validation and a tool
+	// call's 60 s deadline
+	if config.Server.Timeout == 0 {
+		config.Server.Timeout = 2 * time.Minute
+	}
 	// an omitted delay would make every retry immediate
 	if config.ERPNext.Retry.InitialDelay == 0 {
 		config.ERPNext.Retry.InitialDelay = 500 * time.Millisecond

@@ -640,7 +640,8 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 		request.ID = fmt.Sprintf("http-%d", time.Now().UnixNano())
 	}
 
-	ctx := r.Context()
+	ctx, cancel := context.WithTimeout(r.Context(), mcp.ToolDeadline)
+	defer cancel()
 	var result *mcp.ToolResponse
 	var err error
 

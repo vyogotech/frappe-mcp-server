@@ -126,6 +126,8 @@ func (s *Server) RegisterToolWithSchema(name, description string, inputSchema ma
 			InputSchema: json.RawMessage(schemaBytes),
 		},
 		func(ctx context.Context, req *gosdk.CallToolRequest) (*gosdk.CallToolResult, error) {
+			ctx, cancel := context.WithTimeout(ctx, ToolDeadline)
+			defer cancel()
 			toolReq := ToolRequest{
 				Tool:   name,
 				Params: req.Params.Arguments,
@@ -150,6 +152,10 @@ func (s *Server) RegisterToolWithSchema(name, description string, inputSchema ma
 	)
 	slog.Debug("Registered MCP tool", "name", name, "has_schema", len(inputSchema) > 1)
 }
+
+// ToolDeadline bounds one tool call, Frappe retries included: frappe_ai's relay gives up after 120 s without a byte, and
+// the agent sends none while a tool runs.
+var ToolDeadline = 60 * time.Second
 
 // auditToolCall writes the one line every tool call leaves, over HTTP and stdio alike: who, which tool and record, how
 // it ended. Never an argument or result value, which hold users' questions and documents.
