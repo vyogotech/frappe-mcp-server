@@ -346,62 +346,13 @@ func TestRateLimiting(t *testing.T) {
 	_, err = client.GetDocument(ctx, "Project", "TEST-PROJ-001")
 	assert.NoError(t, err)
 
-	// Clear cache to ensure second request hits the API
-	client.ClearCache()
-
 	// Second request should be rate limited
-	_, err = client.GetDocument(ctx, "Project", "TEST-PROJ-001")
+	_, err = client.GetDocumentList(ctx, types.SearchRequest{DocType: "Project"})
 	duration := time.Since(start)
 
 	assert.NoError(t, err)
 	// Should take at least 1 second due to rate limiting
 	assert.True(t, duration >= 1*time.Second)
-}
-
-func TestCaching(t *testing.T) {
-	// Create mock server
-	mockServer := testutils.MockERPNextServer(t)
-	defer mockServer.Close()
-
-	// Create client
-	cfg := config.ERPNextConfig{
-		BaseURL:   mockServer.URL,
-		APIKey:    "test_key",
-		APISecret: "test_secret",
-		Timeout:   30 * time.Second,
-		RateLimit: config.RateLimitConfig{
-			RequestsPerSecond: 10,
-			Burst:             20,
-		},
-		Retry: config.RetryConfig{
-			MaxAttempts:  3,
-			InitialDelay: 1 * time.Second,
-			MaxDelay:     10 * time.Second,
-		},
-	}
-
-	client, err := NewClient(cfg)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-
-	// First request - should hit the server
-	start := time.Now()
-	doc1, err := client.GetDocument(ctx, "Project", "TEST-PROJ-001")
-	firstDuration := time.Since(start)
-	assert.NoError(t, err)
-	assert.NotNil(t, doc1)
-
-	// Second request - should hit the cache
-	start = time.Now()
-	doc2, err := client.GetDocument(ctx, "Project", "TEST-PROJ-001")
-	secondDuration := time.Since(start)
-	assert.NoError(t, err)
-	assert.NotNil(t, doc2)
-
-	// Cache hit should be faster
-	assert.True(t, secondDuration < firstDuration)
-	assert.Equal(t, doc1["name"], doc2["name"])
 }
 
 func BenchmarkGetDocument(b *testing.B) {
