@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"time"
 
 	gosdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -174,34 +173,6 @@ func (s *Server) RegisterResource(uri, description string) {
 func (s *Server) Run(ctx context.Context, transport gosdk.Transport) error {
 	slog.Info("Starting MCP server", "name", s.name, "version", s.version)
 	return s.sdkServer.Run(ctx, transport)
-}
-
-// ListenAndServe starts an SSE-based MCP server on the given address.
-// This replaces the old WebSocket/HTTP server with the go-sdk SSE transport.
-func (s *Server) ListenAndServe(addr string) error {
-	slog.Info("Starting MCP SSE server", "addr", addr, "name", s.name, "version", s.version)
-
-	handler := gosdk.NewSSEHandler(
-		func(_ *http.Request) *gosdk.Server { return s.sdkServer },
-		nil,
-	)
-
-	httpServer := &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
-
-	return httpServer.ListenAndServe()
-}
-
-// Shutdown gracefully shuts down the server.
-func (s *Server) Shutdown(ctx context.Context) error {
-	slog.Info("Shutting down MCP server")
-	return nil
 }
 
 // executeToolRequest executes a tool request using the go-sdk server and emits

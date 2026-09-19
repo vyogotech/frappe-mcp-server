@@ -214,15 +214,6 @@ func (s *MCPServer) Run(ctx context.Context) error {
 		}
 	}()
 
-	// Start MCP server in a goroutine
-	go func() {
-		mcpAddr := fmt.Sprintf("%s:%d", s.config.Server.Host, s.config.Server.Port+1)
-		slog.Info("Starting MCP protocol server", "address", mcpAddr)
-		if err := s.server.ListenAndServe(mcpAddr); err != nil {
-			errChan <- err
-		}
-	}()
-
 	// Wait for context cancellation or server error
 	select {
 	case <-ctx.Done():
@@ -234,9 +225,7 @@ func (s *MCPServer) Run(ctx context.Context) error {
 		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
 			slog.Error("HTTP server shutdown error", "error", err)
 		}
-
-		slog.Info("Shutting down MCP protocol server...")
-		return s.server.Shutdown(context.Background())
+		return nil
 	case err := <-errChan:
 		slog.Error("Server error", "error", err)
 		return err
