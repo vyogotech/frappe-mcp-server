@@ -1,0 +1,340 @@
+[
+  {
+    "description": "Count, sum or average ERPNext records. Use this for any \"how many\" question: with metric=\"count\" it returns the exact total of all matching records, not just one page.",
+    "inputSchema": {
+      "properties": {
+        "doctype": {
+          "description": "Document type to aggregate over",
+          "type": "string"
+        },
+        "field": {
+          "description": "Field to aggregate (required when metric != count)",
+          "type": "string"
+        },
+        "filters": {
+          "description": "Optional field-value filters",
+          "type": "object"
+        },
+        "group_by": {
+          "description": "Field to group by (optional)",
+          "type": "string"
+        },
+        "metric": {
+          "description": "Aggregation: sum|count|avg|min|max",
+          "type": "string"
+        },
+        "top_n": {
+          "description": "Return top N groups only",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "doctype",
+        "metric"
+      ],
+      "type": "object"
+    },
+    "name": "aggregate_documents"
+  },
+  {
+    "description": "Analyze any ERPNext document with optional related data",
+    "inputSchema": {
+      "properties": {
+        "doctype": {
+          "description": "ERPNext document type",
+          "type": "string"
+        },
+        "include_related": {
+          "default": false,
+          "description": "Include related documents",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Document name or ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doctype",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "analyze_document"
+  },
+  {
+    "description": "",
+    "inputSchema": {
+      "type": "object"
+    },
+    "name": "analyze_project_timeline"
+  },
+  {
+    "description": "",
+    "inputSchema": {
+      "type": "object"
+    },
+    "name": "budget_variance_analysis"
+  },
+  {
+    "description": "Create a new ERPNext document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args).",
+    "inputSchema": {
+      "properties": {
+        "data": {
+          "description": "Field values for the new document, as an object of fieldname→value",
+          "type": "object"
+        },
+        "doctype": {
+          "description": "ERPNext document type (e.g., Customer, Sales Order)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doctype",
+        "data"
+      ],
+      "type": "object"
+    },
+    "name": "create_document"
+  },
+  {
+    "description": "Delete an ERPNext document (requires confirm: true)",
+    "inputSchema": {
+      "properties": {
+        "confirm": {
+          "description": "Must be true to confirm deletion",
+          "type": "boolean"
+        },
+        "doctype": {
+          "description": "ERPNext document type",
+          "type": "string"
+        },
+        "name": {
+          "description": "Document name or ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doctype",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "delete_document"
+  },
+  {
+    "description": "",
+    "inputSchema": {
+      "type": "object"
+    },
+    "name": "generate_project_report"
+  },
+  {
+    "description": "Retrieve a single ERPNext document by doctype and name",
+    "inputSchema": {
+      "properties": {
+        "doctype": {
+          "description": "ERPNext document type (e.g., Customer, Sales Order)",
+          "type": "string"
+        },
+        "name": {
+          "description": "Document name or ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doctype",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "get_document"
+  },
+  {
+    "description": "",
+    "inputSchema": {
+      "type": "object"
+    },
+    "name": "get_project_status"
+  },
+  {
+    "description": "",
+    "inputSchema": {
+      "type": "object"
+    },
+    "name": "get_resource_allocation"
+  },
+  {
+    "description": "Full-text search across all indexed Frappe/ERPNext doctypes",
+    "inputSchema": {
+      "properties": {
+        "doctype": {
+          "description": "Restrict results to a single doctype (optional)",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Maximum number of results (default 20)",
+          "type": "integer"
+        },
+        "scope": {
+          "description": "One doctype or list of doctypes to search within (optional)"
+        },
+        "start": {
+          "description": "Offset for pagination (default 0)",
+          "type": "integer"
+        },
+        "text": {
+          "description": "Search keyword or phrase",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "name": "global_search"
+  },
+  {
+    "description": "Fetch document rows to read their contents. Returns at most page_length rows (default 20), so it CANNOT be used to count records - use aggregate_documents for counts.",
+    "inputSchema": {
+      "properties": {
+        "doctype": {
+          "description": "ERPNext document type",
+          "type": "string"
+        },
+        "fields": {
+          "description": "Fields to return",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "filters": {
+          "description": "Optional field-value filters",
+          "type": "object"
+        },
+        "order_by": {
+          "description": "Sort order (e.g., 'creation desc')",
+          "type": "string"
+        },
+        "page_length": {
+          "default": 20,
+          "description": "Maximum results to return",
+          "type": "number"
+        }
+      },
+      "required": [
+        "doctype"
+      ],
+      "type": "object"
+    },
+    "name": "list_documents"
+  },
+  {
+    "description": "",
+    "inputSchema": {
+      "type": "object"
+    },
+    "name": "resource_utilization_analysis"
+  },
+  {
+    "description": "Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.)",
+    "inputSchema": {
+      "properties": {
+        "filters": {
+          "description": "Report filter values",
+          "type": "object"
+        },
+        "report_name": {
+          "description": "Exact report name (e.g. 'Sales Analytics')",
+          "type": "string"
+        }
+      },
+      "required": [
+        "report_name"
+      ],
+      "type": "object"
+    },
+    "name": "run_report"
+  },
+  {
+    "description": "Search ERPNext documents of a given doctype using full-text search",
+    "inputSchema": {
+      "properties": {
+        "doctype": {
+          "description": "Document type to search",
+          "type": "string"
+        },
+        "filters": {
+          "description": "Optional field-value filters",
+          "type": "object"
+        },
+        "page_length": {
+          "default": 20,
+          "description": "Maximum results to return",
+          "type": "number"
+        },
+        "search": {
+          "description": "Search query string",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doctype"
+      ],
+      "type": "object"
+    },
+    "name": "search_documents"
+  },
+  {
+    "description": "Search the user's uploaded documents (HR, expense, travel, security and vehicle policies) for a passage answering a question. Use for any policy, entitlement, limit or deadline question.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "description": "Maximum passages to return (default 5)",
+          "type": "integer"
+        },
+        "query": {
+          "description": "The user's question, in their own words",
+          "type": "string"
+        },
+        "session": {
+          "description": "The chat the question comes from, whose attached files are searched too. Filled by the agent, not the model",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "name": "search_knowledge_base"
+  },
+  {
+    "description": "Update an existing ERPNext document. `data` is a flat object of fieldname→value pairs for fields to change.",
+    "inputSchema": {
+      "properties": {
+        "data": {
+          "description": "Fields to update, as an object of fieldname→value",
+          "type": "object"
+        },
+        "doctype": {
+          "description": "ERPNext document type",
+          "type": "string"
+        },
+        "name": {
+          "description": "Document name or ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doctype",
+        "name",
+        "data"
+      ],
+      "type": "object"
+    },
+    "name": "update_document"
+  }
+]
