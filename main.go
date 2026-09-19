@@ -15,17 +15,20 @@ import (
 )
 
 func main() {
-	// Setup structured logging
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
+	// Setup structured logging: info until the configuration names a level (LOG_LEVEL or logging.level)
+	var level slog.LevelVar
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: &level})))
 
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
+	}
+	if cfg.Logging.Level != "" {
+		if err := level.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
+			slog.Warn("Unknown log level; logging at info", "level", cfg.Logging.Level)
+		}
 	}
 
 	// Initialize OpenTelemetry tracing (no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set)

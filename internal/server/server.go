@@ -236,7 +236,7 @@ func (s *MCPServer) Run(ctx context.Context) error {
 
 // healthCheck provides health status endpoint
 func (s *MCPServer) healthCheck(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/health endpoint called",
+	slog.Debug("/health endpoint called",
 		"method", strings.ReplaceAll(r.Method, "\n", " "),
 		"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "))
 	w.Header().Set("Content-Type", "application/json")
@@ -246,7 +246,7 @@ func (s *MCPServer) healthCheck(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write([]byte(`{"status":"healthy","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`)); err != nil {
 		slog.Error("Failed to write health response", "error", err)
 	}
-	slog.Info("/health response sent")
+	slog.Debug("/health response sent")
 }
 
 // metrics provides basic metrics endpoint
