@@ -143,12 +143,11 @@ func (u *User) GetExtensions() map[string][]string {
 // AggregationRequest represents a request for aggregated data
 type AggregationRequest struct {
 	DocType string                 `json:"doctype" validate:"required"`
-	Fields  []string               `json:"fields"`                  // ["customer", "SUM(grand_total) as total"]
-	Filters map[string]interface{} `json:"filters,omitempty"`       // {"status": "Paid"}
-	GroupBy string                 `json:"group_by,omitempty"`      // "customer"
-	OrderBy string                 `json:"order_by,omitempty"`      // "total desc"
-	Limit   int                    `json:"limit,omitempty"`         // 5
-	Metric  string                 `json:"metric,omitempty"`        // "count", "sum", "avg"
+	Metric  string                 `json:"metric,omitempty"`   // count, sum, avg, min or max
+	Field   string                 `json:"field,omitempty"`    // the field a metric other than count reads
+	Filters map[string]interface{} `json:"filters,omitempty"`  // {"status": "Paid"}
+	GroupBy string                 `json:"group_by,omitempty"` // "customer"
+	TopN    int                    `json:"top_n,omitempty"`    // keep the N largest groups
 }
 
 // ReportRequest represents a request to run a Frappe report

@@ -981,6 +981,17 @@ func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolR
 		}, nil
 	}
 
+	switch strings.ToLower(strings.TrimSpace(params.Metric)) {
+	case "count":
+	case "sum", "avg", "min", "max":
+		if params.Field == "" {
+			return nil, fmt.Errorf("metric %q needs a field", params.Metric)
+		}
+	default:
+		return nil, fmt.Errorf("metric must be count, sum, avg, min or max, not %q", params.Metric)
+	}
+	params.Metric = strings.TrimSpace(params.Metric)
+
 	// Execute aggregation query
 	results, err := t.frappeClient.RunAggregationQuery(ctx, params)
 	if err != nil {
@@ -993,7 +1004,8 @@ func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolR
 		"group_by":  params.GroupBy,
 		"results":   results,
 		"count":     len(results),
-		"fields":    params.Fields,
+		"metric":    params.Metric,
+		"field":     params.Field,
 		"filters":   params.Filters,
 	})
 	if err != nil {

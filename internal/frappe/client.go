@@ -536,36 +536,30 @@ func isRetryableError(ctx context.Context, err error) bool {
 func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationRequest) ([]types.Document, error) {
 	endpoint := "/api/method/frappe.client.get_list"
 	
-	// Build request body
+	// Frappe v16's get_list refuses "SUM(x)" strings; an aggregate is a {"SUM": field} dict
+	arg := req.Field
+	if strings.EqualFold(req.Metric, "count") {
+		arg = "name"
+	}
+	fields := []interface{}{map[string]string{strings.ToUpper(req.Metric): arg, "as": "value"}}
+	if req.GroupBy != "" {
+		fields = append([]interface{}{req.GroupBy}, fields...)
+	}
 	requestBody := map[string]interface{}{
-		"doctype": req.DocType,
+		"doctype":           req.DocType,
+		"fields":            fields,
+		"limit_page_length": req.TopN, // 0 is every group, not Frappe's default page of 20
 	}
-	
-	// Add fields (for aggregation like SUM, COUNT, etc.)
-	if len(req.Fields) > 0 {
-		requestBody["fields"] = req.Fields
-	}
-	
-	// Add filters
 	if len(req.Filters) > 0 {
 		requestBody["filters"] = req.Filters
 	}
-	
-	// Add group by
 	if req.GroupBy != "" {
 		requestBody["group_by"] = req.GroupBy
 	}
-	
-	// Add order by
-	if req.OrderBy != "" {
-		requestBody["order_by"] = req.OrderBy
+	if req.TopN > 0 {
+		requestBody["order_by"] = "value desc"
 	}
-	
-	// Add limit
-	if req.Limit > 0 {
-		requestBody["limit_page_length"] = req.Limit
-	}
-	
+
 	var response struct {
 		Message []types.Document `json:"message"`
 	}
