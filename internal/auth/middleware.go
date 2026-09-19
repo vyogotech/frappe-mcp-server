@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"frappe-mcp-server/internal/auth/strategies"
+	"log/slog"
 	"net/http"
 )
 
@@ -37,6 +38,8 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 
 		// Required auth - fail if no valid auth
 		if err != nil {
+			// a refused request is a security event: record why, never the credential
+			slog.Warn("authentication failed", "reason", err.Error(), "path", r.URL.Path, "remote_addr", r.RemoteAddr)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]string{

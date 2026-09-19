@@ -78,6 +78,7 @@ func NewOAuth2Strategy(config OAuth2StrategyConfig) *OAuth2Strategy {
 // Supports both sid cookie (Frappe session) and Bearer token (OAuth2)
 func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*types.User, error) {
 	// Strategy 1: Try sid cookie first (Frappe session - user-level permissions)
+	var sidErr error
 	if sidCookie, err := r.Cookie("sid"); err == nil && sidCookie.Value != "" {
 		// Check cache first
 		cacheKey := "sid:" + sidCookie.Value
@@ -98,11 +99,16 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 			return user, nil
 		}
 		// If sid validation fails, continue to try Bearer token
+		sidErr = err
 	}
 
 	// Strategy 2: Try Bearer token (OAuth2)
 	token := extractBearerToken(r)
 	if token == "" {
+		if sidErr != nil {
+			// keep why the sid failed: Frappe down, a timeout and an expired session need different fixes
+			return nil, fmt.Errorf("missing or invalid Bearer token, and the sid was not accepted: %w", sidErr)
+		}
 		return nil, errors.New("missing or invalid Bearer token")
 	}
 
