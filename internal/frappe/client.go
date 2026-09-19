@@ -576,6 +576,32 @@ func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationR
 	return response.Message, nil
 }
 
+// reportRows gives every row as an object: Frappe v16's query_report.run returns objects, but a prepared report read
+// from an older cache still returns arrays in column order
+func reportRows(columns []types.ReportColumn, result []json.RawMessage) ([]map[string]interface{}, error) {
+	rows := make([]map[string]interface{}, 0, len(result))
+	for i, raw := range result {
+		row := map[string]interface{}{}
+		if err := json.Unmarshal(raw, &row); err == nil {
+			rows = append(rows, row)
+			continue
+		}
+		var cells []interface{}
+		if err := json.Unmarshal(raw, &cells); err != nil {
+			return nil, fmt.Errorf("row %d is neither an object nor an array", i)
+		}
+		for j, cell := range cells {
+			if j < len(columns) && columns[j].FieldName != "" {
+				row[columns[j].FieldName] = cell
+			} else {
+				row[fmt.Sprintf("column_%d", j)] = cell
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
+
 // GetCount returns the total number of docType documents matching filters.
 // get_list is paginated, so only get_count yields a true total. Permissions are
 // identical: both run the same DatabaseQuery with ignore_permissions unset.
@@ -691,7 +717,7 @@ func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types
 	var response struct {
 		Message struct {
 			Columns []types.ReportColumn `json:"columns"`
-			Result  [][]interface{}      `json:"result"`
+			Result  []json.RawMessage    `json:"result"`
 		} `json:"message"`
 	}
 	
@@ -700,9 +726,13 @@ func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types
 		return nil, fmt.Errorf("report query failed for %s: %w", req.ReportName, err)
 	}
 	
+	rows, err := reportRows(response.Message.Columns, response.Message.Result)
+	if err != nil {
+		return nil, fmt.Errorf("report %s: %w", req.ReportName, err)
+	}
 	result := &types.ReportResponse{
 		Columns: response.Message.Columns,
-		Data:    response.Message.Result,
+		Data:    rows,
 	}
 	
 	slog.Info("Report executed successfully",

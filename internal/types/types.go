@@ -160,7 +160,7 @@ type ReportRequest struct {
 // ReportResponse represents the response from a report query
 type ReportResponse struct {
 	Columns []ReportColumn `json:"columns"` // Column definitions
-	Data    [][]interface{} `json:"data"`    // Report data (2D array)
+	Data    []map[string]interface{} `json:"data"` // one object per row, keyed by column fieldname
 	Message string         `json:"message,omitempty"`
 }
 
