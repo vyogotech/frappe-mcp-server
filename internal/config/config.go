@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -174,6 +175,9 @@ func Load() (*Config, error) {
 	}
 
 	data, err := os.ReadFile(configFile)
+	if errors.Is(err, fs.ErrNotExist) && os.Getenv("CONFIG_FILE") == "" {
+		data, err = nil, nil // no file asked for and none there: the environment carries the settings
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -197,6 +201,9 @@ func Load() (*Config, error) {
 	}
 	if config.ERPNext.RateLimit.Burst == 0 {
 		config.ERPNext.RateLimit.Burst = 20
+	}
+	if config.Server.Port == 0 {
+		config.Server.Port = 8080
 	}
 	// an omitted timeout would leave the server's reads and writes unbounded; two minutes covers sid validation and a tool
 	// call's 60 s deadline

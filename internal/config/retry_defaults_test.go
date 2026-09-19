@@ -57,3 +57,19 @@ func TestTheKnowledgeBaseSwitchFollowsTheEnvironment(t *testing.T) {
 		t.Fatal("TOOLS_KNOWLEDGE_BASE=maybe was accepted")
 	}
 }
+
+// installation.md's first option: no config file at all, only environment variables.
+func TestLoadWithTheEnvironmentAlone(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("CONFIG_FILE", "")
+	t.Setenv("FRAPPE_BASE_URL", "http://frappe.test")
+	t.Setenv("FRAPPE_API_KEY", "k")
+	t.Setenv("FRAPPE_API_SECRET", "s")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ERPNext.BaseURL != "http://frappe.test" || cfg.Server.Port != 8080 {
+		t.Fatalf("base_url %q, port %d", cfg.ERPNext.BaseURL, cfg.Server.Port)
+	}
+}

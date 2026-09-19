@@ -24,8 +24,11 @@ func main() {
 	// Setup logging to stderr so it does not interfere with stdio communication.
 	log.SetOutput(os.Stderr)
 
-	// Set config file environment variable if not already set.
-	if os.Getenv("CONFIG_FILE") == "" && *configPath != "" {
+	// Only a --config given on the command line names a file that must exist; without one the environment may carry
+	// every setting.
+	given := false
+	flag.Visit(func(f *flag.Flag) { given = given || f.Name == "config" })
+	if os.Getenv("CONFIG_FILE") == "" && given {
 		_ = os.Setenv("CONFIG_FILE", *configPath)
 	}
 
