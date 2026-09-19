@@ -191,6 +191,13 @@ func Load() (*Config, error) {
 	if config.ERPNext.RateLimit.Burst == 0 {
 		config.ERPNext.RateLimit.Burst = 20
 	}
+	// an omitted delay would make every retry immediate
+	if config.ERPNext.Retry.InitialDelay == 0 {
+		config.ERPNext.Retry.InitialDelay = 500 * time.Millisecond
+	}
+	if config.ERPNext.Retry.MaxDelay == 0 {
+		config.ERPNext.Retry.MaxDelay = 5 * time.Second
+	}
 
 	// Validate configuration
 	if err := config.validate(); err != nil {

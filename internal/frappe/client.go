@@ -10,9 +10,12 @@ package frappe
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -358,43 +361,28 @@ func (c *Client) GlobalSearch(ctx context.Context, req GlobalSearchRequest) ([]G
 
 // makeRequest makes an HTTP request to Frappe API with retry logic
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
-	// Apply rate limiting
-	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return fmt.Errorf("rate limit error: %w", err)
+	attempts := 1
+	if method == http.MethodGet { // a write retried after a timeout can run twice (RFC 9110 9.2.2)
+		attempts = max(1, c.retryConfig.MaxAttempts)
 	}
-
-	var attempt int
-	for attempt = 0; attempt < c.retryConfig.MaxAttempts; attempt++ {
-		if attempt > 0 {
-			// Calculate delay for retry with exponential backoff
-			delay := time.Duration(attempt) * c.retryConfig.InitialDelay
-			if delay > c.retryConfig.MaxDelay {
-				delay = c.retryConfig.MaxDelay
-			}
-
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-			}
-
-			slog.Debug("Retrying request", "attempt", attempt+1, "delay", delay)
+	for attempt := 1; ; attempt++ {
+		if err := c.rateLimiter.Wait(ctx); err != nil {
+			return fmt.Errorf("rate limit error: %w", err)
 		}
-
 		err := c.doRequest(ctx, method, endpoint, body, result)
-		if err == nil {
-			return nil
-		}
-
-		// Check if error is retryable
-		if !isRetryableError(err) {
+		if err == nil || attempt == attempts || !isRetryableError(ctx, err) {
 			return err
 		}
-
-		slog.Warn("Request failed, will retry", "error", err, "attempt", attempt+1)
+		// full jitter up to an exponential bound, so the retries of many calls do not arrive together
+		bound := min(c.retryConfig.MaxDelay, c.retryConfig.InitialDelay<<min(attempt-1, 30))
+		delay := rand.N(bound + 1) //nolint:gosec // G404: backoff jitter is not a secret (CWE-338 does not apply)
+		slog.Debug("Retrying request", "attempt", attempt+1, "delay", delay, "error", err)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
 	}
-
-	return fmt.Errorf("request failed after %d attempts", attempt)
 }
 
 // doRequest performs the actual HTTP request
@@ -530,16 +518,19 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	return nil
 }
 
-// isRetryableError determines if an error is retryable
-func isRetryableError(err error) bool {
-	if erpErr, ok := err.(*types.ERPNextError); ok {
-		// Retry on server errors but not client errors
-		return erpErr.StatusCode >= 500
+// isRetryableError: a network failure or a gateway error may pass; a 500 or a 4xx will not, nor will a cancelled call
+func isRetryableError(ctx context.Context, err error) bool {
+	if ctx.Err() != nil {
+		return false
 	}
-	// Retry on network errors
-	return true
+	var erpErr *types.ERPNextError
+	if errors.As(err, &erpErr) {
+		return erpErr.StatusCode == http.StatusBadGateway || erpErr.StatusCode == http.StatusServiceUnavailable ||
+			erpErr.StatusCode == http.StatusGatewayTimeout
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr)
 }
-
 
 // RunAggregationQuery executes an aggregation query using frappe.client.get_list
 func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationRequest) ([]types.Document, error) {
