@@ -1,0 +1,17 @@
+# placeholder bearer tokens in 'invalid token' tests and docs, and a truncated example JWT: none is a credential
+docs/oauth2-implementation.md:curl-auth-header:377
+test-oauth.sh:curl-auth-header:225
+2947fe88d4226b0cfd517af8fd8b71760324ae58:OAUTH2_IMPLEMENTATION.md:curl-auth-header:377
+2947fe88d4226b0cfd517af8fd8b71760324ae58:TESTING_OAUTH2.md:curl-auth-header:174
+2947fe88d4226b0cfd517af8fd8b71760324ae58:TESTING_OAUTH2.md:generic-api-key:103
+2947fe88d4226b0cfd517af8fd8b71760324ae58:docs/auth-quickstart.md:curl-auth-header:322
+2947fe88d4226b0cfd517af8fd8b71760324ae58:docs/oauth2-implementation.md:curl-auth-header:377
+2947fe88d4226b0cfd517af8fd8b71760324ae58:test-oauth.sh:curl-auth-header:225
+be130b40ab47090439f7e3131896a3ee2818d4f3:OAUTH2_IMPLEMENTATION.md:curl-auth-header:377
+be130b40ab47090439f7e3131896a3ee2818d4f3:TESTING_OAUTH2.md:curl-auth-header:174
+be130b40ab47090439f7e3131896a3ee2818d4f3:TESTING_OAUTH2.md:generic-api-key:103
+be130b40ab47090439f7e3131896a3ee2818d4f3:docs/auth-quickstart.md:curl-auth-header:322
+be130b40ab47090439f7e3131896a3ee2818d4f3:docs/oauth2-implementation.md:curl-auth-header:377
+be130b40ab47090439f7e3131896a3ee2818d4f3:test-oauth.sh:curl-auth-header:225
+d4ad36c24794c7ccef6586cf2bc6ffaf06bc5882:docs/oauth2-implementation.md:curl-auth-header:377
+d4ad36c24794c7ccef6586cf2bc6ffaf06bc5882:test-oauth.sh:curl-auth-header:225
