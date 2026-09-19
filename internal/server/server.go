@@ -292,8 +292,9 @@ func (s *MCPServer) withMiddleware(handler http.Handler) http.Handler {
 		})
 	}
 
-	// Apply CORS and logging (these always run, including for public paths).
-	h = s.corsMiddleware(h)
+	// Apply cross-origin protection and logging (these always run, including for public paths). A browser page on
+	// another origin gets 403, as the MCP specification requires; server-to-server calls carry no Origin and pass.
+	h = http.NewCrossOriginProtection().Handler(h)
 	h = s.loggingMiddleware(h)
 	// Recovery is outermost so it catches panics in every other middleware.
 	h = s.recoveryMiddleware(h)
@@ -384,26 +385,6 @@ func (w *statusRecorder) Flush() {
 // original writer for hijacking, deadline control, etc.
 func (w *statusRecorder) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
-}
-
-// corsMiddleware handles CORS
-func (s *MCPServer) corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		slog.Debug("CORS middleware invoked",
-			"method", strings.ReplaceAll(r.Method, "\n", " "),
-			"path", strings.ReplaceAll(r.URL.Path, "\n", " "))
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Cache-Control")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			slog.Debug("CORS preflight response sent", "path", strings.ReplaceAll(r.URL.Path, "\n", " "))
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }
 
 // toolCatalog returns the canonical description + input schema for every MCP
