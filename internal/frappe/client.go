@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -37,7 +36,6 @@ type Client struct {
 	httpClient  *http.Client
 	rateLimiter *rate.Limiter
 	retryConfig config.RetryConfig
-	cache       sync.Map // Simple in-memory cache
 }
 
 // NewClient creates a new Frappe client (works with any Frappe-based application)
@@ -87,15 +85,6 @@ func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 
 // GetDocument retrieves a single document by doctype and name
 func (c *Client) GetDocument(ctx context.Context, docType, name string) (types.Document, error) {
-	// Check cache first
-	cacheKey := fmt.Sprintf("doc:%s:%s", docType, name)
-	if cached, ok := c.cache.Load(cacheKey); ok {
-		if doc, ok := cached.(types.Document); ok {
-			slog.Debug("Document retrieved from cache", "doctype", docType, "name", name)
-			return doc, nil
-		}
-	}
-
 	endpoint := fmt.Sprintf("/api/resource/%s/%s", url.PathEscape(docType), url.PathEscape(name))
 
 	var response struct {
@@ -105,9 +94,6 @@ func (c *Client) GetDocument(ctx context.Context, docType, name string) (types.D
 	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
 		return nil, fmt.Errorf("failed to get document %s/%s: %w", docType, name, err)
 	}
-
-	// Cache the result
-	c.cache.Store(cacheKey, response.Data)
 
 	slog.Info("Document retrieved successfully", "doctype", docType, "name", name)
 	return response.Data, nil
@@ -176,9 +162,6 @@ func (c *Client) CreateDocument(ctx context.Context, req types.CreateDocumentReq
 		return nil, fmt.Errorf("failed to create document %s: %w", req.DocType, err)
 	}
 
-	// Invalidate cache for this doctype
-	c.invalidateCache(req.DocType)
-
 	slog.Info("Document created successfully", "doctype", req.DocType)
 	return response.Data, nil
 }
@@ -197,10 +180,6 @@ func (c *Client) UpdateDocument(ctx context.Context, req types.UpdateDocumentReq
 		return nil, fmt.Errorf("failed to update document %s/%s: %w", req.DocType, req.Name, err)
 	}
 
-	// Invalidate cache for this specific document
-	cacheKey := fmt.Sprintf("doc:%s:%s", req.DocType, req.Name)
-	c.cache.Delete(cacheKey)
-
 	slog.Info("Document updated successfully", "doctype", req.DocType, "name", req.Name)
 	return response.Data, nil
 }
@@ -214,10 +193,6 @@ func (c *Client) DeleteDocument(ctx context.Context, docType, name string) error
 	if err := c.makeRequest(ctx, "DELETE", endpoint, nil, nil); err != nil {
 		return fmt.Errorf("failed to delete document %s/%s: %w", docType, name, err)
 	}
-
-	// Invalidate cache
-	cacheKey := fmt.Sprintf("doc:%s:%s", docType, name)
-	c.cache.Delete(cacheKey)
 
 	slog.Info("Document deleted successfully", "doctype", docType, "name", name)
 	return nil
@@ -574,24 +549,6 @@ func isRetryableError(err error) bool {
 	return true
 }
 
-// invalidateCache removes all cache entries for a given doctype
-func (c *Client) invalidateCache(docType string) {
-	prefix := fmt.Sprintf("doc:%s:", docType)
-	c.cache.Range(func(key, value interface{}) bool {
-		if keyStr, ok := key.(string); ok && strings.HasPrefix(keyStr, prefix) {
-			c.cache.Delete(key)
-		}
-		return true
-	})
-}
-
-// ClearCache clears all cached data
-func (c *Client) ClearCache() {
-	c.cache.Range(func(key, value interface{}) bool {
-		c.cache.Delete(key)
-		return true
-	})
-}
 
 // RunAggregationQuery executes an aggregation query using frappe.client.get_list
 func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationRequest) ([]types.Document, error) {
@@ -668,15 +625,6 @@ func (c *Client) GetCount(ctx context.Context, docType string, filters map[strin
 
 // GetReportFilters fetches the filter metadata for a report
 func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]types.ReportFilter, error) {
-	// Check cache first
-	cacheKey := fmt.Sprintf("report_filters:%s", reportName)
-	if cached, ok := c.cache.Load(cacheKey); ok {
-		if filters, ok := cached.([]types.ReportFilter); ok {
-			slog.Debug("Report filters retrieved from cache", "report_name", reportName)
-			return filters, nil
-		}
-	}
-
 	// Use Frappe's desk.query_report.get_report_doc method to get report metadata
 	endpoint := "/api/method/frappe.desk.query_report.get_report_doc"
 	
@@ -731,9 +679,6 @@ func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]typ
 			}
 		}
 	}
-	
-	// Cache the result for 5 minutes
-	c.cache.Store(cacheKey, filters)
 	
 	slog.Info("Report filters retrieved successfully", "report_name", reportName, "filter_count", len(filters))
 	return filters, nil
