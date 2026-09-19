@@ -1,7 +1,10 @@
 package config
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -169,7 +172,10 @@ func Load() (*Config, error) {
 	}
 
 	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	// read strictly: a misspelled key would take its zero value, and for auth that value is the insecure one
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&config); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
