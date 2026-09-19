@@ -21,7 +21,8 @@ const golden = "testdata/tools_list.golden.json"
 var update = flag.Bool("update", false, "rewrite "+golden+" from the live registration")
 
 func TestToolsListMatchesSnapshot(t *testing.T) {
-	cfg := &config.Config{ERPNext: config.ERPNextConfig{BaseURL: "http://frappe.invalid"}}
+	// ragbot's config switches the knowledge base on, and that is the list its model sees
+	cfg := &config.Config{ERPNext: config.ERPNextConfig{BaseURL: "http://frappe.invalid"}, Tools: config.ToolsConfig{KnowledgeBase: true}}
 	client, err := frappe.NewClient(cfg.ERPNext)
 	require.NoError(t, err)
 	s, err := NewMCPServer(cfg, client)

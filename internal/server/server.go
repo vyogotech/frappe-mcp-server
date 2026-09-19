@@ -536,8 +536,10 @@ func (s *MCPServer) registerTools() error {
 	// Cross-doctype search
 	reg("global_search", s.tools.GlobalSearch)
 
-	// Retrieval over the user's own documents
-	reg("search_knowledge_base", s.tools.SearchKnowledgeBase)
+	// Retrieval over the user's own documents, where the site has rag
+	if s.config.Tools.KnowledgeBase {
+		reg("search_knowledge_base", s.tools.SearchKnowledgeBase)
+	}
 
 	// Generic analysis tool
 	reg("analyze_document", s.tools.AnalyzeDocument)
@@ -576,7 +578,7 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	tools := make([]map[string]interface{}, 0, len(order))
 	for _, name := range order {
 		meta, ok := catalog[name]
-		if !ok {
+		if !ok || (name == "search_knowledge_base" && !s.config.Tools.KnowledgeBase) {
 			continue
 		}
 		entry := map[string]interface{}{

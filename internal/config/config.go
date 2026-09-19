@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,12 @@ type Config struct {
 	Performance PerformanceConfig `yaml:"performance"`
 	Auth        AuthConfig        `yaml:"auth"`
 	Neo4j       Neo4jConfig       `yaml:"neo4j"`
+	Tools       ToolsConfig       `yaml:"tools"`
+}
+
+// ToolsConfig switches on tools that need more than Frappe itself
+type ToolsConfig struct {
+	KnowledgeBase bool `yaml:"knowledge_base"` // search_knowledge_base answers only where the rag app is installed
 }
 
 // Neo4jConfig represents the configuration for FrappeForge knowledge graph
@@ -252,6 +259,14 @@ func (c *Config) loadFromEnv() error {
 	// Logging configuration
 	if level := os.Getenv("LOG_LEVEL"); level != "" {
 		c.Logging.Level = level
+	}
+	// a deployment whose site has no rag turns the knowledge base off without a config file of its own
+	if kb := os.Getenv("TOOLS_KNOWLEDGE_BASE"); kb != "" {
+		on, err := strconv.ParseBool(kb)
+		if err != nil {
+			return fmt.Errorf("TOOLS_KNOWLEDGE_BASE: %w", err)
+		}
+		c.Tools.KnowledgeBase = on
 	}
 
 	// LLM Provider configuration
