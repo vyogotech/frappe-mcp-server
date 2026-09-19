@@ -79,6 +79,9 @@ type SearchResult struct {
 }
 
 // NewMCPServer creates a new MCP server instance
+// maxRequestBody bounds every request body: tool calls and chat requests are small JSON documents.
+const maxRequestBody = 1 << 20
+
 func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, error) {
 	// Create MCP server
 	server := mcp.NewServer("frappe-mcp-server", "1.0.0")
@@ -183,7 +186,7 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 
 	mcpServer.httpServer = &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-		Handler:           mcpServer.withMiddleware(mux),
+		Handler:           http.MaxBytesHandler(mcpServer.withMiddleware(mux), maxRequestBody),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       cfg.Server.Timeout,
 		WriteTimeout:      cfg.Server.Timeout,
