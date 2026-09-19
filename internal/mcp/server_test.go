@@ -118,8 +118,10 @@ func TestExecuteToolRequestError(t *testing.T) {
 
 	assert.NotNil(t, response)
 	assert.Equal(t, "test-1", response.ID)
-	assert.NotNil(t, response.Error)
-	assert.Equal(t, 500, response.Error.Code)
+	assert.Nil(t, response.Error)
+	assert.True(t, response.IsError)
+	require.Len(t, response.Content, 1)
+	assert.Contains(t, response.Content[0].Text, assert.AnError.Error())
 }
 
 func TestToolRequestGeneration(t *testing.T) {

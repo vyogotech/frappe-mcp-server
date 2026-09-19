@@ -183,9 +183,16 @@ func TestStreamableHTTP_ToolsCall_HandlerError(t *testing.T) {
 
 	var resp JSONRPCResponse
 	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
-	require.NotNil(t, resp.Error)
-	assert.Equal(t, JSONRPCServerError, resp.Error.Code)
-	assert.Contains(t, resp.Error.Message, "tool exploded")
+	require.Nil(t, resp.Error)
+
+	raw, err := json.Marshal(resp.Result)
+	require.NoError(t, err)
+
+	var result toolsCallResult
+	require.NoError(t, json.Unmarshal(raw, &result))
+	assert.True(t, result.IsError)
+	require.Len(t, result.Content, 1)
+	assert.Contains(t, result.Content[0].Text, "tool exploded")
 }
 
 func TestStreamableHTTP_ToolsCall_MissingName(t *testing.T) {
