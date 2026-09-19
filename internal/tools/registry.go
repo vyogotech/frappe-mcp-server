@@ -1064,8 +1064,9 @@ func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (
 // SearchKnowledgeBase searches the documents the user has uploaded to Drive.
 func (t *ToolRegistry) SearchKnowledgeBase(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
-		Query string `json:"query"`
-		Limit int    `json:"limit,omitempty"`
+		Query   string `json:"query"`
+		Limit   int    `json:"limit,omitempty"`
+		Session string `json:"session,omitempty"`
 	}
 
 	if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -1075,7 +1076,7 @@ func (t *ToolRegistry) SearchKnowledgeBase(ctx context.Context, request mcp.Tool
 		return nil, fmt.Errorf("query is required")
 	}
 
-	passages, err := t.frappeClient.SearchKnowledgeBase(ctx, params.Query, params.Limit)
+	passages, err := t.frappeClient.SearchKnowledgeBase(ctx, params.Query, params.Limit, params.Session)
 	if err != nil {
 		return nil, err
 	}

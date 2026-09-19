@@ -527,8 +527,9 @@ func toolCatalog() map[string]mcp.ToolMeta {
 		"search_knowledge_base": {
 			Description: "Search the user's uploaded documents (HR, expense, travel, security and vehicle policies) for a passage answering a question. Use for any policy, entitlement, limit or deadline question.",
 			InputSchema: objSchema(map[string]interface{}{
-				"query": strProp("The user's question, in their own words"),
-				"limit": map[string]interface{}{"type": "integer", "description": "Maximum passages to return (default 5)"},
+				"query":   strProp("The user's question, in their own words"),
+				"limit":   map[string]interface{}{"type": "integer", "description": "Maximum passages to return (default 5)"},
+				"session": strProp("The chat the question comes from, whose attached files are searched too. Filled by the agent, not the model"),
 			}, "query"),
 		},
 		"global_search": {

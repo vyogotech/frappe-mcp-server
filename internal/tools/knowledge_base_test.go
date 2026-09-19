@@ -88,6 +88,20 @@ func TestSearchKnowledgeBase(t *testing.T) {
 		assert.Equal(t, "5", rec.query.Get("limit"))
 	})
 
+	t.Run("passes the chat on, so its attached files are searched too", func(t *testing.T) {
+		client, rec := newKBFrappe(t, passages)
+		_, err := searchKB(t, NewRegistry(client), `{"query":"q","session":"chat-1"}`)
+		require.NoError(t, err)
+		assert.Equal(t, "chat-1", rec.query.Get("session"))
+	})
+
+	t.Run("sends no chat when none is named", func(t *testing.T) {
+		client, rec := newKBFrappe(t, passages)
+		_, err := searchKB(t, NewRegistry(client), `{"query":"q"}`)
+		require.NoError(t, err)
+		assert.False(t, rec.query.Has("session"))
+	})
+
 	t.Run("a question is required", func(t *testing.T) {
 		client, rec := newKBFrappe(t, passages)
 		_, err := searchKB(t, NewRegistry(client), `{"limit":3}`)
