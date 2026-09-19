@@ -494,37 +494,37 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 
 	// Check for HTTP errors
 	if resp.StatusCode >= 400 {
+		// the message carries Frappe's one-line exception, never the raw body (a traceback, sometimes document text) or
+		// the endpoint (whose query string holds rag.search's question): callers log it and pass it to the model
 		var erpError types.ERPNextError
-		if err := json.Unmarshal(responseBody, &erpError); err != nil {
-			// If we can't parse the error, create a generic one
-			erpError = types.ERPNextError{
-				Message:    string(responseBody),
-				StatusCode: resp.StatusCode,
-			}
-		}
+		_ = json.Unmarshal(responseBody, &erpError)
 		erpError.StatusCode = resp.StatusCode
-		
+		detail := erpError.Exception
+		if detail == "" {
+			detail = erpError.ExcType
+		}
+
 		// If message is empty, provide a more helpful error based on status code
 		if erpError.Message == "" {
 			switch resp.StatusCode {
 			case 401:
-				erpError.Message = fmt.Sprintf("Authentication failed (HTTP %d). Please check your API credentials or OAuth2 token. Raw response: %s", resp.StatusCode, string(responseBody))
+				erpError.Message = fmt.Sprintf("Authentication failed (HTTP %d). Please check your API credentials or OAuth2 token. %s", resp.StatusCode, detail)
 			case 403:
-				erpError.Message = fmt.Sprintf("Permission denied (HTTP %d). The current user/API key does not have permission for this operation. Raw response: %s", resp.StatusCode, string(responseBody))
+				erpError.Message = fmt.Sprintf("Permission denied (HTTP %d). The current user/API key does not have permission for this operation. %s", resp.StatusCode, detail)
 			case 404:
-				erpError.Message = fmt.Sprintf("Resource not found (HTTP %d). Endpoint: %s. Raw response: %s", resp.StatusCode, endpoint, string(responseBody))
+				erpError.Message = fmt.Sprintf("Resource not found (HTTP %d). %s", resp.StatusCode, detail)
 			case 500:
-				erpError.Message = fmt.Sprintf("Internal server error (HTTP %d). Raw response: %s", resp.StatusCode, string(responseBody))
+				erpError.Message = fmt.Sprintf("Internal server error (HTTP %d). %s", resp.StatusCode, detail)
 			default:
-				erpError.Message = fmt.Sprintf("HTTP error %d. Raw response: %s", resp.StatusCode, string(responseBody))
+				erpError.Message = fmt.Sprintf("HTTP error %d. %s", resp.StatusCode, detail)
 			}
 		}
-		
+
+		// the query string holds rag.search's question and the body can hold document text
 		slog.Error("Frappe API error",
 			"status_code", resp.StatusCode,
-			"endpoint", endpoint,
-			"message", erpError.Message,
-			"response_body", string(responseBody))
+			"path", strings.SplitN(endpoint, "?", 2)[0],
+			"exc_type", erpError.ExcType)
 		
 		return &erpError
 	}

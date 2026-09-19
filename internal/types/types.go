@@ -8,6 +8,8 @@ type ERPNextError struct {
 	Message    string `json:"message"`
 	StatusCode int    `json:"status_code"`
 	Exc        string `json:"exc,omitempty"`
+	ExcType    string `json:"exc_type,omitempty"`
+	Exception  string `json:"exception,omitempty"`
 }
 
 func (e *ERPNextError) Error() string {

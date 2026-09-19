@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -326,58 +325,44 @@ func (s *MCPServer) recoveryMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// loggingMiddleware logs HTTP requests
+// loggingMiddleware logs each request's method, path, status, size and duration. Never a body: bodies hold users'
+// questions, tool arguments and document passages (the tool call itself is audited in internal/mcp).
 func (s *MCPServer) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		var reqBodyCopy, respBodyCopy strings.Builder
+		slog.Info("HTTP request received",
+			"method", strings.ReplaceAll(r.Method, "\n", " "),
+			"path", strings.ReplaceAll(r.URL.Path, "\n", " "),
+			"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "),
+			"user_agent", strings.ReplaceAll(r.UserAgent(), "\n", " "))
 
-		// Read and log request body (if POST/PUT)
-		if r.Method == "POST" || r.Method == "PUT" {
-			bodyBytes, _ := io.ReadAll(r.Body)
-			reqBodyCopy.Write(bodyBytes)
-			r.Body = io.NopCloser(strings.NewReader(reqBodyCopy.String()))
-			slog.Info("HTTP request received",
-				"method", strings.ReplaceAll(r.Method, "\n", " "),
-				"path", strings.ReplaceAll(r.URL.Path, "\n", " "),
-				"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "),
-				"user_agent", strings.ReplaceAll(r.UserAgent(), "\n", " "),
-				"body", reqBodyCopy.String())
-		} else {
-			slog.Info("HTTP request received",
-				"method", strings.ReplaceAll(r.Method, "\n", " "),
-				"path", strings.ReplaceAll(r.URL.Path, "\n", " "),
-				"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "),
-				"user_agent", strings.ReplaceAll(r.UserAgent(), "\n", " "))
-		}
-
-		// Wrap ResponseWriter to capture response body
-		ww := &responseWriterWithBody{ResponseWriter: w, body: &respBodyCopy, status: 200}
+		ww := &statusRecorder{ResponseWriter: w, status: 200}
 		next.ServeHTTP(ww, r)
 
 		slog.Info("HTTP request completed",
 			"method", strings.ReplaceAll(r.Method, "\n", " "),
 			"path", strings.ReplaceAll(r.URL.Path, "\n", " "),
 			"status", ww.status,
-			"duration", time.Since(start),
-			"response_body", respBodyCopy.String())
+			"bytes", ww.bytes,
+			"duration", time.Since(start))
 	})
 }
 
-type responseWriterWithBody struct {
+type statusRecorder struct {
 	http.ResponseWriter
-	body   *strings.Builder
 	status int
+	bytes  int
 }
 
-func (w *responseWriterWithBody) WriteHeader(statusCode int) {
+func (w *statusRecorder) WriteHeader(statusCode int) {
 	w.status = statusCode
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-func (w *responseWriterWithBody) Write(b []byte) (int, error) {
-	w.body.Write(b)
-	return w.ResponseWriter.Write(b)
+func (w *statusRecorder) Write(b []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(b)
+	w.bytes += n
+	return n, err
 }
 
 // Flush forwards to the underlying writer so SSE handlers downstream of the
@@ -385,7 +370,7 @@ func (w *responseWriterWithBody) Write(b []byte) (int, error) {
 // satisfies http.ResponseWriter but NOT http.Flusher — the SSE handler's
 // `w.(http.Flusher)` type assertion fails and the stream returns
 // "SSE not supported".
-func (w *responseWriterWithBody) Flush() {
+func (w *statusRecorder) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
@@ -394,7 +379,7 @@ func (w *responseWriterWithBody) Flush() {
 // Unwrap exposes the underlying ResponseWriter so http.ResponseController
 // (and any other middleware that walks the wrapper chain) can find the
 // original writer for hijacking, deadline control, etc.
-func (w *responseWriterWithBody) Unwrap() http.ResponseWriter {
+func (w *statusRecorder) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
@@ -665,7 +650,7 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("Tool call received", "tool", toolName, "request_id", request.ID, "params", request.Params)
+	slog.Info("Tool call received", "tool", toolName, "request_id", request.ID)
 	request.Tool = toolName
 	if request.ID == "" {
 		request.ID = fmt.Sprintf("http-%d", time.Now().UnixNano())
@@ -675,44 +660,44 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	var result *mcp.ToolResponse
 	var err error
 
-	slog.Info("Executing tool", "tool", toolName, "request_id", request.ID, "params", request.Params)
+	slog.Info("Executing tool", "tool", toolName, "request_id", request.ID)
 	switch toolName {
 	// Core CRUD tools
 	case "get_document":
-		slog.Info("Calling ERPNext GetDocument", "params", request.Params)
+		slog.Info("Calling ERPNext GetDocument")
 		result, err = s.tools.GetDocument(ctx, request)
 	case "list_documents":
-		slog.Info("Calling ERPNext ListDocuments", "params", request.Params)
+		slog.Info("Calling ERPNext ListDocuments")
 		result, err = s.tools.ListDocuments(ctx, request)
 	case "create_document":
-		slog.Info("Calling ERPNext CreateDocument", "params", request.Params)
+		slog.Info("Calling ERPNext CreateDocument")
 		result, err = s.tools.CreateDocument(ctx, request)
 	case "update_document":
-		slog.Info("Calling ERPNext UpdateDocument", "params", request.Params)
+		slog.Info("Calling ERPNext UpdateDocument")
 		result, err = s.tools.UpdateDocument(ctx, request)
 	case "delete_document":
-		slog.Info("Calling ERPNext DeleteDocument", "params", request.Params)
+		slog.Info("Calling ERPNext DeleteDocument")
 		result, err = s.tools.DeleteDocument(ctx, request)
 	case "search_documents":
-		slog.Info("Calling ERPNext SearchDocuments", "params", request.Params)
+		slog.Info("Calling ERPNext SearchDocuments")
 		result, err = s.tools.SearchDocuments(ctx, request)
 	case "analyze_document":
-		slog.Info("Calling ERPNext AnalyzeDocument", "params", request.Params)
+		slog.Info("Calling ERPNext AnalyzeDocument")
 		result, err = s.tools.AnalyzeDocument(ctx, request)
 	case "get_project_status":
-		slog.Info("Calling ERPNext GetProjectStatus", "params", request.Params)
+		slog.Info("Calling ERPNext GetProjectStatus")
 		result, err = s.tools.GetProjectStatus(ctx, request)
 	case "analyze_project_timeline":
-		slog.Info("Calling ERPNext AnalyzeProjectTimeline", "params", request.Params)
+		slog.Info("Calling ERPNext AnalyzeProjectTimeline")
 		result, err = s.tools.AnalyzeProjectTimeline(ctx, request)
 	case "resource_utilization_analysis":
-		slog.Info("Calling ERPNext ResourceUtilizationAnalysis", "params", request.Params)
+		slog.Info("Calling ERPNext ResourceUtilizationAnalysis")
 		result, err = s.tools.ResourceUtilizationAnalysis(ctx, request)
 	case "budget_variance_analysis":
-		slog.Info("Calling ERPNext BudgetVarianceAnalysis", "params", request.Params)
+		slog.Info("Calling ERPNext BudgetVarianceAnalysis")
 		result, err = s.tools.BudgetVarianceAnalysis(ctx, request)
 	case "global_search":
-		slog.Info("Calling ERPNext GlobalSearch", "params", request.Params)
+		slog.Info("Calling ERPNext GlobalSearch")
 		result, err = s.tools.GlobalSearch(ctx, request)
 	default:
 		http.Error(w, "Tool not found", http.StatusNotFound)
@@ -726,7 +711,7 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("Tool executed successfully", "tool", toolName, "request_id", request.ID, "erpnext_result", result)
+	slog.Info("Tool executed successfully", "tool", toolName, "request_id", request.ID)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		slog.Error("Failed to encode tool response", "error", err)
@@ -778,9 +763,9 @@ func (s *MCPServer) handleChatJSON(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if chatRequest.Context.UserEmail != "" {
-		slog.Info("Processing chat query", "message", chatRequest.Message, "user_email", chatRequest.Context.UserEmail)
+		slog.Info("Processing chat query", "user_email", chatRequest.Context.UserEmail)
 	} else {
-		slog.Info("Processing chat query", "message", chatRequest.Message)
+		slog.Info("Processing chat query")
 	}
 
 	// Declare variables for query processing
@@ -894,7 +879,7 @@ func (s *MCPServer) handleChatJSON(w http.ResponseWriter, r *http.Request) {
 
 	// Special handling for global_search queries
 	if queryIntent.Action == "global_search" || queryIntent.Action == "search_all" {
-		slog.Info("Processing global search query", "message", chatRequest.Message)
+		slog.Info("Processing global search query")
 		params := map[string]interface{}{
 			"text": chatRequest.Message,
 		}
@@ -1284,7 +1269,7 @@ Respond with JSON only:
 	// Validate JSON
 	var params map[string]interface{}
 	if err := json.Unmarshal([]byte(cleanedResponse), &params); err != nil {
-		slog.Warn("Failed to parse aggregation params JSON", "response", cleanedResponse, "error", err)
+		slog.Warn("Failed to parse aggregation params JSON", "error", err)
 		return nil, fmt.Errorf("invalid aggregation params JSON: %w", err)
 	}
 
@@ -1446,7 +1431,7 @@ Respond with JSON only:
 	// Validate JSON
 	var params map[string]interface{}
 	if err := json.Unmarshal([]byte(cleanedResponse), &params); err != nil {
-		slog.Warn("Failed to parse report params JSON", "response", cleanedResponse, "error", err)
+		slog.Warn("Failed to parse report params JSON", "error", err)
 		return nil, fmt.Errorf("invalid report params JSON: %w", err)
 	}
 
@@ -1535,7 +1520,7 @@ Respond with JSON only:
 	// Validate JSON
 	var params map[string]interface{}
 	if err := json.Unmarshal([]byte(cleanedResponse), &params); err != nil {
-		slog.Warn("Failed to parse create params JSON", "response", cleanedResponse, "error", err)
+		slog.Warn("Failed to parse create params JSON", "error", err)
 		return nil, fmt.Errorf("invalid create params JSON: %w", err)
 	}
 
@@ -1618,7 +1603,7 @@ Respond with JSON only:
 	// Validate JSON
 	var params map[string]interface{}
 	if err := json.Unmarshal([]byte(cleanedResponse), &params); err != nil {
-		slog.Warn("Failed to parse update params JSON", "response", cleanedResponse, "error", err)
+		slog.Warn("Failed to parse update params JSON", "error", err)
 		return nil, fmt.Errorf("invalid update params JSON: %w", err)
 	}
 
@@ -1735,7 +1720,7 @@ func (s *MCPServer) extractQueryIntent(ctx context.Context, query string) (*Quer
 
 	// If query has "list" OR generic data words, but NO aggregation keywords, it's a list query
 	if (hasListKeyword || hasGenericDataWord) && !hasAggregationKeyword {
-		slog.Info("Preprocessing detected simple list query", "query", query)
+		slog.Info("Preprocessing detected simple list query")
 
 		// Extract doctype from query using simple pattern matching
 		doctype := extractDoctypeFromQuery(queryLower)
@@ -1952,13 +1937,13 @@ Now respond for the user's query:`, query)
 	}
 
 	if err := json.Unmarshal([]byte(cleanedResponse), &aiExtraction); err != nil {
-		slog.Warn("Failed to parse AI response as JSON", "response", cleanedResponse, "error", err)
+		slog.Warn("Failed to parse AI response as JSON", "error", err)
 		return nil, fmt.Errorf("AI response was not valid JSON: %w", err)
 	}
 
 	// Check if query is ERPNext-related
 	if !aiExtraction.IsERPNextRelated {
-		slog.Info("Query is not ERPNext-related", "query", query)
+		slog.Info("Query is not ERPNext-related")
 		return &QueryIntent{
 			Action:           "non_erpnext",
 			IsERPNextRelated: false,
@@ -2240,7 +2225,7 @@ func (s *MCPServer) executeTool(ctx context.Context, toolName string, params jso
 		Params: params,
 	}
 
-	slog.Info("Executing tool", "tool", toolName, "params", string(params))
+	slog.Info("Executing tool", "tool", toolName)
 
 	switch toolName {
 	// Core generic tools (work with ANY doctype)
