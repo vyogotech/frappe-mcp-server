@@ -54,6 +54,7 @@ type ToolRequest struct {
 type ToolResponse struct {
 	ID      string    `json:"id"`
 	Content []Content `json:"content"`
+	IsError bool      `json:"isError,omitempty"`
 	Error   *Error    `json:"error,omitempty"`
 }
 
@@ -274,9 +275,11 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 		}
 		span.SetAttributes(attribute.Bool("tool.success", false))
 		span.SetStatus(codes.Error, msg)
+		// the tool ran and failed: MCP reports that as a result the model can read, not as a JSON-RPC error
 		return &ToolResponse{
-			ID:    request.ID,
-			Error: &Error{Code: 500, Message: msg},
+			ID:      request.ID,
+			Content: []Content{{Type: "text", Text: msg}},
+			IsError: true,
 		}
 	}
 

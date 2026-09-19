@@ -176,7 +176,7 @@ func (s *Server) dispatchToolsCall(ctx context.Context, req JSONRPCRequest) JSON
 	}
 	return newJSONRPCResult(req.ID, toolsCallResult{
 		Content: content,
-		IsError: false,
+		IsError: resp.IsError,
 	})
 }
 
