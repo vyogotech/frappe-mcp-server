@@ -12,6 +12,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+
+	"frappe-mcp-server/internal/auth"
 )
 
 // tracerName is the instrumentation scope for mcp dispatch spans.
@@ -128,7 +130,9 @@ func (s *Server) RegisterToolWithSchema(name, description string, inputSchema ma
 				Tool:   name,
 				Params: req.Params.Arguments,
 			}
+			start := time.Now()
 			resp, err := handler(ctx, toolReq)
+			auditToolCall(ctx, name, req.Params.Arguments, err, time.Since(start))
 			if err != nil {
 				// Return as a tool-level error (IsError=true), not a protocol error.
 				return &gosdk.CallToolResult{
@@ -145,6 +149,22 @@ func (s *Server) RegisterToolWithSchema(name, description string, inputSchema ma
 		},
 	)
 	slog.Debug("Registered MCP tool", "name", name, "has_schema", len(inputSchema) > 1)
+}
+
+// auditToolCall writes the one line every tool call leaves, over HTTP and stdio alike: who, which tool and record, how
+// it ended. Never an argument or result value, which hold users' questions and documents.
+func auditToolCall(ctx context.Context, tool string, arguments json.RawMessage, err error, took time.Duration) {
+	var ids struct{ Doctype, Name string }
+	_ = json.Unmarshal(arguments, &ids)
+	user, outcome, errorType := "", "ok", ""
+	if u := auth.UserFromContext(ctx); u != nil {
+		user = u.Email
+	}
+	if err != nil {
+		outcome, errorType = "tool_error", fmt.Sprintf("%T", err)
+	}
+	slog.Info("tool call", "user", user, "tool", tool, "doctype", ids.Doctype, "name", ids.Name,
+		"outcome", outcome, "error_type", errorType, "duration_ms", took.Milliseconds())
 }
 
 // ToolMetadata returns the description and input schema registered for a tool,
