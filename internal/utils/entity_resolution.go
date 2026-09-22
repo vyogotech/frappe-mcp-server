@@ -86,7 +86,6 @@ func FuzzyMatch(a, b string) bool {
 	return false
 }
 
-// isPhoneticMatch returns true if two words are phonetically similar
 func isPhoneticMatch(a, b string) bool {
 	// Common phonetic substitutions
 	phoneticPairs := []struct{ pattern, replacement string }{
@@ -107,7 +106,7 @@ func isPhoneticMatch(a, b string) bool {
 	return false
 }
 
-// isVowelSwapOrTransposition returns true if two short words differ by a common vowel swap or transposition
+// isVowelSwapOrTransposition reports whether a and b differ in exactly one vowel; it checks no transposition.
 func isVowelSwapOrTransposition(a, b []rune) bool {
 	if len(a) != len(b) {
 		return false
@@ -126,7 +125,6 @@ func isVowelSwapOrTransposition(a, b []rune) bool {
 	return diffs == 1
 }
 
-// isSubsequence returns true if a is a subsequence of b
 func isSubsequence(a, b []rune) bool {
 	j := 0
 	for i := 0; i < len(b) && j < len(a); i++ {
@@ -137,12 +135,10 @@ func isSubsequence(a, b []rune) bool {
 	return j == len(a)
 }
 
-// LevenshteinDistance computes the edit distance between two strings (byte-based, for compatibility)
 func LevenshteinDistance(a, b string) int {
 	return LevenshteinDistanceRunes([]rune(a), []rune(b))
 }
 
-// LevenshteinDistanceRunes computes the edit distance between two rune slices
 func LevenshteinDistanceRunes(a, b []rune) int {
 	da := make([][]int, len(a)+1)
 	for i := range da {
@@ -180,7 +176,7 @@ func min(a, b, c int) int {
 	return c
 }
 
-// ResolveEntity attempts to resolve a user-friendly name to an internal ID from a list of candidates
+// ResolveEntity returns the first candidate FuzzyMatch accepts, not the closest one.
 func ResolveEntity(userInput string, candidates []string) (string, bool) {
 	for _, candidate := range candidates {
 		if FuzzyMatch(userInput, candidate) {

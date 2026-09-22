@@ -22,7 +22,6 @@ import (
 	"github.com/ollama/ollama/api"
 )
 
-// MCPRequest represents a JSON-RPC 2.0 request to the MCP server
 type MCPRequest struct {
 	JSONRPC string      `json:"jsonrpc"`
 	ID      int         `json:"id"`
@@ -30,7 +29,6 @@ type MCPRequest struct {
 	Params  interface{} `json:"params"`
 }
 
-// MCPResponse represents a JSON-RPC 2.0 response from the MCP server
 type MCPResponse struct {
 	JSONRPC string      `json:"jsonrpc"`
 	ID      int         `json:"id"`
@@ -38,42 +36,35 @@ type MCPResponse struct {
 	Error   *MCPError   `json:"error,omitempty"`
 }
 
-// MCPError represents an MCP error
 type MCPError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-// Tool represents an MCP tool
 type Tool struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
 	InputSchema interface{} `json:"inputSchema"`
 }
 
-// ToolsListResult represents the result of tools/list
 type ToolsListResult struct {
 	Tools []Tool `json:"tools"`
 }
 
-// ToolCallParams represents parameters for tools/call
 type ToolCallParams struct {
 	Name      string                 `json:"name"`
 	Arguments map[string]interface{} `json:"arguments"`
 }
 
-// ToolCallResult represents the result of tools/call
 type ToolCallResult struct {
 	Content []ToolContent `json:"content"`
 }
 
-// ToolContent represents tool call content
 type ToolContent struct {
 	Type string `json:"type"`
 	Text string `json:"text"`
 }
 
-// OllamaERPNextClient manages the integration between Ollama and ERPNext MCP server
 type OllamaERPNextClient struct {
 	mcpServerPath string
 	ollamaModel   string
@@ -86,14 +77,12 @@ type OllamaERPNextClient struct {
 	debugMode     bool // New: enable debug/raw mode
 }
 
-// New: Enable debug logging globally
 func init() {
 	// Enable detailed debug logging with timestamps and file info
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.Println("[DEBUG] Logging initialized: timestamps and file info enabled")
 }
 
-// NewOllamaERPNextClient creates a new client
 func NewOllamaERPNextClient(mcpServerPath, ollamaModel string, debugMode bool) *OllamaERPNextClient {
 	log.Printf("[INIT] Creating OllamaERPNextClient | MCP: %s | Model: %s | Debug: %v",
 		strings.ReplaceAll(mcpServerPath, "\n", " "),
@@ -125,7 +114,6 @@ func NewOllamaERPNextClient(mcpServerPath, ollamaModel string, debugMode bool) *
 	}
 }
 
-// StartMCPServer starts the MCP server subprocess
 func (c *OllamaERPNextClient) StartMCPServer() error {
 	log.Printf("[DEBUG] Starting MCP server subprocess: %s", strings.ReplaceAll(c.mcpServerPath, "\n", " "))
 
@@ -225,7 +213,6 @@ func (c *OllamaERPNextClient) StartMCPServer() error {
 	return nil
 }
 
-// sendMCPRequest sends a request to the MCP server and returns the response
 func (c *OllamaERPNextClient) sendMCPRequest(request MCPRequest) (*MCPResponse, error) {
 	requestBytes, err := json.Marshal(request)
 	if err != nil {
@@ -331,7 +318,6 @@ func (c *OllamaERPNextClient) CallTool(toolName string, arguments map[string]int
 	return "No response from tool", nil
 }
 
-// GetToolsDescription returns a description of available tools for the LLM
 func (c *OllamaERPNextClient) GetToolsDescription() string {
 	var builder strings.Builder
 	builder.WriteString("Available ERPNext tools:\n\n")
@@ -376,7 +362,7 @@ func (c *OllamaERPNextClient) GetToolsDescription() string {
 	return builder.String()
 }
 
-// ChatWithOllama sends a message to Ollama with tool context
+// ChatWithOllama returns the message it was given, then the model's whole reply.
 func (c *OllamaERPNextClient) ChatWithOllama(ctx context.Context, userMessage string) (string, string, error) {
 	log.Printf("[DEBUG] Sending prompt to Ollama (model: %s): %s",
 		strings.ReplaceAll(c.ollamaModel, "\n", " "),
@@ -454,8 +440,7 @@ User question: %s`, c.GetToolsDescription(), userMessage),
 	return userMessage, responseContent.String(), nil
 }
 
-// ProcessOllamaResponse processes Ollama response and executes tool calls if needed
-// Now takes userQuestion as argument for LLM grounding
+// ProcessOllamaResponse runs the response's CALL_TOOL:<name>:<json> lines, or returns it unchanged if it has none.
 func (c *OllamaERPNextClient) ProcessOllamaResponse(response string, userQuestion string) (string, error) {
 	log.Printf("[DEBUG] Processing Ollama response for tool calls: %s", strings.ReplaceAll(response, "\n", " "))
 
@@ -595,7 +580,7 @@ YOUR RESPONSE MUST BE FACTUAL AND CITE THE EXACT DATA.`,
 	return finalResult, nil
 }
 
-// ResolveEntityWithFallback resolves an entity name with fallback options
+// ResolveEntityWithFallback falls back to the first search result when none matches the input.
 func (c *OllamaERPNextClient) ResolveEntityWithFallback(ctx context.Context, doctype, userInput string) (string, error) {
 	// 1. Try global search
 	searchArgs := map[string]interface{}{
@@ -637,7 +622,6 @@ func (c *OllamaERPNextClient) ResolveEntityWithFallback(ctx context.Context, doc
 	return "", fmt.Errorf("could not resolve entity for input: %s", userInput)
 }
 
-// preprocessUserInput uses LLM to extract intent and entities from user input
 func (c *OllamaERPNextClient) preprocessUserInput(ctx context.Context, userInput string) (intent string, entities map[string]string, llmInput string, llmOutput string, err error) {
 	prompt := fmt.Sprintf(`Extract the business intent and all relevant entities (like project names, customer names, dates, specific fields being queried) from the following user message. Respond ONLY in JSON with fields 'intent' and 'entities' (a map of entity type to value). Do not include any explanation or markdown, just the JSON object.
 

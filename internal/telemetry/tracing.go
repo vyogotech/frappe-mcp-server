@@ -19,7 +19,6 @@ import (
 
 const serviceName = "frappe-mcp-server"
 
-// noopShutdown is returned when telemetry is disabled.
 func noopShutdown(_ context.Context) error { return nil }
 
 // Init sets the global tracer provider; the caller must defer the returned shutdown, which flushes pending spans.

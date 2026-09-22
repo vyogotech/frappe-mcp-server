@@ -12,9 +12,6 @@ import (
 	"frappe-mcp-server/internal/llm"
 )
 
-// stubLLMClient is a minimal llm.Client used to verify the legacy-fallback
-// path of generateWithLLM. Returns a known string from Generate; never
-// recurses back into MCPServer.
 type stubLLMClient struct{}
 
 func (stubLLMClient) Generate(ctx context.Context, prompt string) (string, error) {
@@ -22,9 +19,7 @@ func (stubLLMClient) Generate(ctx context.Context, prompt string) (string, error
 }
 func (stubLLMClient) Provider() string { return "stub" }
 
-// TestGenerateWithLLM_LegacyClientFallback verifies that when llmManager is
-// nil but llmClient is set, generateWithLLM delegates to the legacy client
-// and does NOT recurse. Without the fix, this test stack-overflows.
+// With no manager, generateWithLLM must call the legacy client, not recurse into itself.
 func TestGenerateWithLLM_LegacyClientFallback(t *testing.T) {
 	s := &MCPServer{
 		llmClient:  stubLLMClient{},
@@ -79,8 +74,7 @@ func TestWithMiddleware_PublicPathsBypassAuth(t *testing.T) {
 	}
 }
 
-// mockOAuthEndpointTest is the loopback base URL referenced from the auth
-// middleware test. Extracted to a constant to dodge gosec G101.
+// mockOAuthEndpointTest is a constant because gosec G101 flags TokenInfoURL string literals as hardcoded credentials.
 const mockOAuthEndpointTest = "http://localhost:8000"
 
 // These three tools return placeholder numbers, so executeTool must not dispatch them.

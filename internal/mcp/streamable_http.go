@@ -59,7 +59,6 @@ func (s *Server) HandleStreamableHTTP(w http.ResponseWriter, r *http.Request) {
 	writeJSONRPC(w, resp)
 }
 
-// dispatchJSONRPC routes a JSON-RPC request to the appropriate handler.
 func (s *Server) dispatchJSONRPC(ctx context.Context, req JSONRPCRequest) JSONRPCResponse {
 	switch req.Method {
 	case "initialize":
@@ -73,8 +72,6 @@ func (s *Server) dispatchJSONRPC(ctx context.Context, req JSONRPCRequest) JSONRP
 	}
 }
 
-// dispatchInitialize handles the JSON-RPC "initialize" method. Returns the
-// MCP protocol version and the server's tool capability advertisement.
 func (s *Server) dispatchInitialize(req JSONRPCRequest) JSONRPCResponse {
 	return newJSONRPCResult(req.ID, initializeResult{
 		ProtocolVersion: "2024-11-05",
@@ -88,7 +85,6 @@ func (s *Server) dispatchInitialize(req JSONRPCRequest) JSONRPCResponse {
 	})
 }
 
-// dispatchToolsList returns each registered tool with the description and input schema given at registration.
 func (s *Server) dispatchToolsList(req JSONRPCRequest) JSONRPCResponse {
 	tools := make([]toolDefinition, 0, len(s.toolNames))
 	for _, name := range s.toolNames {
@@ -102,7 +98,6 @@ func (s *Server) dispatchToolsList(req JSONRPCRequest) JSONRPCResponse {
 	return newJSONRPCResult(req.ID, toolsListResult{Tools: tools})
 }
 
-// toolsCallParams is the params shape for the JSON-RPC tools/call method.
 type toolsCallParams struct {
 	Name      string          `json:"name"`
 	Arguments json.RawMessage `json:"arguments"`
@@ -169,9 +164,7 @@ func (s *Server) dispatchToolsCall(ctx context.Context, req JSONRPCRequest) JSON
 	})
 }
 
-// writeJSONRPC encodes a JSON-RPC response and writes it with HTTP 200.
-// JSON-RPC errors travel in the body, not the HTTP layer (per spec), so this
-// helper always uses status 200.
+// writeJSONRPC always answers 200: a JSON-RPC error travels in the body, not in the HTTP status.
 func writeJSONRPC(w http.ResponseWriter, resp JSONRPCResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -180,9 +173,7 @@ func writeJSONRPC(w http.ResponseWriter, resp JSONRPCResponse) {
 	}
 }
 
-// acceptsJSON reports whether the Accept header allows application/json.
-// Empty header means "anything", which is fine. */* is fine. Specific
-// application/json is fine. Pure text/event-stream is not.
+// acceptsJSON reports whether a non-empty Accept header allows application/json; callers accept an empty one.
 func acceptsJSON(accept string) bool {
 	for _, part := range strings.Split(accept, ",") {
 		mediaType := strings.ToLower(strings.TrimSpace(strings.SplitN(part, ";", 2)[0]))

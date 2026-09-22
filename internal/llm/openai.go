@@ -13,8 +13,6 @@ import (
 	"frappe-mcp-server/internal/config"
 )
 
-// OpenAICompatibleClient implements the Client interface for OpenAI-compatible APIs
-// This works with: OpenAI, Together.ai, Groq, Ollama, LocalAI, LM Studio, OpenRouter, Replicate, etc.
 type OpenAICompatibleClient struct {
 	apiKey       string
 	model        string
@@ -25,7 +23,6 @@ type OpenAICompatibleClient struct {
 	providerName string
 }
 
-// NewOpenAICompatibleClient creates a new OpenAI-compatible client
 func NewOpenAICompatibleClient(cfg config.LLMConfig) (*OpenAICompatibleClient, error) {
 	// Detect provider name from base URL for better logging
 	providerName := "openai-compatible"
@@ -58,12 +55,10 @@ func NewOpenAICompatibleClient(cfg config.LLMConfig) (*OpenAICompatibleClient, e
 	}, nil
 }
 
-// Provider returns the provider name
 func (c *OpenAICompatibleClient) Provider() string {
 	return c.providerName
 }
 
-// Generate generates a completion from the given prompt
 func (c *OpenAICompatibleClient) Generate(ctx context.Context, prompt string) (string, error) {
 	requestBody := map[string]interface{}{
 		"model": c.model,
@@ -120,9 +115,6 @@ func (c *OpenAICompatibleClient) Generate(ctx context.Context, prompt string) (s
 	return result.Choices[0].Message.Content, nil
 }
 
-// GenerateStream implements the Streamer interface.
-// It requests a streaming completion (stream:true) and sends each content
-// token into the returned channel, closing it when done or on error.
 func (c *OpenAICompatibleClient) GenerateStream(ctx context.Context, prompt string) (<-chan string, error) {
 	requestBody := map[string]interface{}{
 		"model": c.model,

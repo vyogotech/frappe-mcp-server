@@ -369,7 +369,6 @@ func (c *TestClient) printResponse(response *MCPToolResponse) {
 	}
 }
 
-// Test API methods
 func (c *TestClient) testHealthCheck() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -417,7 +416,6 @@ func (c *TestClient) testPortfolioAPI() error {
 	return nil
 }
 
-// Demo scenarios
 func (c *TestClient) demoBasicAccess() {
 	fmt.Println("   • Listing projects...")
 	c.testListProjects()

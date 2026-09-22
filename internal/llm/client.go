@@ -8,7 +8,6 @@ import (
 	"frappe-mcp-server/internal/config"
 )
 
-// Client is the interface for LLM providers
 type Client interface {
 	// Generate generates a completion from the given prompt
 	Generate(ctx context.Context, prompt string) (string, error)
@@ -18,13 +17,11 @@ type Client interface {
 }
 
 // Streamer is optionally implemented by LLM clients that support token streaming.
-// Callers should type-assert: if s, ok := client.(llm.Streamer); ok { ... }
 type Streamer interface {
 	// GenerateStream must close the channel when done, on error or on cancel; a non-nil error means no stream started.
 	GenerateStream(ctx context.Context, prompt string) (<-chan string, error)
 }
 
-// NewClient creates an LLM client based on configuration
 func NewClient(cfg config.LLMConfig) (Client, error) {
 	// Validate common fields
 	if cfg.Model == "" {

@@ -2,7 +2,6 @@ package llm
 
 import "fmt"
 
-// PresetModel represents a preset model configuration
 type PresetModel struct {
 	Name        string      `json:"name"`
 	Provider    string      `json:"provider"`
@@ -14,7 +13,6 @@ type PresetModel struct {
 	Config      ModelConfig `json:"config"`
 }
 
-// ModelRegistry holds all available preset models
 var ModelRegistry = map[string]PresetModel{
 	"groq-llama-70b": {
 		Name:        "groq-llama-70b",
@@ -104,13 +102,11 @@ var ModelRegistry = map[string]PresetModel{
 	},
 }
 
-// GetPresetModel returns a preset model configuration by name
 func GetPresetModel(name string) (PresetModel, bool) {
 	model, exists := ModelRegistry[name]
 	return model, exists
 }
 
-// ListPresetModels returns all available preset models
 func ListPresetModels() []PresetModel {
 	models := make([]PresetModel, 0, len(ModelRegistry))
 	for _, model := range ModelRegistry {
@@ -119,7 +115,6 @@ func ListPresetModels() []PresetModel {
 	return models
 }
 
-// ValidateModelConfig validates a model configuration
 func ValidateModelConfig(config ModelConfig) error {
 	if config.Provider == "" {
 		return fmt.Errorf("provider is required")

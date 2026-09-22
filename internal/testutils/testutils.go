@@ -9,7 +9,6 @@ import (
 	"frappe-mcp-server/internal/types"
 )
 
-// MockERPNextServer creates a mock ERPNext server for testing
 func MockERPNextServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set response headers
@@ -37,7 +36,6 @@ func MockERPNextServer(t *testing.T) *httptest.Server {
 	}))
 }
 
-// handleGetProject handles GET requests for a specific project
 func handleGetProject(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -67,7 +65,6 @@ func handleGetProject(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// handleProjectList handles GET requests for project list
 func handleProjectList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -102,7 +99,6 @@ func handleProjectList(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// handleTaskList handles GET requests for task list
 func handleTaskList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -139,7 +135,6 @@ func handleTaskList(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// handleCustomerList handles GET requests for customer list
 func handleCustomerList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -168,7 +163,6 @@ func handleCustomerList(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// handleEmployeeList handles GET requests for employee list
 func handleEmployeeList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -199,7 +193,6 @@ func handleEmployeeList(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// handleDefault handles default responses
 func handleDefault(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"message": "Endpoint not mocked",
@@ -211,7 +204,6 @@ func handleDefault(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// handleSearch handles search requests
 func handleSearch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -246,7 +238,6 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// handleGlobalSearch handles POST requests to the Frappe global search endpoint.
 func handleGlobalSearch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -274,7 +265,6 @@ func handleGlobalSearch(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// CreateTestProject creates a test project document
 func CreateTestProject() types.Document {
 	return types.Document{
 		"name":                "TEST-PROJ-001",
@@ -289,7 +279,6 @@ func CreateTestProject() types.Document {
 	}
 }
 
-// CreateTestTask creates a test task document
 func CreateTestTask() types.Document {
 	return types.Document{
 		"name":                "TEST-TASK-001",
@@ -303,28 +292,24 @@ func CreateTestTask() types.Document {
 	}
 }
 
-// AssertNoError asserts that no error occurred
 func AssertNoError(t *testing.T, err error, message string) {
 	if err != nil {
 		t.Fatalf("%s: %v", message, err)
 	}
 }
 
-// AssertError asserts that an error occurred
 func AssertError(t *testing.T, err error, message string) {
 	if err == nil {
 		t.Fatalf("%s: expected error but got none", message)
 	}
 }
 
-// AssertEqual asserts that two values are equal
 func AssertEqual(t *testing.T, expected, actual interface{}, message string) {
 	if expected != actual {
 		t.Fatalf("%s: expected %v, got %v", message, expected, actual)
 	}
 }
 
-// AssertNotNil asserts that a value is not nil
 func AssertNotNil(t *testing.T, value interface{}, message string) {
 	if value == nil {
 		t.Fatalf("%s: expected non-nil value", message)

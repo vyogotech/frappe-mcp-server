@@ -1,4 +1,3 @@
-// internal/mcp/jsonrpc.go
 package mcp
 
 import "encoding/json"
@@ -21,8 +20,7 @@ type JSONRPCRequest struct {
 	Params  json.RawMessage `json:"params,omitempty"`
 }
 
-// JSONRPCResponse is a JSON-RPC 2.0 response envelope. Exactly one of Result
-// or Error is set in any successfully-encoded response.
+// JSONRPCResponse carries exactly one of Result or Error.
 type JSONRPCResponse struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id,omitempty"`
@@ -30,15 +28,12 @@ type JSONRPCResponse struct {
 	Error   *JSONRPCError   `json:"error,omitempty"`
 }
 
-// JSONRPCError is the error object inside a JSON-RPC 2.0 response.
 type JSONRPCError struct {
 	Code    int         `json:"code"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
-// newJSONRPCError builds a JSON-RPC error response that echoes the original
-// request ID. Used by the streamable HTTP handler whenever dispatch fails.
 func newJSONRPCError(id json.RawMessage, code int, message string) JSONRPCResponse {
 	return JSONRPCResponse{
 		JSONRPC: "2.0",
@@ -50,8 +45,6 @@ func newJSONRPCError(id json.RawMessage, code int, message string) JSONRPCRespon
 	}
 }
 
-// newJSONRPCResult builds a successful JSON-RPC response with the given result
-// payload.
 func newJSONRPCResult(id json.RawMessage, result interface{}) JSONRPCResponse {
 	return JSONRPCResponse{
 		JSONRPC: "2.0",
@@ -62,38 +55,32 @@ func newJSONRPCResult(id json.RawMessage, result interface{}) JSONRPCResponse {
 
 // MCP-specific result payload shapes (from the MCP specification, not JSON-RPC).
 
-// initializeResult is the response to the "initialize" method.
 type initializeResult struct {
 	ProtocolVersion string                 `json:"protocolVersion"`
 	Capabilities    map[string]interface{} `json:"capabilities"`
 	ServerInfo      serverInfo             `json:"serverInfo"`
 }
 
-// serverInfo describes this MCP server.
 type serverInfo struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
 }
 
-// toolDefinition is one entry in the tools/list result.
 type toolDefinition struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
 	InputSchema map[string]interface{} `json:"inputSchema"`
 }
 
-// toolsListResult is the response to the "tools/list" method.
 type toolsListResult struct {
 	Tools []toolDefinition `json:"tools"`
 }
 
-// toolContent is one item in a tools/call result content array.
 type toolContent struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
 }
 
-// toolsCallResult is the response to the "tools/call" method.
 type toolsCallResult struct {
 	Content []toolContent `json:"content"`
 	IsError bool          `json:"isError"`

@@ -11,7 +11,6 @@ import (
 	"frappe-mcp-server/internal/config"
 )
 
-// AnthropicClient implements the Client interface for Anthropic Claude
 type AnthropicClient struct {
 	apiKey      string
 	model       string
@@ -20,7 +19,6 @@ type AnthropicClient struct {
 	client      *http.Client
 }
 
-// NewAnthropicClient creates a new Anthropic client
 func NewAnthropicClient(cfg config.LLMConfig) (*AnthropicClient, error) {
 	return &AnthropicClient{
 		apiKey:      cfg.APIKey,
@@ -33,12 +31,10 @@ func NewAnthropicClient(cfg config.LLMConfig) (*AnthropicClient, error) {
 	}, nil
 }
 
-// Provider returns the provider name
 func (c *AnthropicClient) Provider() string {
 	return "anthropic"
 }
 
-// Generate generates a completion from the given prompt
 func (c *AnthropicClient) Generate(ctx context.Context, prompt string) (string, error) {
 	requestBody := map[string]interface{}{
 		"model": c.model,

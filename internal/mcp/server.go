@@ -16,11 +16,8 @@ import (
 	"frappe-mcp-server/internal/auth"
 )
 
-// tracerName is the instrumentation scope for mcp dispatch spans.
 const tracerName = "frappe-mcp-server/internal/mcp"
 
-// Server wraps the go-sdk MCP server with a simplified registration API that
-// maintains backward compatibility with the existing ToolHandler signature.
 type Server struct {
 	name      string
 	version   string
@@ -33,24 +30,20 @@ type Server struct {
 	toolMeta map[string]ToolMeta
 }
 
-// ToolMeta is the public metadata for a registered MCP tool — the pieces a
-// client needs to know when the server answers tools/list.
+// ToolMeta is what tools/list publishes for a tool.
 type ToolMeta struct {
 	Description string
 	InputSchema map[string]interface{}
 }
 
-// ToolHandler defines the interface for MCP tools.
 type ToolHandler func(ctx context.Context, request ToolRequest) (*ToolResponse, error)
 
-// ToolRequest represents an MCP tool request (adapter type).
 type ToolRequest struct {
 	ID     string          `json:"id"`
 	Tool   string          `json:"tool"`
 	Params json.RawMessage `json:"params"`
 }
 
-// ToolResponse represents an MCP tool response (adapter type).
 type ToolResponse struct {
 	ID      string    `json:"id"`
 	Content []Content `json:"content"`
@@ -58,20 +51,17 @@ type ToolResponse struct {
 	Error   *Error    `json:"error,omitempty"`
 }
 
-// Content represents MCP content.
 type Content struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
 	Data string `json:"data,omitempty"`
 }
 
-// Error represents an MCP error.
 type Error struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-// NewServer creates a new MCP server backed by the go-sdk.
 func NewServer(name, version string) *Server {
 	sdkServer := gosdk.NewServer(&gosdk.Implementation{
 		Name:    name,
@@ -86,7 +76,6 @@ func NewServer(name, version string) *Server {
 	}
 }
 
-// SDKServer returns the underlying go-sdk server for direct access.
 func (s *Server) SDKServer() *gosdk.Server {
 	return s.sdkServer
 }
@@ -96,9 +85,7 @@ func (s *Server) RegisterTool(name string, handler ToolHandler) {
 	s.RegisterToolWithSchema(name, "", nil, handler)
 }
 
-// RegisterToolWithSchema registers a tool along with the description and input
-// schema that tools/list should publish. inputSchema may be nil, in which case
-// a permissive {"type":"object"} is used.
+// RegisterToolWithSchema publishes description and inputSchema in tools/list; a nil inputSchema allows any object.
 func (s *Server) RegisterToolWithSchema(name, description string, inputSchema map[string]interface{}, handler ToolHandler) {
 	if s.toolMeta == nil {
 		s.toolMeta = make(map[string]ToolMeta)
@@ -171,8 +158,7 @@ func auditToolCall(ctx context.Context, tool string, arguments json.RawMessage, 
 		"outcome", outcome, "error_type", errorType, "duration_ms", took.Milliseconds())
 }
 
-// ToolMetadata returns the description and input schema registered for a tool,
-// or an empty ToolMeta with a permissive schema if the tool had no metadata.
+// ToolMetadata gives a name never registered an empty description and a permissive schema.
 func (s *Server) ToolMetadata(name string) ToolMeta {
 	if meta, ok := s.toolMeta[name]; ok {
 		return meta
@@ -180,7 +166,7 @@ func (s *Server) ToolMetadata(name string) ToolMeta {
 	return ToolMeta{InputSchema: map[string]interface{}{"type": "object"}}
 }
 
-// RegisterResource registers a resource with the go-sdk server.
+// RegisterResource registers a resource whose reads return an empty result.
 func (s *Server) RegisterResource(uri, description string) {
 	s.resourceURIs = append(s.resourceURIs, uri)
 	s.sdkServer.AddResource(
@@ -192,16 +178,13 @@ func (s *Server) RegisterResource(uri, description string) {
 	slog.Debug("Registered MCP resource", "uri", uri)
 }
 
-// Run runs the server with the provided transport (e.g. &gosdk.StdioTransport{}).
-// This is the preferred entry-point for the stdio binary.
 func (s *Server) Run(ctx context.Context, transport gosdk.Transport) error {
 	slog.Info("Starting MCP server", "name", s.name, "version", s.version)
 	return s.sdkServer.Run(ctx, transport)
 }
 
-// executeToolRequest executes a tool request using the go-sdk server and emits
-// an OpenTelemetry span for the call. Both the Streamable HTTP handler and any
-// other caller share identical traces through this function.
+// executeToolRequest calls the tool through the go-sdk server, not its handler, so a /mcp tool call gets the same
+// deadline and audit line as a stdio one.
 func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *ToolResponse {
 	if request.ID == "" {
 		request.ID = fmt.Sprintf("req_%d", time.Now().UnixNano())
@@ -290,8 +273,7 @@ func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *T
 	return &ToolResponse{ID: request.ID, Content: content}
 }
 
-// mustUnmarshalMap decodes a JSON object into a map; returns an empty map on
-// any error so that tool handlers always receive a valid (possibly empty) map.
+// mustUnmarshalMap returns an empty map, never an error, for anything that is not a JSON object.
 func mustUnmarshalMap(data json.RawMessage) map[string]any {
 	if len(data) == 0 {
 		return map[string]any{}

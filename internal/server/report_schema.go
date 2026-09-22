@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// ReportSchema holds filter schema information for a report
 type ReportSchema struct {
 	ReportName       string
 	RequiredFilters  []string
@@ -16,7 +15,7 @@ type ReportSchema struct {
 	FilterDefaults   map[string]interface{} // Default values for filters
 }
 
-// GetReportSchema retrieves or infers the schema for a report
+// GetReportSchema falls back to a built-in schema when Frappe gives no filters, so its error is always nil.
 func (s *MCPServer) GetReportSchema(ctx context.Context, reportName string) (*ReportSchema, error) {
 	// First, try to fetch from Frappe API
 	filters, err := s.frappeClient.GetReportFilters(ctx, reportName)
@@ -74,8 +73,6 @@ func (s *MCPServer) GetReportSchema(ctx context.Context, reportName string) (*Re
 	return schema, nil
 }
 
-// getHardcodedReportSchema provides fallback schema for common reports
-// This should rarely be used - the API fetch should work for most cases
 func (s *MCPServer) getHardcodedReportSchema(reportName string) *ReportSchema {
 	// Normalize report name for matching
 	normalized := strings.ToLower(strings.TrimSpace(reportName))
@@ -105,7 +102,7 @@ func (s *MCPServer) getHardcodedReportSchema(reportName string) *ReportSchema {
 	}
 }
 
-// ValidateAndTransformFilters validates user-provided filters against schema and transforms them
+// ValidateAndTransformFilters maps date filters to the report's names, fills defaults and lists required ones missing.
 func (s *ReportSchema) ValidateAndTransformFilters(userFilters map[string]interface{}) (map[string]interface{}, []string, error) {
 	transformed := make(map[string]interface{})
 	missing := []string{}
@@ -185,7 +182,6 @@ func (s *ReportSchema) ValidateAndTransformFilters(userFilters map[string]interf
 	return transformed, missing, nil
 }
 
-// GetDateFieldNames returns the date field names expected by this report
 func (s *ReportSchema) GetDateFieldNames() (startField, endField string) {
 	if len(s.DateRangeFields) >= 2 {
 		return s.DateRangeFields[0], s.DateRangeFields[1]

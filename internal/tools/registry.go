@@ -12,19 +12,16 @@ import (
 	"frappe-mcp-server/internal/types"
 )
 
-// ToolRegistry contains all the MCP tools
 type ToolRegistry struct {
 	frappeClient *frappe.Client
 }
 
-// NewRegistry creates a new tool registry
 func NewRegistry(frappeClient *frappe.Client) *ToolRegistry {
 	return &ToolRegistry{
 		frappeClient: frappeClient,
 	}
 }
 
-// GetDocument retrieves a single document
 func (t *ToolRegistry) GetDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		DocType string `json:"doctype"`
@@ -64,7 +61,6 @@ func (t *ToolRegistry) GetDocument(ctx context.Context, request mcp.ToolRequest)
 	}, nil
 }
 
-// ListDocuments retrieves a list of documents with pagination
 func (t *ToolRegistry) ListDocuments(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.SearchRequest
 
@@ -106,7 +102,6 @@ func (t *ToolRegistry) ListDocuments(ctx context.Context, request mcp.ToolReques
 	}, nil
 }
 
-// CreateDocument creates a new document
 func (t *ToolRegistry) CreateDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.CreateDocumentRequest
 
@@ -151,7 +146,6 @@ func (t *ToolRegistry) CreateDocument(ctx context.Context, request mcp.ToolReque
 	}, nil
 }
 
-// UpdateDocument updates an existing document
 func (t *ToolRegistry) UpdateDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.UpdateDocumentRequest
 
@@ -188,7 +182,6 @@ func (t *ToolRegistry) UpdateDocument(ctx context.Context, request mcp.ToolReque
 	}, nil
 }
 
-// DeleteDocument deletes a document
 func (t *ToolRegistry) DeleteDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		DocType string `json:"doctype"`
@@ -232,7 +225,6 @@ func (t *ToolRegistry) DeleteDocument(ctx context.Context, request mcp.ToolReque
 	}, nil
 }
 
-// SearchDocuments performs full-text search across documents
 func (t *ToolRegistry) SearchDocuments(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.SearchRequest
 
@@ -279,7 +271,6 @@ func (t *ToolRegistry) SearchDocuments(ctx context.Context, request mcp.ToolRequ
 	}, nil
 }
 
-// GetProjectStatus retrieves comprehensive project status
 func (t *ToolRegistry) GetProjectStatus(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		ProjectName string `json:"project_name"`
@@ -343,7 +334,6 @@ func (t *ToolRegistry) GetProjectStatus(ctx context.Context, request mcp.ToolReq
 	}, nil
 }
 
-// AnalyzeProjectTimeline analyzes project timeline and milestones
 func (t *ToolRegistry) AnalyzeProjectTimeline(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		ProjectName string `json:"project_name"`
@@ -412,7 +402,7 @@ func (t *ToolRegistry) AnalyzeProjectTimeline(ctx context.Context, request mcp.T
 	}, nil
 }
 
-// CalculateProjectMetrics calculates various project metrics
+// CalculateProjectMetrics returns placeholder numbers, so the HTTP server does not offer it.
 func (t *ToolRegistry) CalculateProjectMetrics(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		ProjectName string `json:"project_name"`
@@ -473,7 +463,6 @@ func (t *ToolRegistry) CalculateProjectMetrics(ctx context.Context, request mcp.
 	}, nil
 }
 
-// GetResourceAllocation analyzes resource allocation across projects
 func (t *ToolRegistry) GetResourceAllocation(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	// Get all active projects
 	projectReq := types.SearchRequest{
@@ -519,7 +508,7 @@ func (t *ToolRegistry) GetResourceAllocation(ctx context.Context, request mcp.To
 	}, nil
 }
 
-// ProjectRiskAssessment performs risk assessment for a project
+// ProjectRiskAssessment returns placeholder numbers, so the HTTP server does not offer it.
 func (t *ToolRegistry) ProjectRiskAssessment(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		ProjectName string `json:"project_name"`
@@ -577,7 +566,6 @@ func (t *ToolRegistry) ProjectRiskAssessment(ctx context.Context, request mcp.To
 	}, nil
 }
 
-// GenerateProjectReport generates a comprehensive project report
 func (t *ToolRegistry) GenerateProjectReport(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		ProjectName string `json:"project_name"`
@@ -661,7 +649,7 @@ func (t *ToolRegistry) GenerateProjectReport(ctx context.Context, request mcp.To
 	}, nil
 }
 
-// PortfolioDashboard provides portfolio-level insights
+// PortfolioDashboard returns placeholder numbers, so the HTTP server does not offer it.
 func (t *ToolRegistry) PortfolioDashboard(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	// Get all projects
 	projectReq := types.SearchRequest{
@@ -711,7 +699,6 @@ func (t *ToolRegistry) PortfolioDashboard(ctx context.Context, request mcp.ToolR
 	}, nil
 }
 
-// ResourceUtilizationAnalysis analyzes resource utilization
 func (t *ToolRegistry) ResourceUtilizationAnalysis(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	// Get all employees
 	empReq := types.SearchRequest{
@@ -753,7 +740,6 @@ func (t *ToolRegistry) ResourceUtilizationAnalysis(ctx context.Context, request 
 	}, nil
 }
 
-// BudgetVarianceAnalysis analyzes budget variance across projects
 func (t *ToolRegistry) BudgetVarianceAnalysis(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	// Get projects with budget information
 	projectReq := types.SearchRequest{
@@ -810,8 +796,7 @@ func (t *ToolRegistry) BudgetVarianceAnalysis(ctx context.Context, request mcp.T
 	}, nil
 }
 
-// AnalyzeDocument is a generic document analyzer that works with ANY doctype
-// It fetches the document and optionally related documents, letting AI handle analysis
+// AnalyzeDocument only fetches the document and, with include_related, its linked records; the model analyses them.
 func (t *ToolRegistry) AnalyzeDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		DocType        string   `json:"doctype"`
@@ -868,7 +853,6 @@ func (t *ToolRegistry) AnalyzeDocument(ctx context.Context, request mcp.ToolRequ
 	}, nil
 }
 
-// fetchRelatedDocuments generically fetches related documents based on common patterns
 func (t *ToolRegistry) fetchRelatedDocuments(ctx context.Context, doctype string, doc types.Document) map[string]interface{} {
 	related := make(map[string]interface{})
 
@@ -909,7 +893,6 @@ func (t *ToolRegistry) fetchRelatedDocuments(ctx context.Context, doctype string
 	return related
 }
 
-// inferDocTypeFromField infers doctype from field name using generic patterns
 func inferDocTypeFromField(fieldName string) string {
 	// Generic mapping based on common ERPNext naming conventions
 	mapping := map[string]string{
@@ -936,7 +919,6 @@ func inferDocTypeFromField(fieldName string) string {
 	return ""
 }
 
-// AggregateDocuments performs aggregation queries on ERPNext data
 func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.AggregationRequest
 
@@ -1027,7 +1009,6 @@ func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolR
 	}, nil
 }
 
-// RunReport executes a Frappe report and returns formatted results
 func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.ReportRequest
 
@@ -1072,7 +1053,6 @@ func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (
 	}, nil
 }
 
-// GlobalSearch performs a full-text search across all Frappe doctypes.
 // SearchKnowledgeBase searches the documents the user has uploaded to Drive.
 func (t *ToolRegistry) SearchKnowledgeBase(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {

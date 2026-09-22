@@ -17,7 +17,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the application configuration
 type Config struct {
 	Server      ServerConfig      `yaml:"server"`
 	ERPNext     ERPNextConfig     `yaml:"erpnext"`
@@ -35,14 +34,12 @@ type ToolsConfig struct {
 	KnowledgeBase bool `yaml:"knowledge_base"` // search_knowledge_base answers only where the rag app is installed
 }
 
-// Neo4jConfig represents the configuration for FrappeForge knowledge graph
 type Neo4jConfig struct {
 	BoltURL  string `yaml:"bolt_url"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }
 
-// ServerConfig represents server configuration
 type ServerConfig struct {
 	Host           string        `yaml:"host"`
 	Port           int           `yaml:"port"`
@@ -50,8 +47,6 @@ type ServerConfig struct {
 	MaxConnections int           `yaml:"max_connections"`
 }
 
-// ERPNextConfig represents Frappe instance client configuration
-// Named ERPNextConfig for backward compatibility, but works with any Frappe app
 type ERPNextConfig struct {
 	BaseURL   string          `yaml:"base_url"`
 	APIKey    string          `yaml:"api_key"`
@@ -61,26 +56,22 @@ type ERPNextConfig struct {
 	Retry     RetryConfig     `yaml:"retry"`
 }
 
-// RateLimitConfig represents rate limiting configuration
 type RateLimitConfig struct {
 	RequestsPerSecond int `yaml:"requests_per_second"`
 	Burst             int `yaml:"burst"`
 }
 
-// RetryConfig represents retry configuration
 type RetryConfig struct {
 	MaxAttempts  int           `yaml:"max_attempts"`
 	InitialDelay time.Duration `yaml:"initial_delay"`
 	MaxDelay     time.Duration `yaml:"max_delay"`
 }
 
-// LoggingConfig represents logging configuration
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
 }
 
-// LLMConfig represents generic LLM provider configuration
 type LLMConfig struct {
 	// Provider type: "openai-compatible", "anthropic", "azure"
 	// "openai-compatible" works with: OpenAI, Together.ai, Groq, Ollama, LocalAI, etc.
@@ -102,7 +93,6 @@ type LLMConfig struct {
 	AzureAPIVersion string `yaml:"azure_api_version,omitempty"` // Azure API version
 }
 
-// LLMFallbackConfig represents fallback LLM configuration
 type LLMFallbackConfig struct {
 	Enabled     bool          `yaml:"enabled"`     // Enable fallback
 	BaseURL     string        `yaml:"base_url"`    // Fallback API endpoint
@@ -114,20 +104,17 @@ type LLMFallbackConfig struct {
 	AutoSwitch  bool          `yaml:"auto_switch"` // Auto-switch on rate limit
 }
 
-// CacheConfig represents caching configuration
 type CacheConfig struct {
 	TTL     time.Duration `yaml:"ttl"`
 	MaxSize int           `yaml:"max_size"`
 }
 
-// PerformanceConfig represents performance tuning configuration
 type PerformanceConfig struct {
 	WorkerPoolSize    int  `yaml:"worker_pool_size"`
 	BatchSize         int  `yaml:"batch_size"`
 	EnableCompression bool `yaml:"enable_compression"`
 }
 
-// AuthConfig represents authentication configuration
 type AuthConfig struct {
 	Enabled     bool             `yaml:"enabled"`
 	RequireAuth bool             `yaml:"require_auth"`
@@ -135,7 +122,6 @@ type AuthConfig struct {
 	TokenCache  TokenCacheConfig `yaml:"token_cache"`
 }
 
-// OAuth2Config represents OAuth2 configuration
 type OAuth2Config struct {
 	// Frappe OAuth endpoints
 	TokenInfoURL string `yaml:"token_info_url"`
@@ -151,13 +137,12 @@ type OAuth2Config struct {
 	Timeout time.Duration `yaml:"timeout"`
 }
 
-// TokenCacheConfig represents token cache configuration
 type TokenCacheConfig struct {
 	TTL             time.Duration `yaml:"ttl"`
 	CleanupInterval time.Duration `yaml:"cleanup_interval"`
 }
 
-// Load loads configuration from config.yaml and environment variables
+// Load reads config.yaml, or the file CONFIG_FILE names, and lets environment variables override it.
 func Load() (*Config, error) {
 	// Load .env file if it exists (ignore errors as .env file might not exist)
 	_ = godotenv.Load()
@@ -226,7 +211,6 @@ func Load() (*Config, error) {
 	return &config, nil
 }
 
-// loadFromEnv loads configuration from environment variables
 func (c *Config) loadFromEnv() error {
 	// ERPNEXT_* is the deprecated fallback that keeps upgraded deployments starting; drop it no earlier than 2026-10-01.
 	if baseURL := os.Getenv("FRAPPE_BASE_URL"); baseURL != "" {
@@ -336,7 +320,6 @@ func (c *Config) loadFromEnv() error {
 	return nil
 }
 
-// validate validates the configuration
 func (c *Config) validate() error {
 	if c.ERPNext.BaseURL == "" {
 		return fmt.Errorf("frappe instance base URL is required")

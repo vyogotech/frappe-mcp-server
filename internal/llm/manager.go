@@ -11,7 +11,6 @@ import (
 	"frappe-mcp-server/internal/config"
 )
 
-// ModelConfig represents a complete LLM model configuration
 type ModelConfig struct {
 	Provider    string  `json:"provider"`    // "ollama", "groq", "openai"
 	Model       string  `json:"model"`       // Model name
@@ -22,7 +21,6 @@ type ModelConfig struct {
 	Timeout     string  `json:"timeout"`     // Request timeout
 }
 
-// toConfigLLM converts ModelConfig to config.LLMConfig
 func (mc ModelConfig) toConfigLLM() (config.LLMConfig, error) {
 	timeout, err := time.ParseDuration(mc.Timeout)
 	if err != nil {
@@ -40,7 +38,6 @@ func (mc ModelConfig) toConfigLLM() (config.LLMConfig, error) {
 	}, nil
 }
 
-// ModelStatus represents the current status of a model
 type ModelStatus struct {
 	Provider        string    `json:"provider"`
 	Model           string    `json:"model"`
@@ -55,7 +52,6 @@ type ModelStatus struct {
 	FallbackCount   int64     `json:"fallback_count"`
 }
 
-// Manager handles dynamic LLM model switching and fallback
 type Manager struct {
 	primaryClient     Client
 	fallbackClient    Client
@@ -72,7 +68,6 @@ type Manager struct {
 	rateLimitDuration time.Duration // How long to wait after rate limit
 }
 
-// NewManager creates a new LLM manager with primary and optional fallback
 func NewManager(primaryConfig ModelConfig, fallbackConfig *ModelConfig) (*Manager, error) {
 	// Convert to config.LLMConfig
 	primaryCfg, err := primaryConfig.toConfigLLM()
@@ -127,7 +122,7 @@ func NewManager(primaryConfig ModelConfig, fallbackConfig *ModelConfig) (*Manage
 	return m, nil
 }
 
-// Generate generates text using the current model with auto-fallback support
+// Generate uses the fallback while the primary is rate-limited, or after a primary error shouldFallback accepts.
 func (m *Manager) Generate(ctx context.Context, prompt string) (string, error) {
 	m.mutex.RLock()
 	client := m.primaryClient
@@ -257,7 +252,7 @@ func (m *Manager) GenerateStream(ctx context.Context, prompt string) (<-chan str
 	return ch, nil
 }
 
-// SwitchModel switches to a new model configuration at runtime
+// SwitchModel switches even when the new model fails its test call; persist is only logged.
 func (m *Manager) SwitchModel(config ModelConfig, persist bool) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -305,7 +300,6 @@ func (m *Manager) SwitchModel(config ModelConfig, persist bool) error {
 	return nil
 }
 
-// SetFallback sets or updates the fallback model
 func (m *Manager) SetFallback(config ModelConfig, autoEnable bool) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -340,7 +334,6 @@ func (m *Manager) SetFallback(config ModelConfig, autoEnable bool) error {
 	return nil
 }
 
-// EnableAutoFallback enables or disables automatic fallback
 func (m *Manager) EnableAutoFallback(enabled bool) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -348,7 +341,6 @@ func (m *Manager) EnableAutoFallback(enabled bool) {
 	slog.Info("Auto-fallback setting changed", "enabled", enabled)
 }
 
-// GetStatus returns the current status of primary and fallback models
 func (m *Manager) GetStatus() map[string]interface{} {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -385,7 +377,6 @@ func (m *Manager) GetStatus() map[string]interface{} {
 	return status
 }
 
-// shouldFallback determines if we should fallback based on the error
 func (m *Manager) shouldFallback(err error) bool {
 	if !m.autoFallback || !m.fallbackEnabled {
 		return false
@@ -408,7 +399,6 @@ func (m *Manager) shouldFallback(err error) bool {
 	return false
 }
 
-// updateMetrics updates the metrics for a model
 func (m *Manager) updateMetrics(metrics *ModelStatus, err error, duration time.Duration) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -435,7 +425,6 @@ func (m *Manager) updateMetrics(metrics *ModelStatus, err error, duration time.D
 	}
 }
 
-// scheduleRevertToPrimary schedules a revert back to the primary model
 func (m *Manager) scheduleRevertToPrimary() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -457,7 +446,6 @@ func (m *Manager) scheduleRevertToPrimary() {
 	slog.Info("Scheduled revert to primary LLM", "after", m.revertDuration)
 }
 
-// scheduleRevertAfterRateLimit schedules a revert after the rate limit expires
 func (m *Manager) scheduleRevertAfterRateLimit(retryAfter time.Duration) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -480,9 +468,7 @@ func (m *Manager) scheduleRevertAfterRateLimit(retryAfter time.Duration) {
 	slog.Info("Scheduled rate limit recovery", "after", retryAfter.Round(time.Second))
 }
 
-// parseRetryAfter extracts retry-after duration from error message
-// Groq format: "Please try again in 9m38.016s"
-// Returns 0 if not found
+// parseRetryAfter reads a wait like Groq's "try again in 9m38s"; else 10 minutes for a rate limit, 0 for the rest.
 func (m *Manager) parseRetryAfter(err error) time.Duration {
 	if err == nil {
 		return 0
@@ -535,12 +521,10 @@ func (m *Manager) parseRetryAfter(err error) time.Duration {
 	return 0
 }
 
-// isDurationChar checks if a character is valid in a duration string
 func isDurationChar(ch rune) bool {
 	return (ch >= '0' && ch <= '9') || ch == 'h' || ch == 'm' || ch == 's' || ch == '.' || ch == 'µ' || ch == 'n'
 }
 
-// contains checks if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsHelper(s, substr)))
 }

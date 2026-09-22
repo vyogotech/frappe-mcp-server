@@ -23,7 +23,6 @@ import (
 	"frappe-mcp-server/internal/types"
 )
 
-// detectProvider detects the LLM provider from the base URL
 func detectProvider(baseURL string) string {
 	lower := strings.ToLower(baseURL)
 	if strings.Contains(lower, "groq") {
@@ -36,7 +35,6 @@ func detectProvider(baseURL string) string {
 	return "unknown"
 }
 
-// generateWithLLM generates text using the LLM manager (with auto-fallback) or legacy client
 func (s *MCPServer) generateWithLLM(ctx context.Context, prompt string) (string, error) {
 	// Try LLM Manager first (with auto-fallback support)
 	if s.llmManager != nil {
@@ -49,7 +47,6 @@ func (s *MCPServer) generateWithLLM(ctx context.Context, prompt string) (string,
 	return "", fmt.Errorf("no LLM client available")
 }
 
-// MCPServer represents the MCP server
 type MCPServer struct {
 	config         *config.Config
 	frappeClient   *frappe.Client
@@ -61,7 +58,6 @@ type MCPServer struct {
 	authMiddleware *auth.Middleware
 }
 
-// QueryIntent represents the extracted intent from a natural language query
 type QueryIntent struct {
 	Action           string          // The intended action (get, list, search, analyze, etc.)
 	DocType          string          // ERPNext doctype (Project, Customer, Item, etc.)
@@ -73,14 +69,12 @@ type QueryIntent struct {
 	Confidence       float64         // AI confidence in the extraction (0-1)
 }
 
-// SearchResult represents the result of searching for an entity
 type SearchResult struct {
 	EntityName string  // The actual name/ID of the found entity
 	DocType    string  // The doctype
 	MatchScore float64 // How well it matched the search term
 }
 
-// NewMCPServer creates a new MCP server instance
 // maxRequestBody bounds every request body: tool calls and chat requests are small JSON documents.
 const maxRequestBody = 1 << 20
 
@@ -203,7 +197,6 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	return mcpServer, nil
 }
 
-// Run starts the MCP server
 func (s *MCPServer) Run(ctx context.Context) error {
 	slog.Info("Starting MCP server",
 		"host", s.config.Server.Host,
@@ -236,7 +229,6 @@ func (s *MCPServer) Run(ctx context.Context) error {
 	}
 }
 
-// healthCheck provides health status endpoint
 func (s *MCPServer) healthCheck(w http.ResponseWriter, r *http.Request) {
 	slog.Debug("/health endpoint called",
 		"method", strings.ReplaceAll(r.Method, "\n", " "),
@@ -251,7 +243,6 @@ func (s *MCPServer) healthCheck(w http.ResponseWriter, r *http.Request) {
 	slog.Debug("/health response sent")
 }
 
-// metrics provides basic metrics endpoint
 func (s *MCPServer) metrics(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/metrics endpoint called",
 		"method", strings.ReplaceAll(r.Method, "\n", " "),
@@ -274,8 +265,7 @@ var publicPaths = map[string]bool{
 	"/metrics":       true,
 }
 
-// withMiddleware applies middleware to HTTP handlers. Order: logging → CORS
-// → (conditionally) auth → handler. Auth is skipped for paths in publicPaths.
+// withMiddleware skips auth for publicPaths only; recovery, logging and cross-origin protection wrap every path.
 func (s *MCPServer) withMiddleware(handler http.Handler) http.Handler {
 	h := handler
 
@@ -369,9 +359,7 @@ func (w *statusRecorder) Flush() {
 	}
 }
 
-// Unwrap exposes the underlying ResponseWriter so http.ResponseController
-// (and any other middleware that walks the wrapper chain) can find the
-// original writer for hijacking, deadline control, etc.
+// Unwrap lets http.ResponseController reach the underlying writer for hijacking and deadlines.
 func (w *statusRecorder) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
@@ -488,7 +476,6 @@ func toolCatalog() map[string]mcp.ToolMeta {
 	}
 }
 
-// registerTools registers every MCP tool, with its toolCatalog schema where it has one.
 func (s *MCPServer) registerTools() error {
 	slog.Info("Registering MCP tools...")
 
@@ -579,7 +566,6 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/tools response sent", "count", len(tools))
 }
 
-// handleToolCall handles direct tool calls via HTTP
 func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Tool endpoint called",
 		"method", strings.ReplaceAll(r.Method, "\n", " "),
@@ -684,9 +670,6 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/tool/ response sent", "tool", toolName, "request_id", request.ID)
 }
 
-// handleChat handles natural language chat queries.
-// When the client sends Accept: text/event-stream it delegates to
-// handleChatSSE which streams SSE events; otherwise it returns JSON.
 func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 		s.handleChatSSE(w, r)
@@ -695,7 +678,6 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 	s.handleChatJSON(w, r)
 }
 
-// handleChatJSON handles natural language chat queries (non-streaming JSON response).
 func (s *MCPServer) handleChatJSON(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/api/v1/chat endpoint called",
 		"method", strings.ReplaceAll(r.Method, "\n", " "),
@@ -1116,7 +1098,6 @@ Write a natural, helpful response.`, chatRequest.Message, reportName, missingPar
 	slog.Info("Chat response sent", "data_size", response["data_size"])
 }
 
-// formatResponseWithLLM uses the LLM to format raw data into a user-friendly response
 func (s *MCPServer) formatResponseWithLLM(ctx context.Context, userQuery string, rawData string) (string, error) {
 	prompt := fmt.Sprintf(`You are a data formatter that converts JSON data into user-requested formats.
 
@@ -1586,7 +1567,6 @@ Respond with JSON only:
 	return json.Marshal(params)
 }
 
-// extractDoctypeFromQuery extracts ERPNext doctype from query using pattern matching
 func extractDoctypeFromQuery(queryLower string) string {
 	// Map of common terms to ERPNext doctypes
 	doctypeMap := map[string]string{
@@ -1626,7 +1606,6 @@ func extractDoctypeFromQuery(queryLower string) string {
 	return "" // No match found
 }
 
-// getDefaultFieldsForDocType returns default fields to fetch for each doctype
 func getDefaultFieldsForDocType(doctype string) []string {
 	// Define commonly useful fields for each doctype
 	fieldMap := map[string][]string{
@@ -1949,7 +1928,6 @@ Now respond for the user's query:`, query)
 	return intent, nil
 }
 
-// cleanJSONResponse cleans LLM responses that may contain markdown or extra text
 func cleanJSONResponse(response string) string {
 	// First, trim whitespace
 	cleaned := strings.TrimSpace(response)
@@ -1989,7 +1967,6 @@ func cleanJSONResponse(response string) string {
 	return cleaned[startIdx : lastBrace+1]
 }
 
-// mapActionToTool maps an action string to the appropriate MCP tool name
 func (s *MCPServer) mapActionToTool(action string) string {
 	action = strings.ToLower(action)
 
@@ -2099,7 +2076,6 @@ func (s *MCPServer) fallbackQueryRouting(query string) *QueryIntent {
 	return intent
 }
 
-// searchForEntity searches ERPNext for an entity and returns the best match
 func (s *MCPServer) searchForEntity(ctx context.Context, doctype, searchTerm string) (*SearchResult, error) {
 	slog.Info("Searching for entity", "doctype", doctype, "search_term", searchTerm)
 
@@ -2151,7 +2127,6 @@ func (s *MCPServer) searchForEntity(ctx context.Context, doctype, searchTerm str
 	}, nil
 }
 
-// executeToolWithEntity executes a tool with a specific entity name
 func (s *MCPServer) executeToolWithEntity(ctx context.Context, toolName, doctype, entityName string) (*mcp.ToolResponse, error) {
 	var params map[string]interface{}
 
@@ -2182,7 +2157,6 @@ func (s *MCPServer) executeToolWithEntity(ctx context.Context, toolName, doctype
 	return s.executeTool(ctx, toolName, paramsJSON)
 }
 
-// executeTool executes a specific MCP tool
 func (s *MCPServer) executeTool(ctx context.Context, toolName string, params json.RawMessage) (*mcp.ToolResponse, error) {
 	request := mcp.ToolRequest{
 		ID:     fmt.Sprintf("tool-%d", time.Now().UnixNano()),
@@ -2235,7 +2209,6 @@ func (s *MCPServer) executeTool(ctx context.Context, toolName string, params jso
 	}
 }
 
-// extractEntityName extracts entity names from queries using multiple patterns
 func extractEntityName(query string) string {
 	// Pattern 1: Text in quotes "Entity Name" or 'Entity Name'
 	reQuoted := regexp.MustCompile(`["']([^"']+)["']`)
@@ -2283,7 +2256,6 @@ func extractEntityName(query string) string {
 	return ""
 }
 
-// handleOpenAPI provides OpenAPI specification
 func (s *MCPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/api/v1/openapi.json endpoint called",
 		"method", strings.ReplaceAll(r.Method, "\n", " "),

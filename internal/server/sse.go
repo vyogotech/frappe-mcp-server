@@ -26,8 +26,7 @@ type sseEvent struct {
 	Timestamp   string   `json:"timestamp,omitempty"`
 }
 
-// sseWriter wraps a ResponseWriter/Flusher so callers can emit events with a
-// single call.  It is NOT safe for concurrent writes (the handler is linear).
+// sseWriter is not safe for concurrent writes.
 type sseWriter struct {
 	w http.ResponseWriter
 	f http.Flusher
@@ -239,8 +238,7 @@ Write a brief, friendly message asking for the missing parameters with 2-3 examp
 	sw.done(toolsCalled, dataQuality(formattedResponse))
 }
 
-// executeIntentSSE mirrors the tool-dispatch logic in handleChatJSON but emits
-// tool_call SSE events before executing each tool.
+// executeIntentSSE mirrors handleChatJSON's tool dispatch, sending a tool_call event before each tool.
 func (s *MCPServer) executeIntentSSE(
 	ctx context.Context,
 	sw *sseWriter,
@@ -340,8 +338,7 @@ func (s *MCPServer) executeIntentSSE(
 	return result, toolsCalled, err
 }
 
-// streamFormatResponse builds an LLM prompt from the raw tool output and
-// streams the tokens back over SSE.  Returns true if streaming succeeded.
+// streamFormatResponse returns false only when nothing was streamed, for the caller to answer without streaming.
 func (s *MCPServer) streamFormatResponse(ctx context.Context, sw *sseWriter, userQuery, rawData string) bool {
 	var streamer llm.Streamer
 
@@ -382,8 +379,6 @@ func (s *MCPServer) streamFormatResponse(ctx context.Context, sw *sseWriter, use
 	}
 }
 
-// buildFormatPrompt constructs the same formatting prompt used by
-// formatResponseWithLLM so the two paths produce consistent output.
 func buildFormatPrompt(userQuery, rawData string) string {
 	return fmt.Sprintf(`You are a data formatter that converts JSON data into user-requested formats.
 
@@ -400,7 +395,7 @@ Raw data from ERPNext:
 Format this data in a clear, readable way that answers the user's question.`, userQuery, rawData)
 }
 
-// dataQuality returns a quality label based on the length of the formatted text.
+// dataQuality labels a text by its length alone.
 func dataQuality(text string) string {
 	switch {
 	case len(text) > 1000:

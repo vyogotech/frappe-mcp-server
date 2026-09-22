@@ -24,8 +24,6 @@ import (
 	"frappe-mcp-server/internal/types"
 )
 
-// Client represents a Frappe Framework API client.
-// Works with ERPNext and all other Frappe-based applications.
 type Client struct {
 	baseURL     string
 	apiKey      string
@@ -35,7 +33,7 @@ type Client struct {
 	retryConfig config.RetryConfig
 }
 
-// NewClient creates a new Frappe client (works with any Frappe-based application)
+// NewClient takes the API key and secret both or neither; without them, a call needs a user in its context.
 func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("base URL is required")
@@ -77,7 +75,6 @@ func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 	}, nil
 }
 
-// GetDocument retrieves a single document by doctype and name
 func (c *Client) GetDocument(ctx context.Context, docType, name string) (types.Document, error) {
 	endpoint := fmt.Sprintf("/api/resource/%s/%s", url.PathEscape(docType), url.PathEscape(name))
 
@@ -93,7 +90,6 @@ func (c *Client) GetDocument(ctx context.Context, docType, name string) (types.D
 	return response.Data, nil
 }
 
-// GetDocumentList retrieves a list of documents with pagination
 func (c *Client) GetDocumentList(ctx context.Context, req types.SearchRequest) (*types.DocumentList, error) {
 	endpoint := fmt.Sprintf("/api/resource/%s", url.PathEscape(req.DocType))
 
@@ -144,7 +140,6 @@ func (c *Client) GetDocumentList(ctx context.Context, req types.SearchRequest) (
 	return result, nil
 }
 
-// CreateDocument creates a new document
 func (c *Client) CreateDocument(ctx context.Context, req types.CreateDocumentRequest) (types.Document, error) {
 	endpoint := fmt.Sprintf("/api/resource/%s", url.PathEscape(req.DocType))
 
@@ -160,7 +155,6 @@ func (c *Client) CreateDocument(ctx context.Context, req types.CreateDocumentReq
 	return response.Data, nil
 }
 
-// UpdateDocument updates an existing document
 func (c *Client) UpdateDocument(ctx context.Context, req types.UpdateDocumentRequest) (types.Document, error) {
 	endpoint := fmt.Sprintf("/api/resource/%s/%s",
 		url.PathEscape(req.DocType),
@@ -178,7 +172,6 @@ func (c *Client) UpdateDocument(ctx context.Context, req types.UpdateDocumentReq
 	return response.Data, nil
 }
 
-// DeleteDocument deletes a document
 func (c *Client) DeleteDocument(ctx context.Context, docType, name string) error {
 	endpoint := fmt.Sprintf("/api/resource/%s/%s",
 		url.PathEscape(docType),
@@ -192,7 +185,7 @@ func (c *Client) DeleteDocument(ctx context.Context, docType, name string) error
 	return nil
 }
 
-// SearchDocuments performs full-text search across documents
+// SearchDocuments lists req.DocType, or calls search_link when req.Search is set.
 func (c *Client) SearchDocuments(ctx context.Context, req types.SearchRequest) (*types.DocumentList, error) {
 	endpoint := fmt.Sprintf("/api/resource/%s", url.PathEscape(req.DocType))
 
@@ -272,7 +265,6 @@ func (c *Client) SearchDocuments(ctx context.Context, req types.SearchRequest) (
 	return result, nil
 }
 
-// GlobalSearchResult is a single result from the Frappe global search.
 type GlobalSearchResult struct {
 	Name    string `json:"name"`
 	DocType string `json:"doctype"`
@@ -280,7 +272,6 @@ type GlobalSearchResult struct {
 	Route   string `json:"route"`
 }
 
-// GlobalSearchRequest holds the parameters for a global search call.
 type GlobalSearchRequest struct {
 	Text    string      `json:"text"`
 	Doctype string      `json:"doctype,omitempty"` // restrict to one doctype
@@ -289,8 +280,7 @@ type GlobalSearchRequest struct {
 	Start   int         `json:"start,omitempty"`
 }
 
-// SearchKnowledgeBase asks the rag app for the passages closest to a question. The app owns
-// the vector search and the per-user permission filter; this only carries the call.
+// SearchKnowledgeBase only carries the call: the rag app owns the vector search and the per-user permission filter.
 func (c *Client) SearchKnowledgeBase(ctx context.Context, query string, limit int, session string) ([]map[string]interface{}, error) {
 	if query == "" {
 		return nil, fmt.Errorf("query is required for a knowledge base search")
@@ -318,8 +308,7 @@ func (c *Client) SearchKnowledgeBase(ctx context.Context, query string, limit in
 	return response.Message, nil
 }
 
-// GlobalSearch performs a full-text search across all indexed doctypes using
-// the Frappe global search endpoint (/api/method/frappe.utils.global_search.search).
+// GlobalSearch calls Frappe's global search, frappe.utils.global_search.search.
 func (c *Client) GlobalSearch(ctx context.Context, req GlobalSearchRequest) ([]GlobalSearchResult, error) {
 	if req.Text == "" {
 		return nil, fmt.Errorf("text is required for global search")
@@ -350,7 +339,7 @@ func (c *Client) GlobalSearch(ctx context.Context, req GlobalSearchRequest) ([]G
 	return response.Message, nil
 }
 
-// makeRequest makes an HTTP request to Frappe API with retry logic
+// makeRequest rate-limits every call and retries only a GET.
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
 	attempts := 1
 	if method == http.MethodGet { // a write retried after a timeout can run twice (RFC 9110 9.2.2)
@@ -376,7 +365,6 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	}
 }
 
-// doRequest performs the actual HTTP request
 func (c *Client) doRequest(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
 	fullURL := c.baseURL + endpoint
 
@@ -502,7 +490,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	return nil
 }
 
-// isRetryableError: a network failure or a gateway error may pass; a 500 or a 4xx will not, nor will a cancelled call
+// isRetryableError accepts a network failure or a gateway error, never a 500, a 4xx or a cancelled call.
 func isRetryableError(ctx context.Context, err error) bool {
 	if ctx.Err() != nil {
 		return false
@@ -560,8 +548,7 @@ func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationR
 	return response.Message, nil
 }
 
-// reportRows gives every row as an object: Frappe v16's query_report.run returns objects, but a prepared report read
-// from an older cache still returns arrays in column order
+// reportRows gives every row as an object, since a prepared report cached before v16 returns arrays in column order.
 func reportRows(columns []types.ReportColumn, result []json.RawMessage) ([]map[string]interface{}, error) {
 	rows := make([]map[string]interface{}, 0, len(result))
 	for i, raw := range result {
@@ -586,9 +573,7 @@ func reportRows(columns []types.ReportColumn, result []json.RawMessage) ([]map[s
 	return rows, nil
 }
 
-// GetCount returns the total number of docType documents matching filters.
-// get_list is paginated, so only get_count yields a true total. Permissions are
-// identical: both run the same DatabaseQuery with ignore_permissions unset.
+// GetCount returns the true total of matching documents, which paginated get_list cannot, under the same permissions.
 func (c *Client) GetCount(ctx context.Context, docType string, filters map[string]interface{}) (int64, error) {
 	// get_count reads the whole body via form_dict; a stray "limit" caps the count.
 	requestBody := map[string]interface{}{"doctype": docType}
@@ -609,7 +594,6 @@ func (c *Client) GetCount(ctx context.Context, docType string, filters map[strin
 	return response.Message, nil
 }
 
-// GetReportFilters fetches the filter metadata for a report
 func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]types.ReportFilter, error) {
 	// Use Frappe's desk.query_report.get_report_doc method to get report metadata
 	endpoint := "/api/method/frappe.desk.query_report.get_report_doc"
@@ -670,7 +654,6 @@ func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]typ
 	return filters, nil
 }
 
-// RunReport executes a Frappe report and returns the results
 func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types.ReportResponse, error) {
 	// Use GET request with query parameters to avoid CSRF issues with API key auth
 	endpoint := "/api/method/frappe.desk.query_report.run"

@@ -17,8 +17,7 @@ import (
 	"frappe-mcp-server/internal/mcp"
 )
 
-// kbFrappe records what reaches the rag app's own search method, which owns both the vector
-// search and the per-user permission filter.
+// kbFrappe records what reaches rag.search.search, which owns the vector search and the permission filter.
 type kbFrappe struct {
 	hits  []string
 	query url.Values

@@ -6,8 +6,7 @@ import (
 	"testing"
 )
 
-// failingResponseWriter always returns an error from Write to simulate a
-// disconnected client.
+// failingResponseWriter fails every Write, as a disconnected client does.
 type failingResponseWriter struct {
 	header http.Header
 }

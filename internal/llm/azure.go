@@ -11,7 +11,6 @@ import (
 	"frappe-mcp-server/internal/config"
 )
 
-// AzureClient implements the Client interface for Azure OpenAI
 type AzureClient struct {
 	apiKey      string
 	endpoint    string
@@ -22,7 +21,6 @@ type AzureClient struct {
 	client      *http.Client
 }
 
-// NewAzureClient creates a new Azure OpenAI client
 func NewAzureClient(cfg config.LLMConfig) (*AzureClient, error) {
 	apiVersion := cfg.AzureAPIVersion
 	if apiVersion == "" {
@@ -42,12 +40,10 @@ func NewAzureClient(cfg config.LLMConfig) (*AzureClient, error) {
 	}, nil
 }
 
-// Provider returns the provider name
 func (c *AzureClient) Provider() string {
 	return "azure"
 }
 
-// Generate generates a completion from the given prompt
 func (c *AzureClient) Generate(ctx context.Context, prompt string) (string, error) {
 	requestBody := map[string]interface{}{
 		"messages": []map[string]string{

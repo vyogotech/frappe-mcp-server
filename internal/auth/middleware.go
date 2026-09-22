@@ -7,13 +7,11 @@ import (
 	"net/http"
 )
 
-// Middleware provides authentication middleware for HTTP handlers
 type Middleware struct {
 	strategy    *strategies.OAuth2Strategy
 	requireAuth bool
 }
 
-// NewMiddleware creates a new authentication middleware
 func NewMiddleware(strategy *strategies.OAuth2Strategy, requireAuth bool) *Middleware {
 	return &Middleware{
 		strategy:    strategy,
@@ -21,7 +19,6 @@ func NewMiddleware(strategy *strategies.OAuth2Strategy, requireAuth bool) *Middl
 	}
 }
 
-// Handler wraps an HTTP handler with authentication
 func (m *Middleware) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Try to authenticate

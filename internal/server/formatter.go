@@ -7,7 +7,6 @@ import (
 	"strings"
 )
 
-// formatFrappeError extracts meaningful error info and formats it user-friendly
 func formatFrappeError(errorMsg, userQuery string) string {
 	// Extract the core error message from Frappe's verbose error format
 	coreError := extractCoreErrorMessage(errorMsg)
@@ -16,7 +15,6 @@ func formatFrappeError(errorMsg, userQuery string) string {
 	return formatUserFriendlyError(coreError, userQuery)
 }
 
-// extractCoreErrorMessage extracts the actual error from Frappe's verbose format
 func extractCoreErrorMessage(errorMsg string) string {
 	// Try to extract from JSON structure first
 	if strings.Contains(errorMsg, "Raw response:") {
@@ -79,7 +77,6 @@ func extractCoreErrorMessage(errorMsg string) string {
 	return errorMsg
 }
 
-// formatUserFriendlyError creates a conversational error message
 func formatUserFriendlyError(errorMsg, userQuery string) string {
 	errorLower := strings.ToLower(errorMsg)
 
@@ -149,7 +146,6 @@ func formatUserFriendlyError(errorMsg, userQuery string) string {
 	return response.String()
 }
 
-// formatDataWithoutLLM provides smart fallback formatting when LLM is unavailable
 func formatDataWithoutLLM(userQuery, rawData string) string {
 	// Try to parse as JSON
 	var data map[string]interface{}
@@ -184,7 +180,6 @@ func formatDataWithoutLLM(userQuery, rawData string) string {
 	return formatAsStructuredSummary(data, userQuery)
 }
 
-// detectRequestedFormat determines what format the user wants
 func detectRequestedFormat(query string) string {
 	queryLower := strings.ToLower(query)
 
@@ -201,7 +196,6 @@ func detectRequestedFormat(query string) string {
 	return "auto" // Let the system decide
 }
 
-// tryFormatAsReport handles ERPNext report format (columns + data)
 func tryFormatAsReport(data map[string]interface{}, formatType string) string {
 	// Check for report structure
 	columns, hasColumns := data["columns"].([]interface{})
@@ -243,7 +237,6 @@ func tryFormatAsReport(data map[string]interface{}, formatType string) string {
 	return response.String()
 }
 
-// buildMarkdownTable creates a markdown table from columns and rows
 func buildMarkdownTable(columns []interface{}, rows []interface{}) string {
 	if len(columns) == 0 || len(rows) == 0 {
 		return "No data available."
@@ -313,7 +306,6 @@ func buildMarkdownTable(columns []interface{}, rows []interface{}) string {
 	return table.String()
 }
 
-// formatCellValue formats a cell value for display
 func formatCellValue(value interface{}) string {
 	if value == nil {
 		return "-"
@@ -346,7 +338,6 @@ func formatCellValue(value interface{}) string {
 	}
 }
 
-// tryFormatAsList handles list/array format
 func tryFormatAsList(data map[string]interface{}, formatType string) string {
 	// Check for list structure
 	items, hasData := data["data"].([]interface{})
@@ -403,7 +394,6 @@ func tryFormatAsList(data map[string]interface{}, formatType string) string {
 	return response.String()
 }
 
-// extractField tries to extract a field from multiple possible keys
 func extractField(data map[string]interface{}, keys ...string) string {
 	for _, key := range keys {
 		if val, ok := data[key]; ok {
@@ -415,7 +405,6 @@ func extractField(data map[string]interface{}, keys ...string) string {
 	return ""
 }
 
-// tryFormatAsDocument handles single document display
 func tryFormatAsDocument(data map[string]interface{}) string {
 	// Check if it looks like a single document (has name, doctype, etc.)
 	if _, hasName := data["name"]; !hasName {
@@ -448,7 +437,6 @@ func tryFormatAsDocument(data map[string]interface{}) string {
 	return response.String()
 }
 
-// formatAsStructuredSummary provides a last-resort readable format
 func formatAsStructuredSummary(data map[string]interface{}, userQuery string) string {
 	var response strings.Builder
 
@@ -490,7 +478,6 @@ func formatAsStructuredSummary(data map[string]interface{}, userQuery string) st
 	return response.String()
 }
 
-// formatErrorMessage makes error messages user-friendly
 func formatErrorMessage(errorText string) string {
 	// Extract key error information
 	errorLower := strings.ToLower(errorText)
@@ -529,7 +516,6 @@ func formatErrorMessage(errorText string) string {
 	return response.String()
 }
 
-// formatEmptyResult provides a helpful message for empty results
 func formatEmptyResult(query string) string {
 	return fmt.Sprintf(`No results found for: "%s"
 

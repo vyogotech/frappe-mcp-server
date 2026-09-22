@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// GenerateID generates a random ID string
 func GenerateID(length int) string {
 	bytes := make([]byte, length/2)
 	if _, err := rand.Read(bytes); err != nil {
@@ -19,7 +18,6 @@ func GenerateID(length int) string {
 	return hex.EncodeToString(bytes)
 }
 
-// SanitizeString removes potentially harmful characters from strings
 func SanitizeString(input string) string {
 	// First remove script content (case insensitive)
 	re := regexp.MustCompile(`(?i)<script[^>]*>.*?</script>`)
@@ -35,18 +33,15 @@ func SanitizeString(input string) string {
 	return cleaned
 }
 
-// ValidateEmail validates email format
 func ValidateEmail(email string) bool {
 	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	return emailRegex.MatchString(email)
 }
 
-// FormatCurrency formats a float64 as currency
 func FormatCurrency(amount float64, currency string) string {
 	return fmt.Sprintf("%.2f %s", amount, currency)
 }
 
-// CalculatePercentage calculates percentage with proper handling of zero values
 func CalculatePercentage(part, total float64) float64 {
 	if total == 0 {
 		return 0
@@ -54,7 +49,6 @@ func CalculatePercentage(part, total float64) float64 {
 	return (part / total) * 100
 }
 
-// TruncateString truncates a string to specified length with ellipsis
 func TruncateString(str string, length int) string {
 	if len(str) <= length {
 		return str
@@ -65,7 +59,6 @@ func TruncateString(str string, length int) string {
 	return str[:length-3] + "..."
 }
 
-// ContainsString checks if a string slice contains a specific string
 func ContainsString(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
@@ -75,7 +68,6 @@ func ContainsString(slice []string, item string) bool {
 	return false
 }
 
-// RemoveEmptyStrings removes empty strings from a slice
 func RemoveEmptyStrings(slice []string) []string {
 	var result []string
 	for _, s := range slice {
@@ -89,7 +81,6 @@ func RemoveEmptyStrings(slice []string) []string {
 	return result
 }
 
-// ParseDateString parses various date string formats
 func ParseDateString(dateStr string) (time.Time, error) {
 	formats := []string{
 		"2006-01-02",
@@ -109,7 +100,6 @@ func ParseDateString(dateStr string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unable to parse date: %s", dateStr)
 }
 
-// CalculateBusinessDays calculates business days between two dates
 func CalculateBusinessDays(start, end time.Time) int {
 	if start.After(end) {
 		start, end = end, start
@@ -126,7 +116,6 @@ func CalculateBusinessDays(start, end time.Time) int {
 	return days
 }
 
-// FormatDuration formats a duration into human-readable format
 func FormatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%.0f seconds", d.Seconds())
@@ -140,7 +129,6 @@ func FormatDuration(d time.Duration) string {
 	return fmt.Sprintf("%.1f days", d.Hours()/24)
 }
 
-// MergeMaps merges multiple maps into one
 func MergeMaps(maps ...map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
 	for _, m := range maps {

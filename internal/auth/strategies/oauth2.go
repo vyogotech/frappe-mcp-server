@@ -23,7 +23,6 @@ import (
 // csrfTokenPattern scrapes a sid's CSRF token from the desk HTML: frappe.sessions.get_csrf_token is not whitelisted.
 var csrfTokenPattern = regexp.MustCompile(`csrf_token\s*=\s*"([a-f0-9]{20,64})"`)
 
-// OAuth2Strategy handles OAuth2 token validation
 type OAuth2Strategy struct {
 	tokenInfoURL   string
 	issuerURL      string
@@ -34,7 +33,6 @@ type OAuth2Strategy struct {
 	mu             sync.RWMutex
 }
 
-// OAuth2StrategyConfig represents configuration for OAuth2Strategy
 type OAuth2StrategyConfig struct {
 	TokenInfoURL   string
 	IssuerURL      string
@@ -44,7 +42,6 @@ type OAuth2StrategyConfig struct {
 	ValidateRemote bool
 }
 
-// NewOAuth2Strategy creates a new OAuth2Strategy
 func NewOAuth2Strategy(config OAuth2StrategyConfig) *OAuth2Strategy {
 	trustedMap := make(map[string]bool)
 	for _, client := range config.TrustedClients {
@@ -71,8 +68,7 @@ func NewOAuth2Strategy(config OAuth2StrategyConfig) *OAuth2Strategy {
 	}
 }
 
-// Authenticate authenticates a request and returns user information
-// Supports both sid cookie (Frappe session) and Bearer token (OAuth2)
+// Authenticate tries the sid cookie first, then the Bearer token.
 func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*types.User, error) {
 	// Strategy 1: Try sid cookie first (Frappe session - user-level permissions)
 	var sidErr error
@@ -140,7 +136,6 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 	return user, nil
 }
 
-// extractBearerToken extracts the Bearer token from the Authorization header
 func extractBearerToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
 	if strings.HasPrefix(auth, "Bearer ") {
@@ -163,7 +158,7 @@ func tokenCacheKey(token string, r *http.Request) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// validateToken validates the token with the OAuth2 provider
+// validateToken accepts any token as an anonymous user unless validate_remote is on.
 func (s *OAuth2Strategy) validateToken(ctx context.Context, token string) (*types.User, string, error) {
 	if !s.validateRemote {
 		// Skip remote validation (for development or if using JWT validation)
@@ -214,7 +209,6 @@ func (s *OAuth2Strategy) validateToken(ctx context.Context, token string) (*type
 	return user, tokenInfo.ClientID, nil
 }
 
-// extractUserFromHeaders extracts user information from trusted client headers
 func (s *OAuth2Strategy) extractUserFromHeaders(r *http.Request) *types.User {
 	return &types.User{
 		ID:       r.Header.Get("X-MCP-User-ID"),
@@ -223,14 +217,13 @@ func (s *OAuth2Strategy) extractUserFromHeaders(r *http.Request) *types.User {
 	}
 }
 
-// isTrustedClient checks if a client is trusted
 func (s *OAuth2Strategy) isTrustedClient(clientID string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.trustedClients[clientID]
 }
 
-// validateSessionCookie validates a Frappe session cookie (sid)
+// validateSessionCookie accepts any sid as an anonymous user unless validate_remote is on.
 func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *http.Cookie) (*types.User, error) {
 	// Check cache first
 	cacheKey := "sid:" + sidCookie.Value
@@ -298,8 +291,7 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 	return user, nil
 }
 
-// fetchCSRFToken retrieves the per-session CSRF token by requesting the desk
-// page with the sid cookie and pulling the token out of the embedded JS.
+// fetchCSRFToken reads the sid's CSRF token out of the desk page's inline JS.
 func (s *OAuth2Strategy) fetchCSRFToken(ctx context.Context, sidCookie *http.Cookie) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", s.issuerURL+"/app", nil)
 	if err != nil {
@@ -329,7 +321,6 @@ func (s *OAuth2Strategy) fetchCSRFToken(ctx context.Context, sidCookie *http.Coo
 	return string(m[1]), nil
 }
 
-// ClearCache clears the token cache
 func (s *OAuth2Strategy) ClearCache() {
 	s.cache.Flush()
 }
