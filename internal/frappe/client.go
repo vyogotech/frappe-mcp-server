@@ -59,6 +59,7 @@ func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 	// spans for every outbound request. When telemetry is disabled (no global
 	// provider), the wrapper is a no-op.
 	transport := &http.Transport{
+		Proxy:               http.ProxyFromEnvironment,
 		MaxIdleConns:        100,
 		IdleConnTimeout:     90 * time.Second,
 		DisableCompression:  false,
