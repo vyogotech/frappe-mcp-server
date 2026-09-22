@@ -1,0 +1,55 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"frappe-mcp-server/internal/config"
+	"frappe-mcp-server/internal/frappe"
+
+	"github.com/stretchr/testify/require"
+)
+
+// An IPv6 host needs brackets in the listen address, or the server stops at startup.
+func TestTheServerListensOnAnIPv6Host(t *testing.T) {
+	l, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skip("no IPv6 loopback here")
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	require.NoError(t, l.Close())
+
+	cfg := &config.Config{ERPNext: config.ERPNextConfig{BaseURL: "http://frappe.invalid"},
+		Server: config.ServerConfig{Host: "::1", Port: port}}
+	client, err := frappe.NewClient(cfg.ERPNext)
+	require.NoError(t, err)
+	s, err := NewMCPServer(cfg, client)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+	defer func() { cancel(); <-done }()
+
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(fmt.Sprintf("http://[::1]:%d/health", port))
+		if err != nil {
+			return false
+		}
+		_ = resp.Body.Close()
+		return true
+	}, 5*time.Second, 50*time.Millisecond)
+
+	rr := httptest.NewRecorder()
+	s.handleOpenAPI(rr, httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil))
+	var spec struct {
+		Servers []struct{ URL string } `json:"servers"`
+	}
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&spec))
+	require.Equal(t, fmt.Sprintf("http://[::1]:%d/api/v1", port), spec.Servers[0].URL)
+}

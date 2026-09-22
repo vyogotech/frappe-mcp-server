@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"regexp"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -185,7 +187,7 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	mux.HandleFunc("/tool/", mcpServer.handleToolCall)
 
 	mcpServer.httpServer = &http.Server{
-		Addr:              fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+		Addr:              net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port)),
 		Handler:           http.MaxBytesHandler(mcpServer.withMiddleware(mux), maxRequestBody),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       cfg.Server.Timeout,
@@ -2320,7 +2322,7 @@ func (s *MCPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 			"description": "API for accessing ERPNext data through MCP protocol",
 		},
 		"servers": []map[string]string{
-			{"url": fmt.Sprintf("http://%s:%d/api/v1", s.config.Server.Host, s.config.Server.Port)},
+			{"url": "http://" + net.JoinHostPort(s.config.Server.Host, strconv.Itoa(s.config.Server.Port)) + "/api/v1"},
 		},
 		"paths": map[string]interface{}{
 			"/health": map[string]interface{}{
