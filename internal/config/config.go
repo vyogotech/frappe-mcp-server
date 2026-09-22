@@ -358,9 +358,8 @@ func (c *Config) validate() error {
 	} else {
 		// Auth is enabled and required - API key/secret is optional but warn if missing
 		if c.ERPNext.APIKey == "" || c.ERPNext.APISecret == "" {
-			// This is valid - we'll use user OAuth2 tokens
-			// But log a warning for clarity
-			fmt.Println("INFO: API key/secret not provided. Will use OAuth2 token pass-through for user-level permissions.")
+			// through slog, not stdout: stdio's stdout is the JSON-RPC channel, and the HTTP server's log is JSON
+			slog.Info("API key/secret not provided; tool calls use each user's own session or OAuth2 token")
 		}
 	}
 
