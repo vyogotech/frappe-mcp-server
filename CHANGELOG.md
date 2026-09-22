@@ -42,6 +42,7 @@ All notable changes to ERPNext MCP Server.
 
 ### Removed
 - Deleted unused `create_oauth_client.py` and `create_oauth_client_fixed.py`
+- **Neo4j configuration** — the `neo4j:` block and `NEO4J_BOLT_URL` / `NEO4J_USERNAME` / `NEO4J_PASSWORD` are gone; nothing has read them since the FrappeForge graph tools left. Config files are read strictly, so a leftover `neo4j:` block now stops the server at startup: delete it.
 
 ## [Unreleased] - 2025-11-13
 

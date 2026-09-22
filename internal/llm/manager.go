@@ -252,8 +252,8 @@ func (m *Manager) GenerateStream(ctx context.Context, prompt string) (<-chan str
 	return ch, nil
 }
 
-// SwitchModel switches even when the new model fails its test call; persist is only logged.
-func (m *Manager) SwitchModel(config ModelConfig, persist bool) error {
+// SwitchModel switches even when the new model fails its test call, and the switch lasts only until restart.
+func (m *Manager) SwitchModel(config ModelConfig) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -294,8 +294,7 @@ func (m *Manager) SwitchModel(config ModelConfig, persist bool) error {
 		"old_provider", oldConfig.Provider,
 		"old_model", oldConfig.Model,
 		"new_provider", config.Provider,
-		"new_model", config.Model,
-		"persist", persist)
+		"new_model", config.Model)
 
 	return nil
 }

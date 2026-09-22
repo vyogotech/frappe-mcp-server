@@ -47,11 +47,6 @@ func main() {
 	// Create MCP server (backed by go-sdk).
 	mcpServer := mcp.NewServer("frappe-mcp-server", "1.0.0")
 
-	// Create Neo4j client
-	if err != nil {
-		log.Printf("Warning: Failed to initialize Neo4j client: %v", err)
-	}
-
 	// Create tool registry and register all tools.
 	toolRegistry := tools.NewRegistry(frappeClient)
 	mcpServer.RegisterTool("get_document", toolRegistry.GetDocument)

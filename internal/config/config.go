@@ -25,19 +25,12 @@ type Config struct {
 	Cache       CacheConfig       `yaml:"cache"`
 	Performance PerformanceConfig `yaml:"performance"`
 	Auth        AuthConfig        `yaml:"auth"`
-	Neo4j       Neo4jConfig       `yaml:"neo4j"`
 	Tools       ToolsConfig       `yaml:"tools"`
 }
 
 // ToolsConfig switches on tools that need more than Frappe itself
 type ToolsConfig struct {
 	KnowledgeBase bool `yaml:"knowledge_base"` // search_knowledge_base answers only where the rag app is installed
-}
-
-type Neo4jConfig struct {
-	BoltURL  string `yaml:"bolt_url"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
 }
 
 type ServerConfig struct {
@@ -275,17 +268,6 @@ func (c *Config) loadFromEnv() error {
 	}
 	if azureAPIVersion := os.Getenv("LLM_AZURE_API_VERSION"); azureAPIVersion != "" {
 		c.LLM.AzureAPIVersion = azureAPIVersion
-	}
-
-	// Neo4j configuration
-	if boltURL := os.Getenv("NEO4J_BOLT_URL"); boltURL != "" {
-		c.Neo4j.BoltURL = boltURL
-	}
-	if username := os.Getenv("NEO4J_USERNAME"); username != "" {
-		c.Neo4j.Username = username
-	}
-	if password := os.Getenv("NEO4J_PASSWORD"); password != "" {
-		c.Neo4j.Password = password
 	}
 
 	// Auth configuration
