@@ -14,10 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockOAuthEndpoint is the loopback base URL used by the in-process httptest
-// servers in this file. Extracting it to a non-credential-looking constant
-// stops gosec G101 from misclassifying TokenInfoURL string literals as
-// hardcoded credentials.
+// mockOAuthEndpoint is a constant because gosec G101 flags TokenInfoURL string literals as hardcoded credentials.
 const mockOAuthEndpoint = "http://localhost:8000"
 
 func TestMiddleware_RequiredAuth_ValidToken(t *testing.T) {

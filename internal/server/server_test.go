@@ -41,10 +41,7 @@ func TestGenerateWithLLM_LegacyClientFallback(t *testing.T) {
 
 var _ llm.Client = stubLLMClient{} // compile-time check
 
-// TestWithMiddleware_PublicPathsBypassAuth verifies that /health,
-// /api/v1/health, and /metrics return 200 even when auth is required and no
-// Bearer token is supplied. Other paths must still get 401. This is what
-// makes the docker HEALTHCHECK actually work.
+// The docker HEALTHCHECK sends no token, so /health, /api/v1/health and /metrics must skip auth and nothing else may.
 func TestWithMiddleware_PublicPathsBypassAuth(t *testing.T) {
 	// A bare OAuth2Strategy with no token in the request returns
 	// "missing or invalid Bearer token" — exactly the failure mode the
@@ -86,10 +83,7 @@ func TestWithMiddleware_PublicPathsBypassAuth(t *testing.T) {
 // middleware test. Extracted to a constant to dodge gosec G101.
 const mockOAuthEndpointTest = "http://localhost:8000"
 
-// TestExecuteTool_FabricatedPMToolsHidden verifies that the three fabricated
-// PM tools are NOT dispatchable through executeTool. They remain as exported
-// methods on ToolRegistry but are unwired from MCP, REST, intent routing,
-// and dispatch. Phase 2 will reimplement their bodies and re-wire them.
+// These three tools return placeholder numbers, so executeTool must not dispatch them.
 func TestExecuteTool_FabricatedPMToolsHidden(t *testing.T) {
 	s := &MCPServer{}
 	for _, name := range []string{

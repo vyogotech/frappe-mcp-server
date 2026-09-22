@@ -12,10 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockOAuthEndpoint is the loopback base URL used by the in-process httptest
-// servers in this file. Extracting it to a non-credential-looking constant
-// stops gosec G101 from misclassifying TokenInfoURL string literals as
-// hardcoded credentials.
+// mockOAuthEndpoint is a constant because gosec G101 flags TokenInfoURL string literals as hardcoded credentials.
 const mockOAuthEndpoint = "http://localhost:8000"
 
 func TestNewOAuth2Strategy(t *testing.T) {
@@ -310,11 +307,7 @@ func TestClearCache(t *testing.T) {
 	require.NotNil(t, user3)
 }
 
-// TestTokenCacheKey_DistinguishesImpersonationHeaders is a regression test
-// for the trusted-client cache-collision impersonation bug. Two requests
-// carrying the same bearer token but different X-MCP-User-* headers MUST
-// produce distinct cache keys, otherwise a trusted backend client can
-// retrieve another user's cached identity by reusing the same token.
+// One token under two X-MCP-User-* identities must give two cache keys, or the second user gets the first's identity.
 func TestTokenCacheKey_DistinguishesImpersonationHeaders(t *testing.T) {
 	token := "shared-bearer-token"
 

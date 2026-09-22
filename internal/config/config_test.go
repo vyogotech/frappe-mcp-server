@@ -283,10 +283,7 @@ func TestLoadMissingFile(t *testing.T) {
 	assert.Nil(t, cfg)
 }
 
-// TestLoadFromEnv_ERPNextLegacyShim verifies that the deprecated ERPNEXT_*
-// environment variable names are still honoured (with a deprecation warn)
-// when the new FRAPPE_* names are not set. Drop this shim no earlier than
-// 2026-10-01 once operators have migrated.
+// The deprecated ERPNEXT_* names must keep loading while FRAPPE_* is unset, until at least 2026-10-01.
 func TestLoadFromEnv_ERPNextLegacyShim(t *testing.T) {
 	t.Setenv("FRAPPE_BASE_URL", "")
 	t.Setenv("FRAPPE_API_KEY", "")

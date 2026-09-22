@@ -439,12 +439,7 @@ func TestGlobalSearch(t *testing.T) {
 	})
 }
 
-// TestClient_SidCookieSetsCSRFHeader verifies that when an authenticated user
-// with SessionID and CSRFToken is in context, the Client adds the sid cookie
-// AND sets X-Frappe-CSRF-Token on writes (POST in this case).
-//
-// This locks in the priority-1 hybrid auth path: sid cookie pass-through with
-// the per-session CSRF token scraped from /app HTML.
+// A write under sid auth must send both the sid cookie and X-Frappe-CSRF-Token, or Frappe rejects it.
 func TestClient_SidCookieSetsCSRFHeader(t *testing.T) {
 	var (
 		capturedReq    *http.Request
