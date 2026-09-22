@@ -1,18 +1,5 @@
 package server
 
-// sse.go — Server-Sent Events support for /api/v1/chat.
-//
-// When a request arrives with `Accept: text/event-stream`, handleChat
-// dispatches to handleChatSSE instead of the JSON handler.
-//
-// SSE event schema (all payloads are JSON, format: "data: <json>\n\n"):
-//
-//	{"type":"status",    "message":"..."}
-//	{"type":"tool_call", "name":"...", "arguments":{...}}
-//	{"type":"content",   "text":"token"}   // one per LLM token
-//	{"type":"done",      "tools_called":[], "data_quality":"high", "timestamp":"..."}
-//	{"type":"error",     "message":"..."}
-
 import (
 	"context"
 	"encoding/json"
@@ -26,7 +13,7 @@ import (
 	"frappe-mcp-server/internal/mcp"
 )
 
-// sseEvent is the envelope written for every SSE message.
+// sseEvent is every /api/v1/chat SSE message, sent as "data: <json>\n\n"; clients parse its type and field names.
 type sseEvent struct {
 	Type      string          `json:"type"`
 	Message   string          `json:"message,omitempty"`
@@ -92,10 +79,7 @@ func (sw *sseWriter) errEvent(msg string) {
 	sw.emit(sseEvent{Type: "error", Message: msg})
 }
 
-// handleChatSSE is the streaming version of handleChat.
-// It sets SSE headers, disables the write-deadline, then walks the same
-// intent-extract → tool-execute → LLM-format pipeline while emitting events
-// at each step so the browser can start rendering immediately.
+// handleChatSSE is the streaming version of handleChat: the same pipeline, emitting an event at each step.
 func (s *MCPServer) handleChatSSE(w http.ResponseWriter, r *http.Request) {
 	sw, ok := newSSEWriter(w)
 	if !ok {

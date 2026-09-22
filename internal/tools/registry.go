@@ -767,10 +767,7 @@ func (t *ToolRegistry) BudgetVarianceAnalysis(ctx context.Context, request mcp.T
 		return nil, fmt.Errorf("failed to get projects: %w", err)
 	}
 
-	// Compute totals across the returned projects. Frappe returns numeric
-	// fields as float64 via JSON unmarshal; missing or non-numeric values
-	// are skipped so a partial dataset still produces a best-effort sum
-	// rather than failing.
+	// Missing or non-numeric amounts are skipped, so a partial dataset still sums instead of failing.
 	var totalBudget, totalActual float64
 	for _, p := range projects.Data {
 		if v, ok := p["total_budget"].(float64); ok {

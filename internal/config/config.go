@@ -228,10 +228,7 @@ func Load() (*Config, error) {
 
 // loadFromEnv loads configuration from environment variables
 func (c *Config) loadFromEnv() error {
-	// Frappe instance configuration. Prefer FRAPPE_* env names (current);
-	// fall back to ERPNEXT_* (deprecated) so operators upgrading from main
-	// don't see "frappe instance base URL is required" on first start.
-	// Plan to drop the ERPNEXT_* shim no earlier than 2026-10-01.
+	// ERPNEXT_* is the deprecated fallback that keeps upgraded deployments starting; drop it no earlier than 2026-10-01.
 	if baseURL := os.Getenv("FRAPPE_BASE_URL"); baseURL != "" {
 		c.ERPNext.BaseURL = baseURL
 	} else if legacy := os.Getenv("ERPNEXT_BASE_URL"); legacy != "" {

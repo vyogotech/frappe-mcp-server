@@ -13,10 +13,7 @@ const (
 	JSONRPCServerError    = -32000 // Generic tool execution failure
 )
 
-// JSONRPCRequest is a JSON-RPC 2.0 request envelope.
-//
-// ID may be a number or a string per spec; we keep it as RawMessage and echo
-// it verbatim in the response.
+// JSONRPCRequest is a JSON-RPC 2.0 request; ID stays raw because the spec allows a number or a string, echoed verbatim.
 type JSONRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id,omitempty"`

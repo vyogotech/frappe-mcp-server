@@ -20,11 +20,7 @@ type Client interface {
 // Streamer is optionally implemented by LLM clients that support token streaming.
 // Callers should type-assert: if s, ok := client.(llm.Streamer); ok { ... }
 type Streamer interface {
-	// GenerateStream sends prompt to the LLM and streams individual tokens into
-	// the returned channel. The channel is closed when generation finishes or
-	// the context is cancelled. A non-nil error returned means the stream could
-	// not be started; errors mid-stream are sent as a final empty token and the
-	// channel is closed.
+	// GenerateStream must close the channel when done, on error or on cancel; a non-nil error means no stream started.
 	GenerateStream(ctx context.Context, prompt string) (<-chan string, error)
 }
 

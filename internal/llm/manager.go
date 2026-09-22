@@ -223,10 +223,7 @@ func (m *Manager) Generate(ctx context.Context, prompt string) (string, error) {
 	return result, err
 }
 
-// GenerateStream implements the Streamer interface.
-// It picks the active client (primary or fallback) and, if that client also
-// implements Streamer, delegates to its GenerateStream.  Otherwise it falls
-// back to a non-streaming Generate call and synthesises a single-token stream.
+// GenerateStream streams from the active client, or sends Generate's whole answer as one token when it cannot stream.
 func (m *Manager) GenerateStream(ctx context.Context, prompt string) (<-chan string, error) {
 	m.mutex.RLock()
 	client := m.primaryClient
@@ -304,8 +301,6 @@ func (m *Manager) SwitchModel(config ModelConfig, persist bool) error {
 		"new_provider", config.Provider,
 		"new_model", config.Model,
 		"persist", persist)
-
-	// TODO: If persist is true, update config.yaml
 
 	return nil
 }

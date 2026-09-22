@@ -9,17 +9,8 @@ import (
 	"strings"
 )
 
-// HandleStreamableHTTP is the POST /mcp handler implementing the JSON-RPC 2.0
-// "Streamable HTTP" transport from the MCP specification, JSON-only response
-// flavour. SSE upgrade is not supported (returns 406).
-//
-// This method is public so it can be registered on the REST API HTTP mux in
-// internal/server, which already has the OAuth2 auth middleware applied.
-//
-// Errors are categorised:
-//   - Transport-level (bad headers)        → non-200 HTTP response
-//   - Protocol-level (bad JSON, bad shape) → 200 + JSON-RPC error body
-//   - Application-level (tool failure)     → 200 + JSON-RPC error body
+// HandleStreamableHTTP serves POST /mcp (Streamable HTTP, JSON responses only); mount it behind the auth middleware.
+// Only transport errors (method, headers, body size) get an HTTP error status; JSON-RPC and tool errors are 200.
 func (s *Server) HandleStreamableHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -97,10 +88,7 @@ func (s *Server) dispatchInitialize(req JSONRPCRequest) JSONRPCResponse {
 	})
 }
 
-// dispatchToolsList handles the JSON-RPC "tools/list" method. Returns each
-// registered tool with the description and input schema supplied at
-// registration time. Tools registered via the bare RegisterTool (no metadata)
-// still get a permissive {"type":"object"} schema, preserving legacy behaviour.
+// dispatchToolsList returns each registered tool with the description and input schema given at registration.
 func (s *Server) dispatchToolsList(req JSONRPCRequest) JSONRPCResponse {
 	tools := make([]toolDefinition, 0, len(s.toolNames))
 	for _, name := range s.toolNames {
@@ -120,10 +108,7 @@ type toolsCallParams struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-// dispatchToolsCall handles the JSON-RPC "tools/call" method. It translates
-// the JSON-RPC request into the internal ToolRequest shape, runs it through
-// executeToolRequest (which emits the OpenTelemetry span), then translates
-// the resulting ToolResponse back into the JSON-RPC tools/call result shape.
+// dispatchToolsCall runs tools/call through executeToolRequest, which owns the tool's OpenTelemetry span.
 func (s *Server) dispatchToolsCall(ctx context.Context, req JSONRPCRequest) JSONRPCResponse {
 	if len(req.Params) == 0 {
 		return newJSONRPCError(req.ID, JSONRPCInvalidParams, "tools/call requires params")

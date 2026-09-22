@@ -1,11 +1,5 @@
+// Package frappe is a client for the generic Frappe REST API, so any Frappe app works, not only ERPNext.
 package frappe
-
-// Package frappe provides a client for the Frappe Framework REST API.
-// This client works with ANY Frappe-based application including ERPNext,
-// Frappe HR, Healthcare, Education, and custom Frappe apps.
-// The API endpoints used are generic Frappe Framework endpoints:
-//   - /api/resource/{doctype}           - CRUD operations
-//   - /api/method/frappe.desk.search.*  - Search operations
 
 import (
 	"context"
@@ -54,10 +48,6 @@ func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 		return nil, fmt.Errorf("API key provided without API secret")
 	}
 
-	// Create HTTP client with connection pooling, instrumented with OpenTelemetry.
-	// otelhttp.NewTransport wraps the underlying transport and creates child
-	// spans for every outbound request. When telemetry is disabled (no global
-	// provider), the wrapper is a no-op.
 	transport := &http.Transport{
 		Proxy:               http.ProxyFromEnvironment,
 		MaxIdleConns:        100,
@@ -299,8 +289,6 @@ type GlobalSearchRequest struct {
 	Start   int         `json:"start,omitempty"`
 }
 
-// GlobalSearch performs a full-text search across all indexed doctypes using
-// the Frappe global search endpoint (/api/method/frappe.utils.global_search.search).
 // SearchKnowledgeBase asks the rag app for the passages closest to a question. The app owns
 // the vector search and the per-user permission filter; this only carries the call.
 func (c *Client) SearchKnowledgeBase(ctx context.Context, query string, limit int, session string) ([]map[string]interface{}, error) {
@@ -330,6 +318,8 @@ func (c *Client) SearchKnowledgeBase(ctx context.Context, query string, limit in
 	return response.Message, nil
 }
 
+// GlobalSearch performs a full-text search across all indexed doctypes using
+// the Frappe global search endpoint (/api/method/frappe.utils.global_search.search).
 func (c *Client) GlobalSearch(ctx context.Context, req GlobalSearchRequest) ([]GlobalSearchResult, error) {
 	if req.Text == "" {
 		return nil, fmt.Errorf("text is required for global search")
@@ -408,11 +398,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	// Authentication priority:
-	// 1. sid cookie (user session) - best, user-level permissions
-	// 2. OAuth2 Bearer token - good, can be user or system level
-	// 3. API key/secret - fallback, system-level permissions
-
+	// Keep this order: the sid and the user's token carry the user's permissions, the API key is system-level.
 	user := auth.UserFromContext(ctx)
 
 	if user != nil && user.SessionID != "" {
@@ -420,10 +406,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 		// a request carries a cookie as name=value only: Secure, HttpOnly and SameSite belong to Set-Cookie
 		req.Header.Set("Cookie", "sid="+user.SessionID)
 		slog.Debug("Using sid cookie for outbound request", "user", user.Email, "method", method, "csrf_token_len", len(user.CSRFToken))
-		// Frappe enforces CSRF on POST/PUT/DELETE under sid auth whenever the
-		// session has a csrf_token populated (which happens the first time the
-		// sid loads any /app/* page — i.e. always, for browser-driven users).
-		// The token is fetched in validateSessionCookie by scraping /app HTML.
+		// Frappe rejects sid-auth writes without the session's CSRF token (scraped in validateSessionCookie).
 		if (method == "POST" || method == "PUT" || method == "DELETE") && user.CSRFToken != "" {
 			req.Header.Set("X-Frappe-CSRF-Token", user.CSRFToken)
 			slog.Debug("Set X-Frappe-CSRF-Token header", "user", user.Email, "method", method, "token_len", len(user.CSRFToken))

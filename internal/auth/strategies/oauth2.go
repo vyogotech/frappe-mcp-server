@@ -20,10 +20,7 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
-// csrfTokenPattern matches the `csrf_token = "<hex>"` assignment embedded in
-// Frappe's desk HTML. Frappe only emits this on desk page loads, and
-// `frappe.sessions.get_csrf_token` is not whitelisted — so scraping the desk
-// HTML is the only first-party way to obtain the token for a known sid.
+// csrfTokenPattern scrapes a sid's CSRF token from the desk HTML: frappe.sessions.get_csrf_token is not whitelisted.
 var csrfTokenPattern = regexp.MustCompile(`csrf_token\s*=\s*"([a-f0-9]{20,64})"`)
 
 // OAuth2Strategy handles OAuth2 token validation
@@ -152,11 +149,8 @@ func extractBearerToken(r *http.Request) string {
 	return ""
 }
 
-// tokenCacheKey derives the OAuth2 cache key from the bearer token AND the
-// X-MCP-User-* impersonation headers. Without this, a trusted backend client
-// reusing the same OAuth2 token for two different end-users would retrieve
-// the first user's cached identity on the second request — silent
-// impersonation. Hashing keeps the raw token out of the cache key space.
+// tokenCacheKey must hash the X-MCP-User-* headers with the token: a trusted client reusing one token for two users
+// would otherwise get the first user's cached identity.
 func tokenCacheKey(token string, r *http.Request) string {
 	h := sha256.New()
 	h.Write([]byte(token))
@@ -283,11 +277,7 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 		return nil, fmt.Errorf("failed to decode session info: %w", err)
 	}
 
-	// Frappe enforces CSRF on POST/PUT/DELETE under sid auth once
-	// frappe.session.data.csrf_token is populated server-side, which happens
-	// lazily on desk page render. `/api/method/frappe.auth.get_logged_user`
-	// does NOT emit X-Frappe-CSRF-Token, and frappe.sessions.get_csrf_token is
-	// not whitelisted, so we scrape the token out of the desk HTML.
+	// Writes under sid auth need the session's CSRF token, and get_logged_user does not return it.
 	csrfToken, err := s.fetchCSRFToken(ctx, sidCookie)
 	if err != nil {
 		// Don't fail auth — reads still work without a CSRF token. Writes will

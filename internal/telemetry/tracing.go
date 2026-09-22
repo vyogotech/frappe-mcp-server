@@ -1,9 +1,4 @@
-// Package telemetry wires OpenTelemetry tracing for frappe-mcp-server.
-//
-// Init() is no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set. When unset, the
-// global tracer provider stays at the default no-op provider, so calls to
-// tracer.Start() throughout the codebase have effectively zero cost. When set,
-// spans are exported via OTLP/HTTP using a batch processor.
+// Package telemetry exports OpenTelemetry spans over OTLP/HTTP only when OTEL_EXPORTER_OTLP_ENDPOINT is set.
 package telemetry
 
 import (
@@ -27,15 +22,8 @@ const serviceName = "frappe-mcp-server"
 // noopShutdown is returned when telemetry is disabled.
 func noopShutdown(_ context.Context) error { return nil }
 
-// Init configures the global OpenTelemetry tracer provider.
-//
-// Returns a shutdown function the caller MUST defer; the function flushes any
-// pending spans. If OTEL_EXPORTER_OTLP_ENDPOINT is unset, Init returns a no-op
-// shutdown and leaves the global provider untouched.
-//
-// Init never returns an error that should abort startup. If exporter creation
-// fails, Init logs a warning and returns a no-op shutdown so the server can
-// still serve requests without telemetry.
+// Init sets the global tracer provider; the caller must defer the returned shutdown, which flushes pending spans.
+// A telemetry failure only logs and disables tracing, so it never aborts startup.
 func Init(ctx context.Context) (func(context.Context) error, error) {
 	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	if endpoint == "" {

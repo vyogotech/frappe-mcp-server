@@ -91,10 +91,7 @@ func (s *Server) SDKServer() *gosdk.Server {
 	return s.sdkServer
 }
 
-// RegisterTool registers a tool with no published metadata — clients calling
-// tools/list will see an empty description and a permissive input schema.
-// Prefer RegisterToolWithSchema; this wrapper remains for callers that have
-// no catalogued metadata to hand over.
+// RegisterTool publishes the tool with an empty description and a permissive schema; prefer RegisterToolWithSchema.
 func (s *Server) RegisterTool(name string, handler ToolHandler) {
 	s.RegisterToolWithSchema(name, "", nil, handler)
 }

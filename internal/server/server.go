@@ -267,10 +267,7 @@ func (s *MCPServer) metrics(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/metrics response sent")
 }
 
-// publicPaths are HTTP paths that bypass authentication. These are health
-// and metrics probes that need to work for docker/k8s/load-balancer probes
-// without managing credentials. Tool dispatch and chat paths are NOT in
-// this set — those always require auth when authMiddleware is enabled.
+// publicPaths skip auth so probes need no credentials; never add a tool or chat path here.
 var publicPaths = map[string]bool{
 	"/health":        true,
 	"/api/v1/health": true,
@@ -304,10 +301,7 @@ func (s *MCPServer) withMiddleware(handler http.Handler) http.Handler {
 	return h
 }
 
-// recoveryMiddleware turns a panic in any handler or downstream middleware
-// into a 500 response + structured log line instead of taking down the
-// HTTP server's goroutine. Outermost in the chain so it covers logging,
-// CORS, and auth middleware as well as the request handler itself.
+// recoveryMiddleware answers a panic anywhere in the chain with a 500 and a logged stack.
 func (s *MCPServer) recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -318,10 +312,7 @@ func (s *MCPServer) recoveryMiddleware(next http.Handler) http.Handler {
 					"path", strings.ReplaceAll(r.URL.Path, "\n", " "),
 					"stack", string(debug.Stack()),
 				)
-				// If headers have already been written, WriteHeader logs a
-				// duplicate-header warning and is otherwise a no-op — leaving
-				// the connection to close. If they have not, the client gets
-				// a clean 500 instead of a hung request.
+				// Safe after headers are sent (a logged no-op); before, the client gets a 500 instead of a hung request.
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = w.Write([]byte(`{"error":"internal server error"}`))
@@ -371,11 +362,7 @@ func (w *statusRecorder) Write(b []byte) (int, error) {
 	return n, err
 }
 
-// Flush forwards to the underlying writer so SSE handlers downstream of the
-// logging middleware can still stream. Without this method the wrapper
-// satisfies http.ResponseWriter but NOT http.Flusher — the SSE handler's
-// `w.(http.Flusher)` type assertion fails and the stream returns
-// "SSE not supported".
+// Flush keeps the wrapper an http.Flusher; without it the SSE handler's type assertion fails with "SSE not supported".
 func (w *statusRecorder) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
@@ -389,11 +376,7 @@ func (w *statusRecorder) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
-// toolCatalog returns the canonical description + input schema for every MCP
-// tool that has a published schema. Both registerTools (MCP protocol) and
-// listTools (REST /tools endpoint) consume this so clients and operators see
-// the same metadata. Tools not present here are still registered but with an
-// empty description and a permissive {"type":"object"} schema.
+// toolCatalog feeds both MCP tools/list and REST /tools; a tool missing here is published with no description.
 func toolCatalog() map[string]mcp.ToolMeta {
 	strProp := func(desc string) map[string]interface{} {
 		return map[string]interface{}{"type": "string", "description": desc}
@@ -505,10 +488,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 	}
 }
 
-// registerTools registers all MCP tools. Tools with catalogued metadata are
-// registered via RegisterToolWithSchema so tools/list returns real schemas;
-// uncatalogued tools fall through to the bare RegisterTool (empty description,
-// permissive schema) to preserve pre-existing behaviour.
+// registerTools registers every MCP tool, with its toolCatalog schema where it has one.
 func (s *MCPServer) registerTools() error {
 	slog.Info("Registering MCP tools...")
 
@@ -559,11 +539,7 @@ func (s *MCPServer) registerTools() error {
 	return nil
 }
 
-// listTools provides the REST /tools endpoint for listing available tools.
-// It consumes the same toolCatalog() that registerTools uses, so the REST
-// response and the MCP tools/list response stay in sync. Deprecated/legacy
-// tools without catalogued schemas are omitted from this listing but remain
-// callable.
+// listTools serves REST /tools from toolCatalog; legacy tools with no catalogue entry stay callable but unlisted.
 func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	slog.Info("/tools endpoint called",
 		"method", strings.ReplaceAll(r.Method, "\n", " "),
