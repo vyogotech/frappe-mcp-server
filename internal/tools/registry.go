@@ -898,9 +898,12 @@ func (t *ToolRegistry) fetchRelatedDocuments(ctx context.Context, doctype string
 				if linkedDocType != "" {
 					// Fetch the linked document
 					linkedDoc, err := t.frappeClient.GetDocument(ctx, linkedDocType, strValue)
-					if err == nil {
-						related[field] = linkedDoc
+					if err != nil {
+						// a refused or failed lookup is not the same as a field with nothing linked
+						related[field] = map[string]interface{}{"error": err.Error()}
+						continue
 					}
+					related[field] = linkedDoc
 				}
 			}
 		}
