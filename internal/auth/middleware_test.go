@@ -219,12 +219,12 @@ func TestMiddleware_WithUserContext(t *testing.T) {
 			Email: "test@example.com",
 		}
 		ctx := WithUser(r.Context(), user)
-		
+
 		// Verify we can retrieve it
 		retrievedUser, found := GetUserFromContext(ctx)
 		assert.True(t, found)
 		assert.Equal(t, "test-user", retrievedUser.ID)
-		
+
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -253,4 +253,3 @@ func TestMiddleware_ContextPropagation(t *testing.T) {
 	assert.NotNil(t, retrievedUser)
 	assert.Equal(t, user.ID, retrievedUser.ID)
 }
-

@@ -42,9 +42,9 @@ func TestNewOAuth2Strategy(t *testing.T) {
 
 func TestExtractBearerToken(t *testing.T) {
 	tests := []struct {
-		name           string
-		authHeader     string
-		expectedToken  string
+		name          string
+		authHeader    string
+		expectedToken string
 	}{
 		{
 			name:          "Valid Bearer token",
@@ -363,4 +363,3 @@ func TestTokenCacheKey_DifferentTokensDifferentKeys(t *testing.T) {
 	assert.NotEqual(t, tokenCacheKey("token-a", req), tokenCacheKey("token-b", req),
 		"different tokens must produce different cache keys")
 }
-

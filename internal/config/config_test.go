@@ -127,13 +127,13 @@ erpnext:
 
 	// Set environment variables
 	originalVars := map[string]string{
-		"CONFIG_FILE":        os.Getenv("CONFIG_FILE"),
-		"FRAPPE_BASE_URL":    os.Getenv("FRAPPE_BASE_URL"),
-		"FRAPPE_API_KEY":     os.Getenv("FRAPPE_API_KEY"),
-		"FRAPPE_API_SECRET":  os.Getenv("FRAPPE_API_SECRET"),
-		"SERVER_HOST":        os.Getenv("SERVER_HOST"),
-		"SERVER_PORT":        os.Getenv("SERVER_PORT"),
-		"LOG_LEVEL":          os.Getenv("LOG_LEVEL"),
+		"CONFIG_FILE":       os.Getenv("CONFIG_FILE"),
+		"FRAPPE_BASE_URL":   os.Getenv("FRAPPE_BASE_URL"),
+		"FRAPPE_API_KEY":    os.Getenv("FRAPPE_API_KEY"),
+		"FRAPPE_API_SECRET": os.Getenv("FRAPPE_API_SECRET"),
+		"SERVER_HOST":       os.Getenv("SERVER_HOST"),
+		"SERVER_PORT":       os.Getenv("SERVER_PORT"),
+		"LOG_LEVEL":         os.Getenv("LOG_LEVEL"),
 	}
 
 	// Set test environment variables

@@ -19,7 +19,7 @@ func (f *failingResponseWriter) Header() http.Header {
 	return f.header
 }
 func (*failingResponseWriter) Write([]byte) (int, error) { return 0, errors.New("client disconnected") }
-func (*failingResponseWriter) WriteHeader(int)            {}
+func (*failingResponseWriter) WriteHeader(int)           {}
 
 type noopFlusher struct{}
 

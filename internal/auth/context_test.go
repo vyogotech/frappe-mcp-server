@@ -90,9 +90,3 @@ func TestUserMethods(t *testing.T) {
 		assert.Equal(t, []string{"San Francisco"}, extensions["location"])
 	})
 }
-
-
-
-
-
-
