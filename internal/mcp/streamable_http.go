@@ -154,6 +154,10 @@ func (s *Server) dispatchToolsCall(ctx context.Context, req JSONRPCRequest) JSON
 	if len(params.Arguments) == 0 {
 		params.Arguments = json.RawMessage(`{}`)
 	}
+	var args map[string]json.RawMessage
+	if err := json.Unmarshal(params.Arguments, &args); err != nil {
+		return newJSONRPCError(req.ID, JSONRPCInvalidParams, "tools/call params.arguments must be an object")
+	}
 
 	toolReq := ToolRequest{
 		ID:     string(req.ID),
