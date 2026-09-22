@@ -139,7 +139,7 @@ func (c *OllamaERPNextClient) StartMCPServer() error {
 	if err != nil {
 		realPath = cleanPath // If symlink evaluation fails, use the clean absolute path
 	}
-	
+
 	info, statErr := os.Stat(realPath)
 	if statErr != nil {
 		return fmt.Errorf("MCP server binary not found at %s: %w", realPath, statErr)
@@ -150,7 +150,7 @@ func (c *OllamaERPNextClient) StartMCPServer() error {
 
 	// Start the MCP server process
 	c.mcpProcess = exec.Command(realPath) // #nosec G204 G702 -- path is resolved, symlinks evaluated, and validated as a non-directory file above
-	c.mcpProcess.Stderr = os.Stderr // Forward stderr for debugging
+	c.mcpProcess.Stderr = os.Stderr       // Forward stderr for debugging
 
 	stdin, err := c.mcpProcess.StdinPipe()
 	if err != nil {
@@ -861,10 +861,10 @@ func main() {
 		fmt.Printf("💻 Starting in CLI mode...\n")
 		debugMode := false
 		for _, arg := range os.Args {
-		if arg == "--debug" || arg == "--raw" {
-			debugMode = true
-			_ = os.Setenv("DEBUG", "1")
-		}
+			if arg == "--debug" || arg == "--raw" {
+				debugMode = true
+				_ = os.Setenv("DEBUG", "1")
+			}
 		}
 		client := NewOllamaERPNextClient(mcpServerPath, ollamaModel, debugMode)
 		if err := client.StartMCPServer(); err != nil {
@@ -932,10 +932,10 @@ func main() {
 		mux := http.NewServeMux()
 		debugMode := false
 		for _, arg := range os.Args {
-		if arg == "--debug" || arg == "--raw" {
-			debugMode = true
-			_ = os.Setenv("DEBUG", "1")
-		}
+			if arg == "--debug" || arg == "--raw" {
+				debugMode = true
+				_ = os.Setenv("DEBUG", "1")
+			}
 		}
 		client := NewOllamaERPNextClient(mcpServerPath, ollamaModel, debugMode)
 		if err := client.StartMCPServer(); err != nil {

@@ -113,7 +113,7 @@ func GetPresetModel(name string) (PresetModel, bool) {
 // ListPresetModels returns all available preset models
 func ListPresetModels() []PresetModel {
 	models := make([]PresetModel, 0, len(ModelRegistry))
-	for _, model := range ModelRegistry{
+	for _, model := range ModelRegistry {
 		models = append(models, model)
 	}
 	return models
@@ -138,4 +138,3 @@ func ValidateModelConfig(config ModelConfig) error {
 	}
 	return nil
 }
-

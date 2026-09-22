@@ -93,4 +93,3 @@ func (c *AnthropicClient) Generate(ctx context.Context, prompt string) (string, 
 
 	return result.Content[0].Text, nil
 }
-

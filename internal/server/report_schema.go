@@ -11,8 +11,8 @@ type ReportSchema struct {
 	ReportName       string
 	RequiredFilters  []string
 	OptionalFilters  []string
-	DateRangeFields  []string              // The specific field names for date range
-	CompanyFieldName string                // Usually "company", but could vary
+	DateRangeFields  []string               // The specific field names for date range
+	CompanyFieldName string                 // Usually "company", but could vary
 	FilterDefaults   map[string]interface{} // Default values for filters
 }
 
@@ -41,7 +41,7 @@ func (s *MCPServer) GetReportSchema(ctx context.Context, reportName string) (*Re
 	// Parse filters
 	for _, filter := range filters {
 		fieldName := filter.FieldName
-		
+
 		// Identify date range fields
 		if filter.FieldType == "Date" {
 			schema.DateRangeFields = append(schema.DateRangeFields, fieldName)
@@ -164,7 +164,7 @@ func (s *ReportSchema) ValidateAndTransformFilters(userFilters map[string]interf
 			}
 		}
 	}
-	
+
 	// Apply other defaults for missing required fields
 	for _, reqFilter := range s.RequiredFilters {
 		if _, exists := transformed[reqFilter]; !exists {
@@ -193,4 +193,3 @@ func (s *ReportSchema) GetDateFieldNames() (startField, endField string) {
 	// Default fallback
 	return "from_date", "to_date"
 }
-

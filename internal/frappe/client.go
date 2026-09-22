@@ -293,8 +293,8 @@ type GlobalSearchResult struct {
 // GlobalSearchRequest holds the parameters for a global search call.
 type GlobalSearchRequest struct {
 	Text    string      `json:"text"`
-	Doctype string      `json:"doctype,omitempty"`  // restrict to one doctype
-	Scope   interface{} `json:"scope,omitempty"`    // one doctype or []string
+	Doctype string      `json:"doctype,omitempty"` // restrict to one doctype
+	Scope   interface{} `json:"scope,omitempty"`   // one doctype or []string
 	Limit   int         `json:"limit,omitempty"`
 	Start   int         `json:"start,omitempty"`
 }
@@ -407,14 +407,14 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	
+
 	// Authentication priority:
 	// 1. sid cookie (user session) - best, user-level permissions
 	// 2. OAuth2 Bearer token - good, can be user or system level
 	// 3. API key/secret - fallback, system-level permissions
-	
+
 	user := auth.UserFromContext(ctx)
-	
+
 	if user != nil && user.SessionID != "" {
 		// Priority 1: Use Frappe session cookie (user-level permissions)
 		// a request carries a cookie as name=value only: Secure, HttpOnly and SameSite belong to Set-Cookie
@@ -435,11 +435,11 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	} else if c.apiKey != "" && c.apiSecret != "" {
 		// Priority 3: Fall back to API key/secret if no user token
 		req.Header.Set("Authorization", fmt.Sprintf("token %s:%s", c.apiKey, c.apiSecret))
-		
+
 		// For API key auth, bypass CSRF by setting headers
 		// Frappe recognizes api/method endpoints and API key auth should bypass CSRF
 		req.Header.Set("X-Frappe-CSRF-Token", "bypass")
-		
+
 		// Warn if using placeholder credentials
 		if c.apiKey == "your_api_key_here" || c.apiSecret == "your_api_secret_here" {
 			slog.Warn("Using placeholder API credentials - authentication will fail",
@@ -505,7 +505,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 			"status_code", resp.StatusCode,
 			"path", strings.SplitN(endpoint, "?", 2)[0],
 			"exc_type", erpError.ExcType)
-		
+
 		return &erpError
 	}
 
@@ -536,7 +536,7 @@ func isRetryableError(ctx context.Context, err error) bool {
 // RunAggregationQuery executes an aggregation query using frappe.client.get_list
 func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationRequest) ([]types.Document, error) {
 	endpoint := "/api/method/frappe.client.get_list"
-	
+
 	// Frappe v16's get_list refuses "SUM(x)" strings; an aggregate is a {"SUM": field} dict
 	arg := req.Field
 	if strings.EqualFold(req.Metric, "count") {
@@ -564,16 +564,16 @@ func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationR
 	var response struct {
 		Message []types.Document `json:"message"`
 	}
-	
+
 	if err := c.makeRequest(ctx, "POST", endpoint, requestBody, &response); err != nil {
 		return nil, fmt.Errorf("aggregation query failed for %s: %w", req.DocType, err)
 	}
-	
+
 	slog.Info("Aggregation query executed successfully",
 		"doctype", req.DocType,
 		"group_by", req.GroupBy,
 		"result_count", len(response.Message))
-	
+
 	return response.Message, nil
 }
 
@@ -630,25 +630,25 @@ func (c *Client) GetCount(ctx context.Context, docType string, filters map[strin
 func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]types.ReportFilter, error) {
 	// Use Frappe's desk.query_report.get_report_doc method to get report metadata
 	endpoint := "/api/method/frappe.desk.query_report.get_report_doc"
-	
+
 	// Build query parameters
 	queryParams := url.Values{}
 	queryParams.Set("report_name", reportName)
 	endpoint = endpoint + "?" + queryParams.Encode()
-	
+
 	var response struct {
 		Message struct {
 			Filters interface{} `json:"filters"` // Can be string (JSON) or array
 		} `json:"message"`
 	}
-	
+
 	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
 		return nil, fmt.Errorf("failed to get report metadata for %s: %w", reportName, err)
 	}
-	
+
 	// Parse the filters - they might be a JSON string or already an array
 	var filters []types.ReportFilter
-	
+
 	switch v := response.Message.Filters.(type) {
 	case string:
 		// Filters are JSON string, need to unmarshal
@@ -682,7 +682,7 @@ func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]typ
 			}
 		}
 	}
-	
+
 	slog.Info("Report filters retrieved successfully", "report_name", reportName, "filter_count", len(filters))
 	return filters, nil
 }
@@ -691,11 +691,11 @@ func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]typ
 func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types.ReportResponse, error) {
 	// Use GET request with query parameters to avoid CSRF issues with API key auth
 	endpoint := "/api/method/frappe.desk.query_report.run"
-	
+
 	// Build query parameters
 	queryParams := url.Values{}
 	queryParams.Set("report_name", req.ReportName)
-	
+
 	// Add filters if provided - need to JSON encode them
 	if len(req.Filters) > 0 {
 		filtersJSON, err := json.Marshal(req.Filters)
@@ -704,29 +704,29 @@ func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types
 		}
 		queryParams.Set("filters", string(filtersJSON))
 	}
-	
+
 	// Add user context if provided
 	if req.User != "" {
 		queryParams.Set("user", req.User)
 	}
-	
+
 	// Append query parameters to endpoint
 	if len(queryParams) > 0 {
 		endpoint = endpoint + "?" + queryParams.Encode()
 	}
-	
+
 	var response struct {
 		Message struct {
 			Columns []types.ReportColumn `json:"columns"`
 			Result  []json.RawMessage    `json:"result"`
 		} `json:"message"`
 	}
-	
+
 	// Use GET request instead of POST to avoid CSRF token issues
 	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
 		return nil, fmt.Errorf("report query failed for %s: %w", req.ReportName, err)
 	}
-	
+
 	rows, err := reportRows(response.Message.Columns, response.Message.Result)
 	if err != nil {
 		return nil, fmt.Errorf("report %s: %w", req.ReportName, err)
@@ -735,11 +735,11 @@ func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types
 		Columns: response.Message.Columns,
 		Data:    rows,
 	}
-	
+
 	slog.Info("Report executed successfully",
 		"report_name", req.ReportName,
 		"columns", len(result.Columns),
 		"rows", len(result.Data))
-	
+
 	return result, nil
 }

@@ -343,4 +343,3 @@ func (s *OAuth2Strategy) fetchCSRFToken(ctx context.Context, sidCookie *http.Coo
 func (s *OAuth2Strategy) ClearCache() {
 	s.cache.Flush()
 }
-

@@ -93,7 +93,7 @@ func isPhoneticMatch(a, b string) bool {
 		{"ph", "f"},
 		{"f", "ph"},
 	}
-	
+
 	for _, pair := range phoneticPairs {
 		normalized := strings.ReplaceAll(a, pair.pattern, pair.replacement)
 		if normalized == b {

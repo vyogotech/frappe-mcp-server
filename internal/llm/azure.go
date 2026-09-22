@@ -28,7 +28,7 @@ func NewAzureClient(cfg config.LLMConfig) (*AzureClient, error) {
 	if apiVersion == "" {
 		apiVersion = "2024-02-01"
 	}
-	
+
 	return &AzureClient{
 		apiKey:      cfg.APIKey,
 		endpoint:    cfg.BaseURL,
@@ -106,4 +106,3 @@ func (c *AzureClient) Generate(ctx context.Context, prompt string) (string, erro
 
 	return result.Choices[0].Message.Content, nil
 }
-

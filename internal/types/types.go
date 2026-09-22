@@ -153,15 +153,15 @@ type AggregationRequest struct {
 // ReportRequest represents a request to run a Frappe report
 type ReportRequest struct {
 	ReportName string                 `json:"report_name" validate:"required"` // "Sales Analytics"
-	Filters    map[string]interface{} `json:"filters,omitempty"`                // Report filters
-	User       string                 `json:"user,omitempty"`                   // User context
+	Filters    map[string]interface{} `json:"filters,omitempty"`               // Report filters
+	User       string                 `json:"user,omitempty"`                  // User context
 }
 
 // ReportResponse represents the response from a report query
 type ReportResponse struct {
-	Columns []ReportColumn `json:"columns"` // Column definitions
-	Data    []map[string]interface{} `json:"data"` // one object per row, keyed by column fieldname
-	Message string         `json:"message,omitempty"`
+	Columns []ReportColumn           `json:"columns"` // Column definitions
+	Data    []map[string]interface{} `json:"data"`    // one object per row, keyed by column fieldname
+	Message string                   `json:"message,omitempty"`
 }
 
 // ReportColumn represents a column in a report
@@ -174,9 +174,9 @@ type ReportColumn struct {
 
 // ReportFilter represents a filter definition from a Frappe report
 type ReportFilter struct {
-	FieldName string `json:"fieldname"`
-	Label     string `json:"label"`
-	FieldType string `json:"fieldtype"`
-	Mandatory int    `json:"mandatory"`  // 0 or 1
+	FieldName string      `json:"fieldname"`
+	Label     string      `json:"label"`
+	FieldType string      `json:"fieldtype"`
+	Mandatory int         `json:"mandatory"` // 0 or 1
 	Default   interface{} `json:"default,omitempty"`
 }

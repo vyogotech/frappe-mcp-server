@@ -54,4 +54,3 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-

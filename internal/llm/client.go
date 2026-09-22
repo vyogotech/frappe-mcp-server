@@ -37,7 +37,7 @@ func NewClient(cfg config.LLMConfig) (Client, error) {
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("LLM base_url is required")
 	}
-	
+
 	// Set defaults
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 60 * time.Second
@@ -48,25 +48,25 @@ func NewClient(cfg config.LLMConfig) (Client, error) {
 	if cfg.Temperature == 0 {
 		cfg.Temperature = 0.7
 	}
-	
+
 	// Determine provider type (default to openai-compatible)
 	providerType := cfg.ProviderType
 	if providerType == "" {
 		providerType = "openai-compatible"
 	}
-	
+
 	switch providerType {
 	case "openai-compatible", "openai", "ollama":
 		// OpenAI-compatible API (works with OpenAI, Together.ai, Groq, Ollama, etc.)
 		return NewOpenAICompatibleClient(cfg)
-		
+
 	case "anthropic":
 		// Anthropic has a different API format
 		if cfg.APIKey == "" {
 			return nil, fmt.Errorf("API key is required for Anthropic")
 		}
 		return NewAnthropicClient(cfg)
-		
+
 	case "azure":
 		// Azure OpenAI has special URL format
 		if cfg.APIKey == "" {
@@ -76,9 +76,8 @@ func NewClient(cfg config.LLMConfig) (Client, error) {
 			return nil, fmt.Errorf("azure deployment is required")
 		}
 		return NewAzureClient(cfg)
-		
+
 	default:
 		return nil, fmt.Errorf("unsupported provider_type: %s (use: openai-compatible, anthropic, or azure)", providerType)
 	}
 }
-

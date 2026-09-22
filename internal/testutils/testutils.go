@@ -15,25 +15,25 @@ func MockERPNextServer(t *testing.T) *httptest.Server {
 		// Set response headers
 		w.Header().Set("Content-Type", "application/json")
 
-	// Handle different endpoints
-	switch r.URL.Path {
-	case "/api/resource/Project/TEST-PROJ-001":
-		handleGetProject(w, r)
-	case "/api/resource/Project":
-		handleProjectList(w, r)
-	case "/api/resource/Task":
-		handleTaskList(w, r)
-	case "/api/resource/Customer":
-		handleCustomerList(w, r)
-	case "/api/resource/Employee":
-		handleEmployeeList(w, r)
-	case "/api/method/frappe.desk.search.search_link":
-		handleSearch(w, r)
-	case "/api/method/frappe.utils.global_search.search":
-		handleGlobalSearch(w, r)
-	default:
-		handleDefault(w, r)
-	}
+		// Handle different endpoints
+		switch r.URL.Path {
+		case "/api/resource/Project/TEST-PROJ-001":
+			handleGetProject(w, r)
+		case "/api/resource/Project":
+			handleProjectList(w, r)
+		case "/api/resource/Task":
+			handleTaskList(w, r)
+		case "/api/resource/Customer":
+			handleCustomerList(w, r)
+		case "/api/resource/Employee":
+			handleEmployeeList(w, r)
+		case "/api/method/frappe.desk.search.search_link":
+			handleSearch(w, r)
+		case "/api/method/frappe.utils.global_search.search":
+			handleGlobalSearch(w, r)
+		default:
+			handleDefault(w, r)
+		}
 	}))
 }
 

@@ -18,7 +18,7 @@ type ToolRegistry struct {
 }
 
 // NewRegistry creates a new tool registry
-func NewRegistry(frappeClient *frappe.Client,) *ToolRegistry {
+func NewRegistry(frappeClient *frappe.Client) *ToolRegistry {
 	return &ToolRegistry{
 		frappeClient: frappeClient,
 	}
@@ -889,7 +889,7 @@ func (t *ToolRegistry) fetchRelatedDocuments(ctx context.Context, doctype string
 	// Extract and fetch linked documents based on common field patterns
 	// This is generic - works for any doctype!
 	linkedFields := []string{"customer", "supplier", "project", "task", "parent_project", "sales_order", "purchase_order"}
-	
+
 	for _, field := range linkedFields {
 		if value, ok := doc[field]; ok {
 			if strValue, ok := value.(string); ok && strValue != "" {
@@ -925,17 +925,17 @@ func inferDocTypeFromField(fieldName string) string {
 		"item":           "Item",
 		"employee":       "Employee",
 	}
-	
+
 	if doctype, ok := mapping[fieldName]; ok {
 		return doctype
 	}
-	
+
 	// Fallback: capitalize field name (often works in ERPNext)
 	// e.g., "warehouse" -> "Warehouse"
 	if len(fieldName) > 0 {
 		return strings.ToUpper(string(fieldName[0])) + fieldName[1:]
 	}
-	
+
 	return ""
 }
 
@@ -1003,13 +1003,13 @@ func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolR
 
 	// Build response
 	resultJSON, err := json.Marshal(map[string]interface{}{
-		"doctype":   params.DocType,
-		"group_by":  params.GroupBy,
-		"results":   results,
-		"count":     len(results),
-		"metric":    params.Metric,
-		"field":     params.Field,
-		"filters":   params.Filters,
+		"doctype":  params.DocType,
+		"group_by": params.GroupBy,
+		"results":  results,
+		"count":    len(results),
+		"metric":   params.Metric,
+		"field":    params.Field,
+		"filters":  params.Filters,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal results: %w", err)
@@ -1120,7 +1120,7 @@ func (t *ToolRegistry) GlobalSearch(ctx context.Context, request mcp.ToolRequest
 	var params struct {
 		Text    string      `json:"text"`
 		Doctype string      `json:"doctype"`
-		Scope   interface{} `json:"scope"`  // string or []string
+		Scope   interface{} `json:"scope"` // string or []string
 		Limit   int         `json:"limit"`
 		Start   int         `json:"start"`
 	}

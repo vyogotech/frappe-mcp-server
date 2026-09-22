@@ -85,33 +85,33 @@ type LLMConfig struct {
 	// Provider type: "openai-compatible", "anthropic", "azure"
 	// "openai-compatible" works with: OpenAI, Together.ai, Groq, Ollama, LocalAI, etc.
 	ProviderType string `yaml:"provider_type"`
-	
+
 	// Generic configuration
-	BaseURL     string        `yaml:"base_url"`      // API endpoint URL
-	APIKey      string        `yaml:"api_key"`       // API key (can be from env)
-	Model       string        `yaml:"model"`         // Model name/ID
-	Timeout     time.Duration `yaml:"timeout"`       // Request timeout
-	MaxTokens   int           `yaml:"max_tokens"`    // Max tokens in response
-	Temperature float64       `yaml:"temperature"`   // Temperature (0.0-2.0)
-	
+	BaseURL     string        `yaml:"base_url"`    // API endpoint URL
+	APIKey      string        `yaml:"api_key"`     // API key (can be from env)
+	Model       string        `yaml:"model"`       // Model name/ID
+	Timeout     time.Duration `yaml:"timeout"`     // Request timeout
+	MaxTokens   int           `yaml:"max_tokens"`  // Max tokens in response
+	Temperature float64       `yaml:"temperature"` // Temperature (0.0-2.0)
+
 	// Fallback configuration (optional)
-	Fallback         *LLMFallbackConfig `yaml:"fallback,omitempty"`    // Fallback model config
-	
+	Fallback *LLMFallbackConfig `yaml:"fallback,omitempty"` // Fallback model config
+
 	// Azure-specific fields (only needed if provider_type is "azure")
-	AzureDeployment string `yaml:"azure_deployment,omitempty"` // Azure deployment name
+	AzureDeployment string `yaml:"azure_deployment,omitempty"`  // Azure deployment name
 	AzureAPIVersion string `yaml:"azure_api_version,omitempty"` // Azure API version
 }
 
 // LLMFallbackConfig represents fallback LLM configuration
 type LLMFallbackConfig struct {
-	Enabled     bool          `yaml:"enabled"`       // Enable fallback
-	BaseURL     string        `yaml:"base_url"`      // Fallback API endpoint
-	APIKey      string        `yaml:"api_key"`       // Fallback API key
-	Model       string        `yaml:"model"`         // Fallback model name
-	Timeout     time.Duration `yaml:"timeout"`       // Fallback timeout
-	MaxTokens   int           `yaml:"max_tokens"`    // Fallback max tokens
-	Temperature float64       `yaml:"temperature"`   // Fallback temperature
-	AutoSwitch  bool          `yaml:"auto_switch"`   // Auto-switch on rate limit
+	Enabled     bool          `yaml:"enabled"`     // Enable fallback
+	BaseURL     string        `yaml:"base_url"`    // Fallback API endpoint
+	APIKey      string        `yaml:"api_key"`     // Fallback API key
+	Model       string        `yaml:"model"`       // Fallback model name
+	Timeout     time.Duration `yaml:"timeout"`     // Fallback timeout
+	MaxTokens   int           `yaml:"max_tokens"`  // Fallback max tokens
+	Temperature float64       `yaml:"temperature"` // Fallback temperature
+	AutoSwitch  bool          `yaml:"auto_switch"` // Auto-switch on rate limit
 }
 
 // CacheConfig represents caching configuration
@@ -129,9 +129,9 @@ type PerformanceConfig struct {
 
 // AuthConfig represents authentication configuration
 type AuthConfig struct {
-	Enabled     bool         `yaml:"enabled"`
-	RequireAuth bool         `yaml:"require_auth"`
-	OAuth2      OAuth2Config `yaml:"oauth2"`
+	Enabled     bool             `yaml:"enabled"`
+	RequireAuth bool             `yaml:"require_auth"`
+	OAuth2      OAuth2Config     `yaml:"oauth2"`
 	TokenCache  TokenCacheConfig `yaml:"token_cache"`
 }
 
@@ -140,13 +140,13 @@ type OAuth2Config struct {
 	// Frappe OAuth endpoints
 	TokenInfoURL string `yaml:"token_info_url"`
 	IssuerURL    string `yaml:"issuer_url"`
-	
+
 	// Trusted backend clients (can provide user context headers)
 	TrustedClients []string `yaml:"trusted_clients"`
-	
+
 	// Token validation
 	ValidateRemote bool `yaml:"validate_remote"`
-	
+
 	// HTTP client timeout
 	Timeout time.Duration `yaml:"timeout"`
 }
@@ -344,7 +344,7 @@ func (c *Config) validate() error {
 	if c.ERPNext.BaseURL == "" {
 		return fmt.Errorf("frappe instance base URL is required")
 	}
-	
+
 	// API key and secret are optional if OAuth2 is enabled and required
 	// In that case, we'll use user OAuth2 tokens for authentication
 	if !c.Auth.Enabled || !c.Auth.RequireAuth {
@@ -363,11 +363,11 @@ func (c *Config) validate() error {
 			fmt.Println("INFO: API key/secret not provided. Will use OAuth2 token pass-through for user-level permissions.")
 		}
 	}
-	
+
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
 	}
-	
+
 	// Validate OAuth2 config if auth is enabled
 	if c.Auth.Enabled {
 		if c.Auth.OAuth2.TokenInfoURL == "" {
@@ -377,6 +377,6 @@ func (c *Config) validate() error {
 			return fmt.Errorf("OAuth2 issuer_url is required when auth is enabled")
 		}
 	}
-	
+
 	return nil
 }

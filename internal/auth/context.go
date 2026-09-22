@@ -27,9 +27,3 @@ func GetUserFromContext(ctx context.Context) (*types.User, bool) {
 	user := UserFromContext(ctx)
 	return user, user != nil
 }
-
-
-
-
-
-

@@ -16,12 +16,12 @@ import (
 // OpenAICompatibleClient implements the Client interface for OpenAI-compatible APIs
 // This works with: OpenAI, Together.ai, Groq, Ollama, LocalAI, LM Studio, OpenRouter, Replicate, etc.
 type OpenAICompatibleClient struct {
-	apiKey      string
-	model       string
-	maxTokens   int
-	temperature float64
-	baseURL     string
-	client      *http.Client
+	apiKey       string
+	model        string
+	maxTokens    int
+	temperature  float64
+	baseURL      string
+	client       *http.Client
 	providerName string
 }
 
@@ -44,7 +44,7 @@ func NewOpenAICompatibleClient(cfg config.LLMConfig) (*OpenAICompatibleClient, e
 	} else if strings.Contains(cfg.BaseURL, "localhost") {
 		providerName = "local"
 	}
-	
+
 	return &OpenAICompatibleClient{
 		apiKey:       cfg.APIKey,
 		model:        cfg.Model,

@@ -7,19 +7,19 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	"frappe-mcp-server/internal/config"
 )
 
 // ModelConfig represents a complete LLM model configuration
 type ModelConfig struct {
-	Provider    string  `json:"provider"`     // "ollama", "groq", "openai"
-	Model       string  `json:"model"`        // Model name
-	BaseURL     string  `json:"base_url"`     // API endpoint
-	APIKey      string  `json:"api_key"`      // API key (optional for local)
-	Temperature float64 `json:"temperature"`  // Generation temperature
-	MaxTokens   int     `json:"max_tokens"`   // Max tokens per request
-	Timeout     string  `json:"timeout"`      // Request timeout
+	Provider    string  `json:"provider"`    // "ollama", "groq", "openai"
+	Model       string  `json:"model"`       // Model name
+	BaseURL     string  `json:"base_url"`    // API endpoint
+	APIKey      string  `json:"api_key"`     // API key (optional for local)
+	Temperature float64 `json:"temperature"` // Generation temperature
+	MaxTokens   int     `json:"max_tokens"`  // Max tokens per request
+	Timeout     string  `json:"timeout"`     // Request timeout
 }
 
 // toConfigLLM converts ModelConfig to config.LLMConfig
@@ -28,7 +28,7 @@ func (mc ModelConfig) toConfigLLM() (config.LLMConfig, error) {
 	if err != nil {
 		return config.LLMConfig{}, fmt.Errorf("invalid timeout: %w", err)
 	}
-	
+
 	return config.LLMConfig{
 		ProviderType: "openai-compatible",
 		BaseURL:      mc.BaseURL,
@@ -42,34 +42,34 @@ func (mc ModelConfig) toConfigLLM() (config.LLMConfig, error) {
 
 // ModelStatus represents the current status of a model
 type ModelStatus struct {
-	Provider         string    `json:"provider"`
-	Model            string    `json:"model"`
-	BaseURL          string    `json:"base_url"`
-	Status           string    `json:"status"` // "active", "rate_limited", "error", "unavailable"
-	LastUsed         time.Time `json:"last_used"`
-	RequestCount     int64     `json:"request_count"`
-	SuccessCount     int64     `json:"success_count"`
-	ErrorCount       int64     `json:"error_count"`
-	RateLimitCount   int64     `json:"rate_limit_count"`
-	AvgResponseTime  int64     `json:"avg_response_time_ms"`
-	FallbackCount    int64     `json:"fallback_count"`
+	Provider        string    `json:"provider"`
+	Model           string    `json:"model"`
+	BaseURL         string    `json:"base_url"`
+	Status          string    `json:"status"` // "active", "rate_limited", "error", "unavailable"
+	LastUsed        time.Time `json:"last_used"`
+	RequestCount    int64     `json:"request_count"`
+	SuccessCount    int64     `json:"success_count"`
+	ErrorCount      int64     `json:"error_count"`
+	RateLimitCount  int64     `json:"rate_limit_count"`
+	AvgResponseTime int64     `json:"avg_response_time_ms"`
+	FallbackCount   int64     `json:"fallback_count"`
 }
 
 // Manager handles dynamic LLM model switching and fallback
 type Manager struct {
-	primaryClient      Client
-	fallbackClient     Client
-	primaryConfig      ModelConfig
-	fallbackConfig     ModelConfig
-	autoFallback       bool
-	fallbackEnabled    bool
-	metrics            *ModelStatus
-	fallbackMetrics    *ModelStatus
-	mutex              sync.RWMutex
-	revertTimer        *time.Timer
-	revertDuration     time.Duration
-	rateLimitUntil     time.Time     // When the rate limit expires
-	rateLimitDuration  time.Duration // How long to wait after rate limit
+	primaryClient     Client
+	fallbackClient    Client
+	primaryConfig     ModelConfig
+	fallbackConfig    ModelConfig
+	autoFallback      bool
+	fallbackEnabled   bool
+	metrics           *ModelStatus
+	fallbackMetrics   *ModelStatus
+	mutex             sync.RWMutex
+	revertTimer       *time.Timer
+	revertDuration    time.Duration
+	rateLimitUntil    time.Time     // When the rate limit expires
+	rateLimitDuration time.Duration // How long to wait after rate limit
 }
 
 // NewManager creates a new LLM manager with primary and optional fallback
@@ -79,7 +79,7 @@ func NewManager(primaryConfig ModelConfig, fallbackConfig *ModelConfig) (*Manage
 	if err != nil {
 		return nil, fmt.Errorf("invalid primary config: %w", err)
 	}
-	
+
 	// Create primary client
 	primaryClient, err := NewOpenAICompatibleClient(primaryCfg)
 	if err != nil {
@@ -142,13 +142,13 @@ func (m *Manager) Generate(ctx context.Context, prompt string) (string, error) {
 		slog.Warn("Primary LLM is rate-limited, using fallback immediately",
 			"primary_provider", config.Provider,
 			"wait_remaining", waitTime.Round(time.Second))
-		
+
 		if m.fallbackEnabled && m.fallbackClient != nil {
 			start := time.Now()
 			result, err := m.fallbackClient.Generate(ctx, prompt)
 			duration := time.Since(start)
 			m.updateMetrics(m.fallbackMetrics, err, duration)
-			
+
 			if err == nil {
 				slog.Info("Successfully used fallback LLM (primary rate-limited)",
 					"fallback_provider", m.fallbackConfig.Provider,
@@ -157,7 +157,7 @@ func (m *Manager) Generate(ctx context.Context, prompt string) (string, error) {
 			}
 			slog.Error("Fallback LLM also failed", "error", err)
 		}
-		
+
 		return "", fmt.Errorf("primary LLM rate-limited (available in %v), fallback unavailable or failed", waitTime.Round(time.Second))
 	}
 
@@ -178,12 +178,12 @@ func (m *Manager) Generate(ctx context.Context, prompt string) (string, error) {
 			m.rateLimitUntil = time.Now().Add(retryAfter)
 			m.rateLimitDuration = retryAfter
 			m.mutex.Unlock()
-			
+
 			slog.Warn("Primary LLM rate-limited, setting cooldown",
 				"primary_provider", config.Provider,
 				"retry_after", retryAfter.Round(time.Second))
 		}
-		
+
 		slog.Warn("Primary LLM failed, attempting fallback",
 			"primary_provider", config.Provider,
 			"primary_model", config.Model,
@@ -360,16 +360,16 @@ func (m *Manager) GetStatus() map[string]interface{} {
 
 	status := map[string]interface{}{
 		"primary": map[string]interface{}{
-			"provider":           m.primaryConfig.Provider,
-			"model":              m.primaryConfig.Model,
-			"base_url":           m.primaryConfig.BaseURL,
-			"status":             m.metrics.Status,
-			"request_count":      m.metrics.RequestCount,
-			"success_count":      m.metrics.SuccessCount,
-			"error_count":        m.metrics.ErrorCount,
-			"rate_limit_count":   m.metrics.RateLimitCount,
-			"avg_response_time":  m.metrics.AvgResponseTime,
-			"fallback_count":     m.metrics.FallbackCount,
+			"provider":          m.primaryConfig.Provider,
+			"model":             m.primaryConfig.Model,
+			"base_url":          m.primaryConfig.BaseURL,
+			"status":            m.metrics.Status,
+			"request_count":     m.metrics.RequestCount,
+			"success_count":     m.metrics.SuccessCount,
+			"error_count":       m.metrics.ErrorCount,
+			"rate_limit_count":  m.metrics.RateLimitCount,
+			"avg_response_time": m.metrics.AvgResponseTime,
+			"fallback_count":    m.metrics.FallbackCount,
 		},
 		"auto_fallback_enabled": m.autoFallback,
 		"fallback_available":    m.fallbackEnabled,
@@ -377,13 +377,13 @@ func (m *Manager) GetStatus() map[string]interface{} {
 
 	if m.fallbackEnabled {
 		status["fallback"] = map[string]interface{}{
-			"provider":           m.fallbackConfig.Provider,
-			"model":              m.fallbackConfig.Model,
-			"base_url":           m.fallbackConfig.BaseURL,
-			"status":             m.fallbackMetrics.Status,
-			"request_count":      m.fallbackMetrics.RequestCount,
-			"success_count":      m.fallbackMetrics.SuccessCount,
-			"error_count":        m.fallbackMetrics.ErrorCount,
+			"provider":      m.fallbackConfig.Provider,
+			"model":         m.fallbackConfig.Model,
+			"base_url":      m.fallbackConfig.BaseURL,
+			"status":        m.fallbackMetrics.Status,
+			"request_count": m.fallbackMetrics.RequestCount,
+			"success_count": m.fallbackMetrics.SuccessCount,
+			"error_count":   m.fallbackMetrics.ErrorCount,
 		}
 	}
 
@@ -494,23 +494,23 @@ func (m *Manager) parseRetryAfter(err error) time.Duration {
 	}
 
 	errStr := err.Error()
-	
+
 	// Look for patterns like "try again in 9m38s" or "try again in 9m38.016s"
 	patterns := []string{
 		"try again in ",
 		"retry after ",
 		"available in ",
 	}
-	
+
 	for _, pattern := range patterns {
 		idx := strings.Index(strings.ToLower(errStr), pattern)
 		if idx == -1 {
 			continue
 		}
-		
+
 		// Extract the time string after the pattern
 		timeStr := errStr[idx+len(pattern):]
-		
+
 		// Find the end of the duration (next non-duration character)
 		endIdx := 0
 		for i, ch := range timeStr {
@@ -519,10 +519,10 @@ func (m *Manager) parseRetryAfter(err error) time.Duration {
 				break
 			}
 		}
-		
+
 		if endIdx > 0 {
 			timeStr = timeStr[:endIdx]
-			
+
 			// Try to parse as duration
 			duration, err := time.ParseDuration(timeStr)
 			if err == nil && duration > 0 {
@@ -531,12 +531,12 @@ func (m *Manager) parseRetryAfter(err error) time.Duration {
 			}
 		}
 	}
-	
+
 	// Fallback: if rate limit but no duration found, use a default (10 minutes)
 	if strings.Contains(strings.ToLower(errStr), "rate limit") {
 		return 10 * time.Minute
 	}
-	
+
 	return 0
 }
 
@@ -558,4 +558,3 @@ func containsHelper(s, substr string) bool {
 	}
 	return false
 }
-
