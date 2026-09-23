@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"frappe-mcp-server/internal/auth"
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/mcp"
@@ -146,85 +147,73 @@ func TestListDocuments(t *testing.T) {
 	assert.Contains(t, response.Content[0].Text, "Retrieved 2 Project documents")
 }
 
+// confirmedRegistry is a registry whose write gate the mock redeems, with a context carrying the one-time token the
+// user gave. Without both, a write tool refuses before it reaches Frappe; the refusal itself is covered by
+// internal/server/confirmation_test.go for every tool and every entry point.
+func confirmedRegistry(t *testing.T) (*ToolRegistry, context.Context) {
+	t.Helper()
+	registry := NewRegistry(createTestClient(t))
+	registry.ConfirmationRedeemMethod = testutils.ConfirmRedeemMethod
+	return registry, auth.WithConfirmation(context.Background(), "a-token-the-user-gave")
+}
+
 func TestCreateDocument(t *testing.T) {
-	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry, ctx := confirmedRegistry(t)
 
-	params := map[string]interface{}{
-		"doctype": "Project",
-		"data": map[string]interface{}{
-			"project_name": "New Test Project",
-			"status":       "Open",
-		},
-	}
-	paramsJSON, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	request := mcp.ToolRequest{
+	response, err := registry.CreateDocument(ctx, mcp.ToolRequest{
 		ID:     "test-1",
 		Tool:   "create_document",
-		Params: paramsJSON,
-	}
+		Params: json.RawMessage(`{"doctype":"Project","data":{"project_name":"New Test Project","status":"Open"}}`),
+	})
 
-	ctx := context.Background()
-	response, err := registry.CreateDocument(ctx, request)
-
-	// We expect an error since our mock server doesn't handle POST requests
-	assert.Error(t, err)
-	assert.Nil(t, response)
+	require.NoError(t, err)
+	require.Len(t, response.Content, 2)
+	assert.Equal(t, "test-1", response.ID)
+	assert.Equal(t, "Successfully created Project document: NEW-PROJECT-0001", response.Content[0].Text)
+	assert.Contains(t, response.Content[1].Text, `"project_name":"New Test Project"`)
+	assert.Contains(t, response.Content[1].Text, `"status":"Open"`)
 }
 
 func TestUpdateDocument(t *testing.T) {
-	client := createTestClient(t)
-	registry := NewRegistry(client)
+	registry, ctx := confirmedRegistry(t)
 
-	params := map[string]interface{}{
-		"doctype": "Project",
-		"name":    "TEST-PROJ-001",
-		"data": map[string]interface{}{
-			"percent_complete": 75.0,
-		},
-	}
-	paramsJSON, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	request := mcp.ToolRequest{
+	response, err := registry.UpdateDocument(ctx, mcp.ToolRequest{
 		ID:     "test-1",
 		Tool:   "update_document",
-		Params: paramsJSON,
-	}
+		Params: json.RawMessage(`{"doctype":"Project","name":"TEST-PROJ-001","data":{"percent_complete":75}}`),
+	})
 
-	ctx := context.Background()
-	response, err := registry.UpdateDocument(ctx, request)
-
-	// We expect an error since our mock server doesn't handle PUT requests
-	assert.Error(t, err)
-	assert.Nil(t, response)
+	require.NoError(t, err)
+	require.Len(t, response.Content, 2)
+	assert.Equal(t, "Successfully updated Project document: TEST-PROJ-001", response.Content[0].Text)
+	assert.Contains(t, response.Content[1].Text, `"percent_complete":75`)
 }
 
 func TestDeleteDocument(t *testing.T) {
-	client := createTestClient(t)
-	registry := NewRegistry(client)
-
-	params := map[string]interface{}{
-		"doctype": "Project",
-		"name":    "TEST-PROJ-001",
-	}
-	paramsJSON, err := json.Marshal(params)
-	require.NoError(t, err)
-
 	request := mcp.ToolRequest{
 		ID:     "test-1",
 		Tool:   "delete_document",
-		Params: paramsJSON,
+		Params: json.RawMessage(`{"doctype":"Project","name":"TEST-PROJ-001"}`),
 	}
 
-	ctx := context.Background()
-	response, err := registry.DeleteDocument(ctx, request)
+	t.Run("unconfirmed", func(t *testing.T) {
+		registry := NewRegistry(createTestClient(t))
 
-	// The context carries no confirmation the user gave, so the delete is refused before the mock server is asked
-	assert.Error(t, err)
-	assert.Nil(t, response)
+		response, err := registry.DeleteDocument(context.Background(), request)
+
+		assert.Error(t, err, "the context carries no confirmation the user gave")
+		assert.Nil(t, response)
+	})
+
+	t.Run("confirmed", func(t *testing.T) {
+		registry, ctx := confirmedRegistry(t)
+
+		response, err := registry.DeleteDocument(ctx, request)
+
+		require.NoError(t, err)
+		require.Len(t, response.Content, 1)
+		assert.Equal(t, "Successfully deleted Project document: TEST-PROJ-001", response.Content[0].Text)
+	})
 }
 
 func TestSearchDocuments(t *testing.T) {

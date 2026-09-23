@@ -156,121 +156,84 @@ func TestGetDocumentList(t *testing.T) {
 	assert.Equal(t, "TEST-PROJ-002", docList.Data[1]["name"])
 }
 
-func TestCreateDocument(t *testing.T) {
-	// Create mock server
+// newMockClient is a client pointed at the Frappe mock, with API key auth.
+func newMockClient(t *testing.T) *Client {
+	t.Helper()
 	mockServer := testutils.MockERPNextServer(t)
-	defer mockServer.Close()
+	t.Cleanup(mockServer.Close)
 
-	// Create client
-	cfg := config.ERPNextConfig{
+	client, err := NewClient(config.ERPNextConfig{
 		BaseURL:   mockServer.URL,
 		APIKey:    "test_key",
 		APISecret: "test_secret",
 		Timeout:   30 * time.Second,
-		RateLimit: config.RateLimitConfig{
-			RequestsPerSecond: 10,
-			Burst:             20,
-		},
-		Retry: config.RetryConfig{
-			MaxAttempts:  3,
-			InitialDelay: 1 * time.Second,
-			MaxDelay:     10 * time.Second,
-		},
-	}
-
-	client, err := NewClient(cfg)
+		RateLimit: config.RateLimitConfig{RequestsPerSecond: 10, Burst: 20},
+		Retry:     config.RetryConfig{MaxAttempts: 3, InitialDelay: 1 * time.Second, MaxDelay: 10 * time.Second},
+	})
 	require.NoError(t, err)
+	return client
+}
 
-	// Test document creation
-	ctx := context.Background()
-	req := types.CreateDocumentRequest{
+// The mock echoes the fields it was sent, so the returned document is what proves the request arrived whole: a wrong
+// method or path would be refused, and a dropped body would come back without the fields.
+func TestCreateDocument(t *testing.T) {
+	doc, err := newMockClient(t).CreateDocument(context.Background(), types.CreateDocumentRequest{
 		DocType: "Project",
 		Data: types.Document{
 			"project_name": "New Test Project",
 			"status":       "Open",
 			"priority":     "Medium",
 		},
-	}
+	})
 
-	// Note: This will return a 404 from our mock server since we haven't
-	// implemented a handler for POST requests, but we can test the client logic
-	_, err = client.CreateDocument(ctx, req)
-	// We expect an error from the mock server
-	assert.Error(t, err)
+	require.NoError(t, err)
+	assert.Equal(t, "Project", doc["doctype"], "POST went to /api/resource/Project")
+	assert.Equal(t, "NEW-PROJECT-0001", doc["name"], "the name Frappe assigned is read back out of the response")
+	assert.Equal(t, "New Test Project", doc["project_name"])
+	assert.Equal(t, "Open", doc["status"])
+	assert.Equal(t, "Medium", doc["priority"])
 }
 
 func TestUpdateDocument(t *testing.T) {
-	// Create mock server
-	mockServer := testutils.MockERPNextServer(t)
-	defer mockServer.Close()
-
-	// Create client
-	cfg := config.ERPNextConfig{
-		BaseURL:   mockServer.URL,
-		APIKey:    "test_key",
-		APISecret: "test_secret",
-		Timeout:   30 * time.Second,
-		RateLimit: config.RateLimitConfig{
-			RequestsPerSecond: 10,
-			Burst:             20,
-		},
-		Retry: config.RetryConfig{
-			MaxAttempts:  3,
-			InitialDelay: 1 * time.Second,
-			MaxDelay:     10 * time.Second,
-		},
-	}
-
-	client, err := NewClient(cfg)
-	require.NoError(t, err)
-
-	// Test document update
-	ctx := context.Background()
-	req := types.UpdateDocumentRequest{
+	doc, err := newMockClient(t).UpdateDocument(context.Background(), types.UpdateDocumentRequest{
 		DocType: "Project",
 		Name:    "TEST-PROJ-001",
 		Data: types.Document{
 			"percent_complete": 50.0,
 			"status":           "Working",
 		},
-	}
+	})
 
-	// Note: This will return a 404 from our mock server since we haven't
-	// implemented a handler for PUT requests
-	_, err = client.UpdateDocument(ctx, req)
-	assert.Error(t, err)
+	require.NoError(t, err)
+	assert.Equal(t, "Project", doc["doctype"])
+	assert.Equal(t, "TEST-PROJ-001", doc["name"], "PUT went to /api/resource/Project/TEST-PROJ-001")
+	assert.Equal(t, 50.0, doc["percent_complete"])
+	assert.Equal(t, "Working", doc["status"])
 }
 
 func TestDeleteDocument(t *testing.T) {
-	// Create mock server
-	mockServer := testutils.MockERPNextServer(t)
-	defer mockServer.Close()
+	// frappe/api/v1.py delete_doc answers 202 with "ok", which the client must read as success, not as an error.
+	err := newMockClient(t).DeleteDocument(context.Background(), "Project", "TEST-PROJ-001")
 
-	// Create client
-	cfg := config.ERPNextConfig{
-		BaseURL:   mockServer.URL,
-		APIKey:    "test_key",
-		APISecret: "test_secret",
-		Timeout:   30 * time.Second,
-		RateLimit: config.RateLimitConfig{
-			RequestsPerSecond: 10,
-			Burst:             20,
-		},
-		Retry: config.RetryConfig{
-			MaxAttempts:  3,
-			InitialDelay: 1 * time.Second,
-			MaxDelay:     10 * time.Second,
-		},
-	}
+	assert.NoError(t, err)
+}
 
-	client, err := NewClient(cfg)
+// Under a sid session Frappe refuses an unsafe method without the session's CSRF token (frappe/auth.py:83-99), so a
+// user whose token could not be scraped must come back with that refusal, not with a silent success.
+func TestWriteUnderASidWithoutItsCSRFTokenIsRefused(t *testing.T) {
+	client := newMockClient(t)
+	create := types.CreateDocumentRequest{DocType: "Project", Data: types.Document{"project_name": "p"}}
+
+	ctx := auth.WithUser(context.Background(), &types.User{Email: "a@b.c", SessionID: "the-session-id"})
+	_, err := client.CreateDocument(ctx, create)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CSRFTokenError")
+
+	scraped := "a-scraped-csrf-value" // not written inline: gosec G101 reads a literal beside CSRFToken as a credential
+	ctx = auth.WithUser(context.Background(), &types.User{Email: "a@b.c", SessionID: "the-session-id", CSRFToken: scraped})
+	doc, err := client.CreateDocument(ctx, create)
 	require.NoError(t, err)
-
-	// Test document deletion
-	ctx := context.Background()
-	err = client.DeleteDocument(ctx, "Project", "TEST-PROJ-001")
-	// We expect an error from the mock server since DELETE isn't handled
-	assert.Error(t, err)
+	assert.Equal(t, "p", doc["project_name"])
 }
 
 func TestSearchDocuments(t *testing.T) {

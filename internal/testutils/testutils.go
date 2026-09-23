@@ -4,18 +4,31 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"frappe-mcp-server/internal/types"
 )
+
+// ConfirmRedeemMethod is a whitelisted method that answers like frappe_ai's one-time write confirmation, so a tool
+// test can reach the write behind the confirmation gate without naming another project's API.
+const ConfirmRedeemMethod = "test_confirm.redeem"
 
 func MockERPNextServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set response headers
 		w.Header().Set("Content-Type", "application/json")
 
+		// Frappe routes a write by doctype and name, not by a table of paths (frappe/api/v1.py url_rules).
+		if doctype, name, ok := resourcePath(r.URL.Path); ok && r.Method != http.MethodGet {
+			handleWrite(w, r, doctype, name)
+			return
+		}
+
 		// Handle different endpoints
 		switch r.URL.Path {
+		case "/api/method/" + ConfirmRedeemMethod:
+			handleConfirmRedeem(w, r)
 		case "/api/resource/Project/TEST-PROJ-001":
 			handleGetProject(w, r)
 		case "/api/resource/Project":
@@ -34,6 +47,96 @@ func MockERPNextServer(t *testing.T) *httptest.Server {
 			handleDefault(w, r)
 		}
 	}))
+}
+
+// resourcePath splits /api/resource/<doctype>[/<name>], the two routes frappe/api/v1.py mounts for a document.
+// The trailing slash is optional because frappe/api/__init__.py binds the map with strict_slashes=False.
+func resourcePath(path string) (doctype, name string, ok bool) {
+	rest, ok := strings.CutPrefix(path, "/api/resource/")
+	if !ok {
+		return "", "", false
+	}
+	doctype, name, _ = strings.Cut(strings.TrimSuffix(rest, "/"), "/")
+	return doctype, name, doctype != ""
+}
+
+// handleWrite answers as frappe/api/v1.py does: create_doc and update_doc return the document under "data", and
+// delete_doc answers 202 with "ok". The document echoes the fields it was sent, so a request that lost its body,
+// its method or its path cannot be mistaken for one that arrived.
+func handleWrite(w http.ResponseWriter, r *http.Request, doctype, name string) {
+	if _, err := r.Cookie("sid"); err == nil && r.Header.Get("X-Frappe-CSRF-Token") == "" {
+		// frappe/auth.py:83-99: an unsafe method on a session cookie without the session's token is refused
+		frappeError(w, http.StatusBadRequest, "CSRFTokenError", "Invalid Request")
+		return
+	}
+
+	switch {
+	case r.Method == http.MethodPost && name == "":
+		data, ok := decodeBody(w, r)
+		if !ok {
+			return
+		}
+		writeData(w, http.StatusOK, document(doctype, "NEW-"+strings.ToUpper(doctype)+"-0001", data))
+	case r.Method == http.MethodPut && name != "":
+		data, ok := decodeBody(w, r)
+		if !ok {
+			return
+		}
+		writeData(w, http.StatusOK, document(doctype, name, data))
+	case r.Method == http.MethodDelete && name != "":
+		writeData(w, http.StatusAccepted, "ok")
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func decodeBody(w http.ResponseWriter, r *http.Request) (types.Document, bool) {
+	var data types.Document
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		frappeError(w, http.StatusBadRequest, "ValidationError", err.Error())
+		return nil, false
+	}
+	return data, true
+}
+
+// document is what Frappe hands back after an insert or a save: the fields it was given plus the ones it owns.
+func document(doctype, name string, data types.Document) types.Document {
+	doc := types.Document{}
+	for k, v := range data {
+		doc[k] = v
+	}
+	doc["name"] = name
+	doc["doctype"] = doctype
+	doc["owner"] = "Administrator"
+	doc["modified_by"] = "Administrator"
+	doc["creation"] = "2024-01-01 00:00:00.000000"
+	doc["modified"] = "2024-01-02 00:00:00.000000"
+	doc["docstatus"] = 0
+	doc["idx"] = 0
+	return doc
+}
+
+func writeData(w http.ResponseWriter, status int, data interface{}) {
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
+}
+
+// frappeError answers as frappe/utils/response.py's report_error does: exc_type always, the message inside
+// _server_messages, and no exception, which is sent only where a traceback is allowed — never for a CSRFTokenError,
+// whose throw sets disable_traceback first (frappe/auth.py:97).
+func frappeError(w http.ResponseWriter, status int, excType, message string) {
+	one, _ := json.Marshal(map[string]string{"message": message})
+	messages, _ := json.Marshal([]string{string(one)})
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"exc_type": excType, "_server_messages": string(messages)})
+}
+
+func handleConfirmRedeem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": map[string]interface{}{"ok": true}})
 }
 
 func handleGetProject(w http.ResponseWriter, r *http.Request) {
