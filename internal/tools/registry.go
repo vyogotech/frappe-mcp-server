@@ -358,8 +358,9 @@ func (t *ToolRegistry) AnalyzeProjectTimeline(ctx context.Context, request mcp.T
 		Filters: map[string]interface{}{
 			"project": params.ProjectName,
 		},
-		Fields:   []string{"name", "subject", "status", "expected_start_date", "expected_end_date", "progress", "priority"},
-		OrderBy:  "expected_start_date",
+		// Task dates are exp_start_date/exp_end_date; the Project fields below are the expected_* ones
+		Fields:   []string{"name", "subject", "status", "exp_start_date", "exp_end_date", "progress", "priority"},
+		OrderBy:  "exp_start_date",
 		PageSize: 100,
 	}
 
