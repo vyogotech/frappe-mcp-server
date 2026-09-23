@@ -36,6 +36,10 @@ type Client struct {
 	csrfTokens  *cache.Cache
 }
 
+// maxResponseBody bounds what one Frappe answer may cost this process: an unbounded read is a memory risk, and a
+// result this large is past anything a model can read anyway.
+const maxResponseBody = 8 << 20
+
 // csrfTokenTTL bounds how long a session's scraped token is reused; Frappe issues a new one with a new sid,
 // so the key already changes when the session does.
 const csrfTokenTTL = 5 * time.Minute
@@ -470,9 +474,13 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	responseBody, err := io.ReadAll(resp.Body)
+	// one byte past the ceiling, so an answer that reaches it is refused rather than parsed half-read
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody+1))
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
+	}
+	if len(responseBody) > maxResponseBody {
+		return fmt.Errorf("response from frappe is too large: over %d bytes", maxResponseBody)
 	}
 
 	// Log response details

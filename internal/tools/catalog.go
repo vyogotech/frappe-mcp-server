@@ -47,7 +47,7 @@ func (t *ToolRegistry) Catalog(knowledgeBase bool) []Tool {
 			Description: "Fetch document rows to read their contents. Returns at most page_length rows (default 20), so it CANNOT be used to count records - use aggregate_documents for counts.",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype":     strProp("ERPNext document type"),
-				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
+				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return (default 20, capped at 100)", "default": 20, "maximum": maxRows},
 				"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
 				"fields":      map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Fields to return"},
 				"order_by":    strProp("Sort order (e.g., 'creation desc')"),
@@ -84,7 +84,7 @@ func (t *ToolRegistry) Catalog(knowledgeBase bool) []Tool {
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype":     strProp("Document type to search"),
 				"search":      strProp("Search query string"),
-				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
+				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return (default 20, capped at 100)", "default": 20, "maximum": maxRows},
 				"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
 			}, "doctype"),
 		}},
@@ -102,7 +102,7 @@ func (t *ToolRegistry) Catalog(knowledgeBase bool) []Tool {
 		}},
 		{Name: "run_report", Handler: t.RunReport, ToolMeta: mcp.ToolMeta{
 			ReadOnly:    readOnly(true),
-			Description: "Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.)",
+			Description: "Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.). Returns at most 100 rows; the result says how many the report had.",
 			InputSchema: objSchema(map[string]interface{}{
 				"report_name": strProp("Exact report name (e.g. 'Sales Analytics')"),
 				"filters":     map[string]interface{}{"type": "object", "description": "Report filter values"},
@@ -115,7 +115,7 @@ func (t *ToolRegistry) Catalog(knowledgeBase bool) []Tool {
 				"text":    strProp("Search keyword or phrase"),
 				"doctype": strProp("Restrict results to a single doctype (optional)"),
 				"scope":   map[string]interface{}{"description": "One doctype or list of doctypes to search within (optional)"},
-				"limit":   map[string]interface{}{"type": "integer", "description": "Maximum number of results (default 20)"},
+				"limit":   map[string]interface{}{"type": "integer", "description": "Maximum number of results (default 20, capped at 100)", "maximum": maxRows},
 				"start":   map[string]interface{}{"type": "integer", "description": "Offset for pagination (default 0)"},
 			}, "text"),
 		}},
@@ -124,7 +124,7 @@ func (t *ToolRegistry) Catalog(knowledgeBase bool) []Tool {
 			Description: "Search the user's uploaded documents (HR, expense, travel, security and vehicle policies) for a passage answering a question. Use for any policy, entitlement, limit or deadline question.",
 			InputSchema: objSchema(map[string]interface{}{
 				"query":   strProp("The user's question, in their own words"),
-				"limit":   map[string]interface{}{"type": "integer", "description": "Maximum passages to return (default 5)"},
+				"limit":   map[string]interface{}{"type": "integer", "description": "Maximum passages to return (default 5, capped at 100)", "maximum": maxRows},
 				"session": strProp("The chat the question comes from, whose attached files are searched too. Filled by the agent, not the model"),
 			}, "query"),
 			OutputSchema: objSchema(map[string]interface{}{

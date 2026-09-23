@@ -141,7 +141,7 @@ below and the catalogue drift apart, and prints the table to paste back in.
 | `delete_document` | Delete an ERPNext document |
 | `search_documents` | Search ERPNext documents of a given doctype using full-text search |
 | `aggregate_documents` | Count, sum or average ERPNext records. Use this for any "how many" question: with metric="count" it returns the exact total of all matching records, not just one page. |
-| `run_report` | Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.) |
+| `run_report` | Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.). Returns at most 100 rows; the result says how many the report had. |
 | `global_search` | Full-text search across all indexed Frappe/ERPNext doctypes |
 | `search_knowledge_base` | Search the user's uploaded documents (HR, expense, travel, security and vehicle policies) for a passage answering a question. Use for any policy, entitlement, limit or deadline question. |
 | `analyze_document` | Analyze any ERPNext document with optional related data |

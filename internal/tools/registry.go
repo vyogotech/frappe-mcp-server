@@ -24,6 +24,19 @@ func NewRegistry(frappeClient *frappe.Client) *ToolRegistry {
 	}
 }
 
+// maxRows bounds every row count a model can ask a tool for. The MCP specification sets no ceiling on the size of
+// a tool result (revision 2025-06-18, which the pinned go-sdk v1.4.1 speaks), and the whole result crosses into the
+// model's context, so the server sets one.
+const maxRows = 100
+
+// rows clamps a model's row count into 1..maxRows, keeping the tool's documented default when it asked for nothing.
+func rows(asked, byDefault int) int {
+	if asked <= 0 {
+		return byDefault
+	}
+	return min(asked, maxRows)
+}
+
 func (t *ToolRegistry) GetDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		DocType string `json:"doctype"`
@@ -74,10 +87,7 @@ func (t *ToolRegistry) ListDocuments(ctx context.Context, request mcp.ToolReques
 		return nil, fmt.Errorf("doctype is required")
 	}
 
-	// Set defaults
-	if params.PageSize == 0 {
-		params.PageSize = 20
-	}
+	params.PageSize = rows(params.PageSize, 20)
 
 	docList, err := t.frappeClient.GetDocumentList(ctx, params)
 	if err != nil {
@@ -238,10 +248,7 @@ func (t *ToolRegistry) SearchDocuments(ctx context.Context, request mcp.ToolRequ
 		return nil, fmt.Errorf("doctype is required")
 	}
 
-	// Set defaults
-	if params.PageSize == 0 {
-		params.PageSize = 20
-	}
+	params.PageSize = rows(params.PageSize, 20)
 
 	docList, err := t.frappeClient.SearchDocuments(ctx, params)
 	if err != nil {
@@ -857,16 +864,28 @@ func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (
 		return nil, fmt.Errorf("failed to run report: %w", err)
 	}
 
-	// Format the response
+	// A report sends every row it has, and the whole result crosses into the model's context.
+	data, truncated := reportData.Data, false
+	if len(data) > maxRows {
+		data, truncated = data[:maxRows], true
+	}
+
 	resultJSON, err := json.Marshal(map[string]interface{}{
 		"report_name": params.ReportName,
 		"columns":     reportData.Columns,
-		"data":        reportData.Data,
+		"data":        data,
 		"row_count":   len(reportData.Data),
+		"truncated":   truncated,
 		"filters":     params.Filters,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal report data: %w", err)
+	}
+
+	summary := fmt.Sprintf("Report '%s' executed successfully with %d row(s)", params.ReportName, len(reportData.Data))
+	if truncated {
+		summary = fmt.Sprintf("Report '%s' returned %d row(s); the first %d are in this result",
+			params.ReportName, len(reportData.Data), maxRows)
 	}
 
 	return &mcp.ToolResponse{
@@ -874,7 +893,7 @@ func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (
 		Content: []mcp.Content{
 			{
 				Type: "text",
-				Text: fmt.Sprintf("Report '%s' executed successfully with %d row(s)", params.ReportName, len(reportData.Data)),
+				Text: summary,
 			},
 			{
 				Type: "text",
@@ -899,7 +918,7 @@ func (t *ToolRegistry) SearchKnowledgeBase(ctx context.Context, request mcp.Tool
 		return nil, fmt.Errorf("query is required")
 	}
 
-	passages, err := t.frappeClient.SearchKnowledgeBase(ctx, params.Query, params.Limit, params.Session)
+	passages, err := t.frappeClient.SearchKnowledgeBase(ctx, params.Query, rows(params.Limit, 5), params.Session)
 	if err != nil {
 		return nil, err
 	}
@@ -950,7 +969,7 @@ func (t *ToolRegistry) GlobalSearch(ctx context.Context, request mcp.ToolRequest
 		Text:    params.Text,
 		Doctype: params.Doctype,
 		Scope:   params.Scope,
-		Limit:   params.Limit,
+		Limit:   rows(params.Limit, 20),
 		Start:   params.Start,
 	})
 	if err != nil {

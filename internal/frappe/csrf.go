@@ -53,7 +53,7 @@ func (c *Client) fetchCSRFToken(ctx context.Context, sid string) (string, error)
 		return "", fmt.Errorf("desk returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return "", fmt.Errorf("read desk body: %w", err)
 	}

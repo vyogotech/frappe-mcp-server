@@ -193,7 +193,8 @@
           "type": "string"
         },
         "limit": {
-          "description": "Maximum number of results (default 20)",
+          "description": "Maximum number of results (default 20, capped at 100)",
+          "maximum": 100,
           "type": "integer"
         },
         "scope": {
@@ -243,7 +244,8 @@
         },
         "page_length": {
           "default": 20,
-          "description": "Maximum results to return",
+          "description": "Maximum results to return (default 20, capped at 100)",
+          "maximum": 100,
           "type": "number"
         }
       },
@@ -267,7 +269,7 @@
     "annotations": {
       "readOnlyHint": true
     },
-    "description": "Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.)",
+    "description": "Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.). Returns at most 100 rows; the result says how many the report had.",
     "inputSchema": {
       "properties": {
         "filters": {
@@ -303,7 +305,8 @@
         },
         "page_length": {
           "default": 20,
-          "description": "Maximum results to return",
+          "description": "Maximum results to return (default 20, capped at 100)",
+          "maximum": 100,
           "type": "number"
         },
         "search": {
@@ -326,7 +329,8 @@
     "inputSchema": {
       "properties": {
         "limit": {
-          "description": "Maximum passages to return (default 5)",
+          "description": "Maximum passages to return (default 5, capped at 100)",
+          "maximum": 100,
           "type": "integer"
         },
         "query": {
