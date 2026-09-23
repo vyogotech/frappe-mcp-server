@@ -36,7 +36,7 @@ func TestGenerateWithLLM_LegacyClientFallback(t *testing.T) {
 
 var _ llm.Client = stubLLMClient{} // compile-time check
 
-// The docker HEALTHCHECK sends no token, so /health, /api/v1/health and /metrics must skip auth and nothing else may.
+// The docker HEALTHCHECK sends no token, so /health and /api/v1/health must skip auth and nothing else may.
 func TestWithMiddleware_PublicPathsBypassAuth(t *testing.T) {
 	// A bare OAuth2Strategy with no token in the request returns
 	// "missing or invalid Bearer token" — exactly the failure mode the
@@ -59,7 +59,7 @@ func TestWithMiddleware_PublicPathsBypassAuth(t *testing.T) {
 	}{
 		{"/health", http.StatusOK},
 		{"/api/v1/health", http.StatusOK},
-		{"/metrics", http.StatusOK},
+		{"/metrics", http.StatusUnauthorized},
 		{"/api/v1/chat", http.StatusUnauthorized},
 		{"/mcp", http.StatusUnauthorized},
 		{"/api/v1/tools", http.StatusUnauthorized},

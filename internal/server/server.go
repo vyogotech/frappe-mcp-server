@@ -176,7 +176,6 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 
 	// Legacy endpoints (for backward compatibility)
 	mux.HandleFunc("/health", mcpServer.healthCheck)
-	mux.HandleFunc("/metrics", mcpServer.metrics)
 	mux.HandleFunc("/tools", mcpServer.listTools)
 	mux.HandleFunc("/tool/", mcpServer.handleToolCall)
 
@@ -243,26 +242,10 @@ func (s *MCPServer) healthCheck(w http.ResponseWriter, r *http.Request) {
 	slog.Debug("/health response sent")
 }
 
-func (s *MCPServer) metrics(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/metrics endpoint called",
-		"method", strings.ReplaceAll(r.Method, "\n", " "),
-		"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "))
-	w.Header().Set("Content-Type", "application/json")
-
-	metrics := fmt.Sprintf(`{\n\t"uptime": "%s",\n\t"timestamp": "%s",\n\t"version": "1.0.0"\n}`, time.Since(time.Now()).String(), time.Now().Format(time.RFC3339))
-
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte(metrics)); err != nil {
-		slog.Error("Failed to write metrics response", "error", err)
-	}
-	slog.Info("/metrics response sent")
-}
-
 // publicPaths skip auth so probes need no credentials; never add a tool or chat path here.
 var publicPaths = map[string]bool{
 	"/health":        true,
 	"/api/v1/health": true,
-	"/metrics":       true,
 }
 
 // withMiddleware skips auth for publicPaths only; recovery, logging and cross-origin protection wrap every path.
