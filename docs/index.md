@@ -1,19 +1,17 @@
 # ERPNext MCP Server
 
-> **AI-powered Model Context Protocol server enabling natural language interactions with ERPNext and Frappe-based apps**
+> **Model Context Protocol server publishing ERPNext and Frappe-based apps to AI assistants as tools**
 
 ## Overview
 
-ERPNext MCP Server bridges ERPNext and other Frappe-based applications with AI assistants through the Model Context Protocol (MCP), enabling natural language queries, intelligent document analysis, and seamless integration with tools like Cursor IDE, Claude Desktop, and Open WebUI.
+ERPNext MCP Server bridges ERPNext and other Frappe-based applications with AI assistants through the Model Context Protocol (MCP). It publishes the tools; the assistant on the other side decides which to call. It integrates with Cursor IDE, Claude Desktop and any other MCP client.
 
 ## Key Features
 
-- 🤖 **AI-Powered Query Processing** - Natural language understanding using local LLM (Ollama)
 - 🔌 **MCP Protocol Support** - STDIO and HTTP interfaces for AI tool integration
 - 📊 **Generic Document Tools** - Works with ANY ERPNext doctype (standard or custom)
 - 📈 **Advanced Analytics** - Aggregation queries (SUM, COUNT, AVG, TOP N) and report execution
 - 🔐 **OAuth2 Authentication** - Standard OAuth2 security with token caching
-- 🔒 **Privacy-Focused** - All AI processing runs locally via Ollama
 - 🚀 **Production-Ready** - Built with Go for performance and reliability
 
 ## Quick Links
@@ -28,20 +26,14 @@ ERPNext MCP Server bridges ERPNext and other Frappe-based applications with AI a
 - [Auth Quick Start](auth-quickstart.md) - Set up authentication in 5 minutes
 - [Implementation Details](oauth2-implementation.md) - Technical implementation deep dive
 
-### LLM Configuration
-- [Generic LLM Config](generic-llm-config.md) - Simple 3-field config for ANY provider
-- [LLM Providers](llm-providers.md) - Detailed provider guide (OpenAI, Together.ai, Groq, etc.)
-
 ### Deployment & Operations
 - [Docker Deployment](docker.md) - Deploy with Docker Compose
 - [Distribution & Releases](distribution.md) - Release process and distribution system
 
 ### Usage & Development
-- [AI Features](ai-features.md) - Learn about NLP and AI capabilities
 - [Analytics & Reporting](analytics-features.md) - 🆕 Aggregations and report execution
 - [API Reference](api-reference.md) - Complete API documentation
 - [Development](development.md) - Contributing and extending
-- [Implementation Details](llm-implementation.md) - Technical architecture deep dive
 
 ## Use Cases
 
@@ -51,7 +43,7 @@ Ask questions directly in your IDE:
 - *"List all open sales orders"*
 - *"What are the pending tasks for customer CUST-123?"*
 
-### 2. **Chat Interfaces (Open WebUI, Claude)**
+### 2. **Chat Interfaces (Claude Desktop)**
 Natural conversations with your ERPNext data:
 - Analyze project timelines
 - Generate reports
@@ -76,10 +68,10 @@ Build custom workflows and integrations using MCP tools.
 └────────┬────────┘
          │ MCP Protocol
          ↓
-┌─────────────────┐     ┌──────────────┐
-│  ERPNext MCP    │────→│   Ollama     │
-│     Server      │     │  (llama3.2)  │
-└────────┬────────┘     └──────────────┘
+┌─────────────────┐
+│  ERPNext MCP    │
+│     Server      │
+└────────┬────────┘
          │ REST API
          ↓
 ┌─────────────────┐
@@ -102,7 +94,6 @@ Or download pre-built binaries from [Releases](https://github.com/vyogotech/frap
 ### Prerequisites
 
 - Frappe/ERPNext instance with API access
-- Ollama (optional, for AI features)
 - MCP client (Cursor IDE or Claude Desktop)
 
 See [Installation Guide](installation.md) for complete installation options.

@@ -24,8 +24,6 @@ Check server status and connectivity.
 ```json
 {
   "status": "healthy",
-  "erpnext_connected": true,
-  "ollama_available": true,
   "timestamp": "2025-11-12T10:30:00Z"
 }
 ```
@@ -61,49 +59,16 @@ Get all available MCP tools.
 
 ---
 
-### Natural Language Chat
-
-**POST** `/api/v1/chat`
-
-Process natural language queries with AI.
-
-**Request:**
-```json
-{
-  "message": "Show me project PROJ-0001"
-}
-```
-
-**Response:**
-```json
-{
-  "response": "Here are the details for project PROJ-0001...",
-  "data": { /* ERPNext document data */ },
-  "tools_called": ["get_document"],
-  "timestamp": "2025-11-12T10:30:00Z",
-  "data_quality": "complete",
-  "data_size": 1,
-  "is_valid_data": true
-}
-```
-
-**Status Codes:**
-- `200` - Success
-- `400` - Bad request (invalid JSON)
-- `404` - Document not found
-- `500` - Internal server error
-
----
-
 ### Execute Tool
 
-**POST** `/api/v1/tool/{tool_name}`
+**POST** `/api/v1/tools/{tool_name}`
 
-Execute a specific MCP tool directly.
+Execute a specific MCP tool directly. The body is `{"params": <the tool's parameters>}`; the JSON shown under each
+tool below is that `params` value. `/tool/{tool_name}` is the same handler under its older path.
 
 #### Get Document
 
-**POST** `/api/v1/tool/get_document`
+**POST** `/api/v1/tools/get_document`
 
 ```json
 {
@@ -129,7 +94,7 @@ Execute a specific MCP tool directly.
 
 #### List Documents
 
-**POST** `/api/v1/tool/list_documents`
+**POST** `/api/v1/tools/list_documents`
 
 ```json
 {
@@ -163,7 +128,7 @@ Execute a specific MCP tool directly.
 
 #### Search Documents
 
-**POST** `/api/v1/tool/search_documents`
+**POST** `/api/v1/tools/search_documents`
 
 ```json
 {
@@ -193,7 +158,7 @@ Execute a specific MCP tool directly.
 
 #### Aggregate Documents 🆕
 
-**POST** `/api/v1/tool/aggregate_documents`
+**POST** `/api/v1/tools/aggregate_documents`
 
 Perform SQL-like aggregation queries on ERPNext data.
 
@@ -248,7 +213,7 @@ Perform SQL-like aggregation queries on ERPNext data.
 
 #### Run Report 🆕
 
-**POST** `/api/v1/tool/run_report`
+**POST** `/api/v1/tools/run_report`
 
 Execute Frappe/ERPNext standard or custom reports.
 
@@ -301,7 +266,7 @@ Execute Frappe/ERPNext standard or custom reports.
 
 #### Create Document
 
-**POST** `/api/v1/tool/create_document`
+**POST** `/api/v1/tools/create_document`
 
 ```json
 {
@@ -328,7 +293,7 @@ Execute Frappe/ERPNext standard or custom reports.
 
 #### Update Document
 
-**POST** `/api/v1/tool/update_document`
+**POST** `/api/v1/tools/update_document`
 
 ```json
 {
@@ -354,7 +319,7 @@ Execute Frappe/ERPNext standard or custom reports.
 
 #### Delete Document
 
-**POST** `/api/v1/tool/delete_document`
+**POST** `/api/v1/tools/delete_document`
 
 ```json
 {
@@ -375,7 +340,7 @@ Execute Frappe/ERPNext standard or custom reports.
 
 #### Analyze Document
 
-**POST** `/api/v1/tool/analyze_document`
+**POST** `/api/v1/tools/analyze_document`
 
 Generic analysis tool for ANY doctype.
 
@@ -407,7 +372,7 @@ Generic analysis tool for ANY doctype.
 
 #### Get Project Status
 
-**POST** `/api/v1/tool/get_project_status`
+**POST** `/api/v1/tools/get_project_status`
 
 ```json
 {
@@ -434,14 +399,6 @@ Generic analysis tool for ANY doctype.
   "progress": 53.3
 }
 ```
-
----
-
-### OpenAPI Specification
-
-**GET** `/api/v1/openapi.json`
-
-Get the OpenAPI 3.0 specification for the entire API.
 
 ---
 
@@ -524,7 +481,6 @@ For Cursor/Claude Desktop integration, the STDIO server implements MCP protocol.
 - `initialize` - Initialize connection
 - `tools/list` - List available tools
 - `tools/call` - Execute a tool
-- `resources/list` - List available resources
 
 ---
 
@@ -536,23 +492,13 @@ For Cursor/Claude Desktop integration, the STDIO server implements MCP protocol.
 # Health check
 curl http://localhost:8080/api/v1/health
 
-# Natural language query
-curl -X POST http://localhost:8080/api/v1/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "List all customers"}'
-
 # Get specific document
-curl -X POST http://localhost:8080/api/v1/tool/get_document \
+curl -X POST http://localhost:8080/api/v1/tools/get_document \
   -H "Content-Type: application/json" \
   -d '{"doctype": "Project", "name": "PROJ-0001"}'
 
-# Analytics: Top 5 customers by revenue
-curl -X POST http://localhost:8080/api/v1/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "show me top 5 customers by revenue in table format"}'
-
-# Aggregation query (direct tool call)
-curl -X POST http://localhost:8080/api/v1/tool/aggregate_documents \
+# Aggregation query
+curl -X POST http://localhost:8080/api/v1/tools/aggregate_documents \
   -H "Content-Type: application/json" \
   -d '{
     "doctype": "Sales Invoice",
@@ -563,7 +509,7 @@ curl -X POST http://localhost:8080/api/v1/tool/aggregate_documents \
   }'
 
 # Run report
-curl -X POST http://localhost:8080/api/v1/tool/run_report \
+curl -X POST http://localhost:8080/api/v1/tools/run_report \
   -H "Content-Type: application/json" \
   -d '{
     "report_name": "Sales Analytics",
@@ -574,16 +520,16 @@ curl -X POST http://localhost:8080/api/v1/tool/run_report \
 ### JavaScript
 
 ```javascript
-// Natural language query
-const response = await fetch('http://localhost:8080/api/v1/chat', {
+// List open projects
+const response = await fetch('http://localhost:8080/api/v1/tools/list_documents', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    message: 'Show me all open projects'
+    params: { doctype: 'Project', filters: { status: 'Open' } }
   })
 });
 const data = await response.json();
-console.log(data.response);
+console.log(data.content);
 ```
 
 ### Python
@@ -593,7 +539,7 @@ import requests
 
 # Get document
 response = requests.post(
-    'http://localhost:8080/api/v1/tool/get_document',
+    'http://localhost:8080/api/v1/tools/get_document',
     json={'doctype': 'Project', 'name': 'PROJ-0001'}
 )
 project = response.json()

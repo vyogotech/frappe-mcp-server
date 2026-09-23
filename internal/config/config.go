@@ -24,7 +24,6 @@ type Config struct {
 	Server      ServerConfig      `yaml:"server"`
 	ERPNext     ERPNextConfig     `yaml:"erpnext"`
 	Logging     LoggingConfig     `yaml:"logging"`
-	LLM         LLMConfig         `yaml:"llm"`
 	Cache       CacheConfig       `yaml:"cache"`
 	Performance PerformanceConfig `yaml:"performance"`
 	Auth        AuthConfig        `yaml:"auth"`
@@ -72,38 +71,6 @@ type RetryConfig struct {
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
-}
-
-type LLMConfig struct {
-	// Provider type: "openai-compatible", "anthropic", "azure"
-	// "openai-compatible" works with: OpenAI, Together.ai, Groq, Ollama, LocalAI, etc.
-	ProviderType string `yaml:"provider_type"`
-
-	// Generic configuration
-	BaseURL     string        `yaml:"base_url"`    // API endpoint URL
-	APIKey      string        `yaml:"api_key"`     // API key (can be from env)
-	Model       string        `yaml:"model"`       // Model name/ID
-	Timeout     time.Duration `yaml:"timeout"`     // Request timeout
-	MaxTokens   int           `yaml:"max_tokens"`  // Max tokens in response
-	Temperature float64       `yaml:"temperature"` // Temperature (0.0-2.0)
-
-	// Fallback configuration (optional)
-	Fallback *LLMFallbackConfig `yaml:"fallback,omitempty"` // Fallback model config
-
-	// Azure-specific fields (only needed if provider_type is "azure")
-	AzureDeployment string `yaml:"azure_deployment,omitempty"`  // Azure deployment name
-	AzureAPIVersion string `yaml:"azure_api_version,omitempty"` // Azure API version
-}
-
-type LLMFallbackConfig struct {
-	Enabled     bool          `yaml:"enabled"`     // Enable fallback
-	BaseURL     string        `yaml:"base_url"`    // Fallback API endpoint
-	APIKey      string        `yaml:"api_key"`     // Fallback API key
-	Model       string        `yaml:"model"`       // Fallback model name
-	Timeout     time.Duration `yaml:"timeout"`     // Fallback timeout
-	MaxTokens   int           `yaml:"max_tokens"`  // Fallback max tokens
-	Temperature float64       `yaml:"temperature"` // Fallback temperature
-	AutoSwitch  bool          `yaml:"auto_switch"` // Auto-switch on rate limit
 }
 
 type CacheConfig struct {
@@ -265,26 +232,6 @@ func (c *Config) loadFromEnv() error {
 			return fmt.Errorf("TOOLS_KNOWLEDGE_BASE: %w", err)
 		}
 		c.Tools.KnowledgeBase = on
-	}
-
-	// LLM Provider configuration
-	if providerType := os.Getenv("LLM_PROVIDER_TYPE"); providerType != "" {
-		c.LLM.ProviderType = providerType
-	}
-	if baseURL := os.Getenv("LLM_BASE_URL"); baseURL != "" {
-		c.LLM.BaseURL = baseURL
-	}
-	if apiKey := os.Getenv("LLM_API_KEY"); apiKey != "" {
-		c.LLM.APIKey = apiKey
-	}
-	if model := os.Getenv("LLM_MODEL"); model != "" {
-		c.LLM.Model = model
-	}
-	if azureDeployment := os.Getenv("LLM_AZURE_DEPLOYMENT"); azureDeployment != "" {
-		c.LLM.AzureDeployment = azureDeployment
-	}
-	if azureAPIVersion := os.Getenv("LLM_AZURE_API_VERSION"); azureAPIVersion != "" {
-		c.LLM.AzureAPIVersion = azureAPIVersion
 	}
 
 	// Auth configuration

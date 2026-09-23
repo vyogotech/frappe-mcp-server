@@ -151,11 +151,3 @@ type ReportColumn struct {
 	FieldType string `json:"fieldtype"`
 	Width     int    `json:"width,omitempty"`
 }
-
-type ReportFilter struct {
-	FieldName string      `json:"fieldname"`
-	Label     string      `json:"label"`
-	FieldType string      `json:"fieldtype"`
-	Mandatory int         `json:"mandatory"` // 0 or 1
-	Default   interface{} `json:"default,omitempty"`
-}

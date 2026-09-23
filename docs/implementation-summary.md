@@ -162,9 +162,9 @@
      | jq -r '.access_token')
    
    # Use token
-   curl -X POST http://localhost:8080/api/v1/chat \
+   curl -X POST http://localhost:8080/api/v1/tools/list_documents \
      -H "Authorization: Bearer $TOKEN" \
-     -d '{"message": "List projects"}'
+     -d '{"params": {"doctype": "Project"}}'
    ```
 
 ### Configuration Modes

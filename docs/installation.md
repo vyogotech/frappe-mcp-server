@@ -139,10 +139,7 @@ Add to your MCP client configuration (`~/.cursor/mcp.json` or Claude Desktop con
       "env": {
         "FRAPPE_BASE_URL": "https://your-frappe-instance.com",
         "FRAPPE_API_KEY": "your_api_key",
-        "FRAPPE_API_SECRET": "your_api_secret",
-        "LLM_PROVIDER_TYPE": "openai-compatible",
-        "LLM_BASE_URL": "http://localhost:11434/v1",
-        "LLM_MODEL": "llama3.2:1b"
+        "FRAPPE_API_SECRET": "your_api_secret"
       }
     }
   }
@@ -159,12 +156,6 @@ erpnext:
   api_key: "your_api_key"
   api_secret: "your_api_secret"
   timeout: "30s"
-
-llm:
-  provider_type: "openai-compatible"
-  base_url: "http://localhost:11434/v1"
-  model: "llama3.2:1b"
-  api_key: ""
 ```
 
 Then reference it in MCP config:
@@ -246,12 +237,6 @@ chmod +x /path/to/frappe-mcp-server-stdio
 - Check API credentials are correct
 - Test manually: `curl https://your-frappe-instance.com/api/method/ping`
 
-### LLM/AI features not working
-
-- Ensure Ollama is running: `ollama list`
-- Check LLM configuration in config.yaml
-- Verify the model is pulled: `ollama pull llama3.2:1b`
-
 ## Updating
 
 To update to the latest version:
@@ -283,6 +268,5 @@ rm -rf ~/.config/frappe-mcp-server
 
 - [Quick Start Guide](quick-start.md) - Get started quickly
 - [Configuration Guide](configuration.md) - Detailed configuration options
-- [LLM Providers](llm-providers.md) - Setup different AI providers
 - [API Reference](api-reference.md) - Explore available tools
 

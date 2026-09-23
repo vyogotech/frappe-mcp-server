@@ -2,11 +2,9 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -45,11 +43,5 @@ func TestTheServerListensOnAnIPv6Host(t *testing.T) {
 		return true
 	}, 5*time.Second, 50*time.Millisecond)
 
-	rr := httptest.NewRecorder()
-	s.handleOpenAPI(rr, httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil))
-	var spec struct {
-		Servers []struct{ URL string } `json:"servers"`
-	}
-	require.NoError(t, json.NewDecoder(rr.Body).Decode(&spec))
-	require.Equal(t, fmt.Sprintf("http://[::1]:%d/api/v1", port), spec.Servers[0].URL)
+	require.Equal(t, fmt.Sprintf("[::1]:%d", port), s.httpServer.Addr)
 }

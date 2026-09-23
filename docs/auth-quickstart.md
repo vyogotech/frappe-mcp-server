@@ -17,10 +17,10 @@ No OAuth2 setup needed. Uses the user's existing Frappe login session.
 ```bash
 export SID='paste-your-sid-here'
 
-curl -X POST http://localhost:8080/api/v1/chat \
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
   -b "sid=$SID" \
   -H "Content-Type: application/json" \
-  -d '{"message": "show me top 5 customers"}'
+  -d '{"params": {"doctype": "Customer", "limit": 5}}'
 ```
 
 ### Step 3: Configure MCP Server
@@ -87,10 +87,10 @@ TOKEN=$(curl -s -X POST http://localhost:8000/api/method/frappe.integrations.oau
   | jq -r '.access_token')
 
 # Test
-curl -X POST http://localhost:8080/api/v1/chat \
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "show me all customers"}'
+  -d '{"params": {"doctype": "Customer"}}'
 ```
 
 For user-level OAuth2 (Authorization Code flow):

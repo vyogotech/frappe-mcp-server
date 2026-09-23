@@ -42,7 +42,6 @@ frappe-mcp-server/
 │   ├── buildinfo/          # Version, read from the build's VCS stamp
 │   ├── config/             # Configuration management
 │   ├── frappe/             # Frappe/ERPNext HTTP client
-│   ├── llm/                # LLM clients for the REST chat pipeline
 │   ├── mcp/                # MCP protocol implementation
 │   ├── server/             # HTTP server & handlers
 │   ├── telemetry/          # OpenTelemetry tracing
@@ -218,8 +217,8 @@ go test -tags=integration ./...
 
 # Test in another
 curl http://localhost:8080/api/v1/health
-curl -X POST http://localhost:8080/api/v1/chat \
-  -d '{"message": "List all projects"}'
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
+  -d '{"params": {"doctype": "Project"}}'
 ```
 
 ## Debugging

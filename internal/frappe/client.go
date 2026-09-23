@@ -623,66 +623,6 @@ func (c *Client) GetCount(ctx context.Context, docType string, filters map[strin
 	return response.Message, nil
 }
 
-func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]types.ReportFilter, error) {
-	// Use Frappe's desk.query_report.get_report_doc method to get report metadata
-	endpoint := "/api/method/frappe.desk.query_report.get_report_doc"
-
-	// Build query parameters
-	queryParams := url.Values{}
-	queryParams.Set("report_name", reportName)
-	endpoint = endpoint + "?" + queryParams.Encode()
-
-	var response struct {
-		Message struct {
-			Filters interface{} `json:"filters"` // Can be string (JSON) or array
-		} `json:"message"`
-	}
-
-	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
-		return nil, fmt.Errorf("failed to get report metadata for %s: %w", reportName, err)
-	}
-
-	// Parse the filters - they might be a JSON string or already an array
-	var filters []types.ReportFilter
-
-	switch v := response.Message.Filters.(type) {
-	case string:
-		// Filters are JSON string, need to unmarshal
-		if v != "" {
-			if err := json.Unmarshal([]byte(v), &filters); err != nil {
-				slog.Warn("Failed to parse report filters from JSON string", "report_name", reportName, "error", err)
-				return []types.ReportFilter{}, nil
-			}
-		}
-	case []interface{}:
-		// Filters are already an array, convert each element
-		for _, item := range v {
-			if filterMap, ok := item.(map[string]interface{}); ok {
-				filter := types.ReportFilter{}
-				if fieldname, ok := filterMap["fieldname"].(string); ok {
-					filter.FieldName = fieldname
-				}
-				if label, ok := filterMap["label"].(string); ok {
-					filter.Label = label
-				}
-				if fieldtype, ok := filterMap["fieldtype"].(string); ok {
-					filter.FieldType = fieldtype
-				}
-				if mandatory, ok := filterMap["mandatory"].(float64); ok {
-					filter.Mandatory = int(mandatory)
-				} else if mandatory, ok := filterMap["mandatory"].(int); ok {
-					filter.Mandatory = mandatory
-				}
-				filter.Default = filterMap["default"]
-				filters = append(filters, filter)
-			}
-		}
-	}
-
-	slog.Info("Report filters retrieved successfully", "report_name", reportName, "filter_count", len(filters))
-	return filters, nil
-}
-
 func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types.ReportResponse, error) {
 	// Use GET request with query parameters to avoid CSRF issues with API key auth
 	endpoint := "/api/method/frappe.desk.query_report.run"

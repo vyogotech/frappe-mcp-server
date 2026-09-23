@@ -365,18 +365,18 @@ TOKEN=$(curl -s -X POST http://frappe:8000/api/method/frappe.integrations.oauth2
   -d "client_secret=CLIENT_SECRET" | jq -r '.access_token')
 
 # Make request
-curl -X POST http://localhost:8080/api/v1/chat \
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "List projects"}'
+  -d '{"params": {"doctype": "Project"}}'
 ```
 
 ### Invalid Token
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/chat \
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
   -H "Authorization: Bearer invalid-token" \
-  -d '{"message": "test"}'
+  -d '{"params": {"doctype": "Project"}}'
 # Expected: 401 Unauthorized (if require_auth: true)
 ```
 

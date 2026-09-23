@@ -2,7 +2,7 @@
 # Usage: docker compose up -d
 
 services:
-  # ERPNext MCP Server (HTTP API + AI)
+  # ERPNext MCP Server (HTTP API)
   frappe-mcp-server:
     build:
       context: .
@@ -16,10 +16,6 @@ services:
       FRAPPE_API_KEY: ${FRAPPE_API_KEY}
       FRAPPE_API_SECRET: ${FRAPPE_API_SECRET}
       
-      # LLM Configuration (for AI features) - Configured via config.yaml instead
-      # LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
-      # LLM_MODEL: ${LLM_MODEL:-llama3.2:1b}
-      
       # Server Configuration
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 8080
@@ -27,9 +23,6 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - mcp_logs:/app/logs
-    depends_on:
-      ollama:
-        condition: service_healthy
     networks:
       - erpnext-network
     healthcheck:
@@ -38,66 +31,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-
-  # Ollama (Local AI Models)
-  ollama:
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      # Mount local ollama models to container
-      - /Users/varkrish/.ollama:/root/.ollama
-      # - ollama_data:/root/.ollama  # Commented out - conflicts with local mount
-    environment:
-      OLLAMA_HOST: 0.0.0.0:11434
-      OLLAMA_ORIGINS: "*"
-      OLLAMA_KEEP_ALIVE: "5m"
-    networks:
-      - erpnext-network
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  # Open WebUI (Web Interface for AI Chat)
-  open-webui:
-    image: ghcr.io/open-webui/open-webui:latest
-    restart: unless-stopped
-    ports:
-      - "9080:8080"
-    volumes:
-      - open_webui_data:/app/backend/data
-      # - ./open_webui_functions:/app/backend/functions:ro
-    environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:-change-this-secret-key}
-      ENABLE_SIGNUP: ${ENABLE_SIGNUP:-true}
-      DEFAULT_USER_ROLE: user
-      WEBUI_NAME: "ERPNext AI Assistant"
-      # ENABLE_RAG_HYBRID_SEARCH: true
-      
-      # OAuth2 Configuration (Optional - enables "Login with Frappe")
-      # Uncomment and configure after creating OAuth client in Frappe
-      # OAUTH_CLIENT_ID: ${FRAPPE_OAUTH_CLIENT_ID:-}
-      # OAUTH_CLIENT_SECRET: ${FRAPPE_OAUTH_CLIENT_SECRET:-}
-      # OAUTH_PROVIDER_NAME: "Frappe"
-      # OPENID_PROVIDER_URL: ${FRAPPE_BASE_URL:-http://localhost:8000}/.well-known/openid-configuration
-    depends_on:
-      ollama:
-        condition: service_healthy
-      frappe-mcp-server:
-        condition: service_started
-    networks:
-      - erpnext-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
 
   # ERPNext (Optional - only if you want to run ERPNext locally)
   # Remove this if you have ERPNext running elsewhere
@@ -134,10 +67,6 @@ networks:
     driver: bridge
 
 volumes:
-  ollama_data:
-    driver: local
-  open_webui_data:
-    driver: local
   mcp_logs:
     driver: local
   erpnext_data:

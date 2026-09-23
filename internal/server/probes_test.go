@@ -8,8 +8,9 @@ import (
 	"frappe-mcp-server/internal/config"
 )
 
-// The only endpoints a probe may reach without credentials are the two health paths; /metrics reported
-// time.Since(time.Now()) and a pinned version, and nothing read it.
+// The only endpoints a probe may reach without credentials are the two health paths. /metrics reported
+// time.Since(time.Now()) and a pinned version, and nothing read it; the chat and OpenAPI routes left with the
+// server's own LLM pipeline (ADR-012).
 func TestServedPathsAndProbes(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Server.Host = "127.0.0.1"
@@ -18,7 +19,7 @@ func TestServedPathsAndProbes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMCPServer: %v", err)
 	}
-	for _, path := range []string{"/metrics"} {
+	for _, path := range []string{"/metrics", "/api/v1/chat", "/api/v1/openapi.json"} {
 		req := httptest.NewRequest("GET", path, nil)
 		w := httptest.NewRecorder()
 		s.httpServer.Handler.ServeHTTP(w, req)

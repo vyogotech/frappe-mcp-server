@@ -7,7 +7,6 @@
 The ERPNext MCP Server now includes powerful analytics and reporting capabilities that allow you to:
 - Perform complex aggregations (SUM, COUNT, AVG, TOP N)
 - Execute native ERPNext reports
-- Ask analytical questions in natural language
 
 ## Features
 
@@ -15,7 +14,7 @@ The ERPNext MCP Server now includes powerful analytics and reporting capabilitie
 
 Perform SQL-like aggregations on your ERPNext data without writing SQL.
 
-**Natural Language Examples:**
+**Examples:**
 ```
 "Show me top 5 customers by revenue"
 "What are total sales by item this month?"
@@ -56,7 +55,7 @@ curl -X POST http://localhost:8080/api/v1/tool/aggregate_documents \
 
 Execute any standard or custom ERPNext report with filters.
 
-**Natural Language Examples:**
+**Examples:**
 ```
 "Run Sales Analytics report"
 "Execute Customer Ledger Summary"
@@ -198,65 +197,6 @@ curl -X POST http://localhost:8080/api/v1/tool/run_report \
 }
 ```
 
-## Natural Language Processing
-
-The AI automatically detects analytical queries and routes them appropriately:
-
-### Detection Rules
-
-1. **Keywords trigger aggregation:**
-   - "top N", "bottom N"
-   - "highest", "lowest", "most", "least"
-   - "sum", "total", "average", "count"
-   - "by [field]" (grouping indicator)
-
-2. **Keywords trigger reports:**
-   - "run [report name] report"
-   - "execute [report name]"
-   - "show [report name] report"
-
-### Examples with AI Flow
-
-**Query:** "top 5 customers by revenue"
-
-```
-User Input → AI Intent Extraction
-            ↓
-    {action: "aggregate", doctype: "Sales Invoice"}
-            ↓
-    AI Parameter Extraction
-            ↓
-    {
-      fields: ["customer", "SUM(grand_total) as revenue"],
-      group_by: "customer",
-      order_by: "revenue desc",
-      limit: 5
-    }
-            ↓
-    Execute aggregate_documents tool
-            ↓
-    Format results as table (AI formatting)
-```
-
-**Query:** "run Sales Analytics report"
-
-```
-User Input → AI Intent Extraction
-            ↓
-    {action: "report"}
-            ↓
-    AI Parameter Extraction
-            ↓
-    {
-      report_name: "Sales Analytics",
-      filters: {}
-    }
-            ↓
-    Execute run_report tool
-            ↓
-    Format results as table (AI formatting)
-```
-
 ## Usage Patterns
 
 ### In Cursor IDE
@@ -270,13 +210,6 @@ User Input → AI Intent Extraction
 
 @erpnext Which products have the highest profit margin?
 ```
-
-### In Open WebUI
-
-Simply type your analytical question:
-- "Show me top customers"
-- "What's our average order value?"
-- "Run the Customer Ledger Summary"
 
 ### Programmatic Access
 
@@ -442,34 +375,8 @@ For better readability, add "in table format" to your queries:
 
 ## Architecture Notes
 
-### Hybrid Approach
-
-The system follows a **hybrid architecture**:
-
-**Pure MCP Interface:**
-- Tools (`aggregate_documents`, `run_report`) return structured data
-- MCP clients (Cursor, Claude) call tools directly
-- Client handles formatting
-
-**Conversational API:**
-- AI extracts intent from natural language
-- AI determines parameters
-- AI formats results for user
-- Suitable for Open WebUI and simple clients
-
-### Under the Hood
-
-**Aggregation Tool:**
-```
-Natural Language → LLM Intent → LLM Params → Frappe API
-                                              (frappe.client.get_list)
-```
-
-**Report Tool:**
-```
-Natural Language → LLM Intent → LLM Params → Frappe API
-                                              (frappe.desk.query_report.run)
-```
+Both tools return structured data and nothing else. The client that called them decides how to present it:
+`aggregate_documents` reads `frappe.client.get_list`, `run_report` reads `frappe.desk.query_report.run`.
 
 ## Future Enhancements
 
@@ -477,13 +384,11 @@ Planned features:
 - Chart/visualization hints
 - Scheduled report execution
 - Export to CSV/Excel/PDF
-- Custom report builder via conversation
 - Caching for frequently-run queries
 - Time-series analysis helpers
 
 ## See Also
 
-- [AI Features](ai-features.md) - Overview of AI capabilities
 - [API Reference](api-reference.md) - Complete API documentation
 - [Quick Start](quick-start.md) - Getting started guide
 

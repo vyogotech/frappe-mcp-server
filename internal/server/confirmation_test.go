@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"sync"
 	"testing"
 
-	"frappe-mcp-server/internal/auth"
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/tools"
@@ -127,8 +125,8 @@ func newConfirmServer(t *testing.T, site *fakeSite, redeemMethod string) *MCPSer
 	return s
 }
 
-// entryPoints are every way a tool call reaches a handler: the SDK's /mcp, the REST tool path, and executeTool, which
-// is what handleChat and the SSE chat both route through. Each returns what its caller ends up reading.
+// entryPoints are every way a tool call reaches a handler: the SDK's /mcp and the REST tool path. Each returns what
+// its caller ends up reading.
 var entryPoints = []struct {
 	name string
 	call func(t *testing.T, s *MCPServer, tool, args, token string) string
@@ -157,22 +155,6 @@ var entryPoints = []struct {
 		rec := httptest.NewRecorder()
 		s.httpServer.Handler.ServeHTTP(rec, req)
 		return rec.Body.String()
-	}},
-	{"executeTool", func(t *testing.T, s *MCPServer, tool, args, token string) string {
-		t.Helper()
-		ctx := context.Background()
-		if token != "" {
-			ctx = auth.WithConfirmation(ctx, token)
-		}
-		resp, err := s.executeTool(ctx, tool, json.RawMessage(args))
-		if err != nil {
-			return err.Error()
-		}
-		var text strings.Builder
-		for _, c := range resp.Content {
-			text.WriteString(c.Text)
-		}
-		return text.String()
 	}},
 }
 

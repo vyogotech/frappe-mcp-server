@@ -124,8 +124,8 @@ def query_mcp(message):
     settings = frappe.get_single("MCP Server Settings")
 
     response = requests.post(
-        f"{settings.mcp_server_url}/api/v1/chat",
-        json={"message": message},
+        f"{settings.mcp_server_url}/api/v1/tools/list_documents",
+        json={"params": {"doctype": "Customer"}},
         cookies={"sid": frappe.session.sid},  # Pass user session
         timeout=30
     )
@@ -138,10 +138,10 @@ def query_mcp(message):
 # Get your sid from ERPNext browser DevTools → Application → Cookies
 export SID='your-sid-value-here'
 
-curl -X POST http://localhost:8080/api/v1/chat \
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
   -b "sid=$SID" \
   -H "Content-Type: application/json" \
-  -d '{"message": "show me top 5 customers"}'
+  -d '{"params": {"doctype": "Customer", "limit": 5}}'
 ```
 
 ### CSRF Token Handling
@@ -173,10 +173,10 @@ TOKEN=$(curl -s -X POST http://localhost:8000/api/method/frappe.integrations.oau
   | jq -r '.access_token')
 
 # 2. Call MCP
-curl -X POST http://localhost:8080/api/v1/chat \
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Show me all open projects"}'
+  -d '{"params": {"doctype": "Project", "filters": {"status": "Open"}}}'
 ```
 
 ### Authorization Code Flow (User Login)
