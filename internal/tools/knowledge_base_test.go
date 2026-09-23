@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
@@ -19,8 +18,9 @@ import (
 
 // kbFrappe records what reaches rag.search.search, which owns the vector search and the permission filter.
 type kbFrappe struct {
-	hits  []string
-	query url.Values
+	hits []string
+	// the question travels in the body since ADR-037, so this is what rag.search.search was sent
+	sent map[string]any
 }
 
 func newKBFrappe(t *testing.T, passages []map[string]interface{}) (*frappe.Client, *kbFrappe) {
@@ -29,7 +29,10 @@ func newKBFrappe(t *testing.T, passages []map[string]interface{}) (*frappe.Clien
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec.hits = append(rec.hits, r.URL.Path)
-		rec.query = r.URL.Query()
+		rec.sent = map[string]any{}
+		if r.Body != nil {
+			_ = json.NewDecoder(r.Body).Decode(&rec.sent)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api/method/rag.search.search" {
@@ -71,8 +74,8 @@ func TestSearchKnowledgeBase(t *testing.T) {
 		require.Len(t, resp.Content, 2)
 
 		assert.Equal(t, []string{"/api/method/rag.search.search"}, rec.hits)
-		assert.Equal(t, "what is the mileage rate", rec.query.Get("query"))
-		assert.Equal(t, "3", rec.query.Get("limit"))
+		assert.Equal(t, "what is the mileage rate", rec.sent["query"])
+		assert.Equal(t, float64(3), rec.sent["limit"])
 
 		var got []map[string]interface{}
 		require.NoError(t, json.Unmarshal([]byte(resp.Content[1].Text), &got))
@@ -84,21 +87,22 @@ func TestSearchKnowledgeBase(t *testing.T) {
 		client, rec := newKBFrappe(t, passages)
 		_, err := searchKB(t, NewRegistry(client), `{"query":"anything"}`)
 		require.NoError(t, err)
-		assert.Equal(t, "5", rec.query.Get("limit"))
+		assert.Equal(t, float64(5), rec.sent["limit"])
 	})
 
 	t.Run("passes the chat on, so its attached files are searched too", func(t *testing.T) {
 		client, rec := newKBFrappe(t, passages)
 		_, err := searchKB(t, NewRegistry(client), `{"query":"q","session":"chat-1"}`)
 		require.NoError(t, err)
-		assert.Equal(t, "chat-1", rec.query.Get("session"))
+		assert.Equal(t, "chat-1", rec.sent["session"])
 	})
 
 	t.Run("sends no chat when none is named", func(t *testing.T) {
 		client, rec := newKBFrappe(t, passages)
 		_, err := searchKB(t, NewRegistry(client), `{"query":"q"}`)
 		require.NoError(t, err)
-		assert.False(t, rec.query.Has("session"))
+		_, sent := rec.sent["session"]
+		assert.False(t, sent)
 	})
 
 	t.Run("a question is required", func(t *testing.T) {

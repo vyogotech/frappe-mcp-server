@@ -304,19 +304,18 @@ func (c *Client) SearchKnowledgeBase(ctx context.Context, query string, limit in
 		limit = 5
 	}
 
-	params := url.Values{}
-	params.Set("query", query)
-	params.Set("limit", fmt.Sprintf("%d", limit))
+	// the question travels in the body, never the query string: nginx logs every URL it serves and
+	// rag.search.search is POST-only since ADR-037, so a GET is refused outright
+	body := map[string]any{"query": query, "limit": limit}
 	// the chat the question comes from: the app also searches the files attached to it
 	if session != "" {
-		params.Set("session", session)
+		body["session"] = session
 	}
 
 	var response struct {
 		Message []map[string]interface{} `json:"message"`
 	}
-	endpoint := "/api/method/rag.search.search?" + params.Encode()
-	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
+	if err := c.makeRequest(ctx, "POST", "/api/method/rag.search.search", body, &response); err != nil {
 		return nil, fmt.Errorf("knowledge base search failed: %w", err)
 	}
 
