@@ -134,35 +134,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to load from environment: %w", err)
 	}
 
-	// Set default rate limits if not provided
-	if config.ERPNext.RateLimit.RequestsPerSecond == 0 {
-		config.ERPNext.RateLimit.RequestsPerSecond = 10
-	}
-	if config.ERPNext.RateLimit.Burst == 0 {
-		config.ERPNext.RateLimit.Burst = 20
-	}
-	if config.Server.Port == 0 {
-		config.Server.Port = 8080
-	}
-	// an omitted timeout would leave the server's reads and writes unbounded; two minutes covers sid validation and a tool
-	// call's 60 s deadline
-	if config.Server.Timeout == 0 {
-		config.Server.Timeout = 2 * time.Minute
-	}
-	// an omitted delay would make every retry immediate
-	if config.ERPNext.Retry.InitialDelay == 0 {
-		config.ERPNext.Retry.InitialDelay = 500 * time.Millisecond
-	}
-	if config.ERPNext.Retry.MaxDelay == 0 {
-		config.ERPNext.Retry.MaxDelay = 5 * time.Second
-	}
-	if config.Tools.ConfirmationRedeemMethod == "" {
-		config.Tools.ConfirmationRedeemMethod = DefaultConfirmationRedeemMethod
-	}
-	// one site URL has to point the whole server at a site: Frappe serves its own OAuth2 introspection
-	if config.Auth.OAuth2.TokenInfoURL == "" && config.ERPNext.BaseURL != "" {
-		config.Auth.OAuth2.TokenInfoURL = strings.TrimSuffix(config.ERPNext.BaseURL, "/") + frappeUserinfoPath
-	}
+	config.applyDefaults()
 
 	// Validate configuration
 	if err := config.validate(); err != nil {
@@ -172,90 +144,99 @@ func Load() (*Config, error) {
 	return &config, nil
 }
 
+// applyDefaults fills in every value a config file may leave out.
+func (c *Config) applyDefaults() {
+	// Set default rate limits if not provided
+	if c.ERPNext.RateLimit.RequestsPerSecond == 0 {
+		c.ERPNext.RateLimit.RequestsPerSecond = 10
+	}
+	if c.ERPNext.RateLimit.Burst == 0 {
+		c.ERPNext.RateLimit.Burst = 20
+	}
+	if c.Server.Port == 0 {
+		c.Server.Port = 8080
+	}
+	// an omitted timeout would leave the server's reads and writes unbounded; two minutes covers sid validation and a tool
+	// call's 60 s deadline
+	if c.Server.Timeout == 0 {
+		c.Server.Timeout = 2 * time.Minute
+	}
+	// an omitted delay would make every retry immediate
+	if c.ERPNext.Retry.InitialDelay == 0 {
+		c.ERPNext.Retry.InitialDelay = 500 * time.Millisecond
+	}
+	if c.ERPNext.Retry.MaxDelay == 0 {
+		c.ERPNext.Retry.MaxDelay = 5 * time.Second
+	}
+	if c.Tools.ConfirmationRedeemMethod == "" {
+		c.Tools.ConfirmationRedeemMethod = DefaultConfirmationRedeemMethod
+	}
+	// one site URL has to point the whole server at a site: Frappe serves its own OAuth2 introspection
+	if c.Auth.OAuth2.TokenInfoURL == "" && c.ERPNext.BaseURL != "" {
+		c.Auth.OAuth2.TokenInfoURL = strings.TrimSuffix(c.ERPNext.BaseURL, "/") + frappeUserinfoPath
+	}
+}
+
+// envString sets *dst when key carries a value.
+func envString(key string, dst *string) {
+	if v := os.Getenv(key); v != "" {
+		*dst = v
+	}
+}
+
+// envRenamed prefers key and falls back to the name it replaced, saying so when the old one is used.
+func envRenamed(key, legacy string, dst *string) {
+	if v := os.Getenv(key); v != "" {
+		*dst = v
+		return
+	}
+	if v := os.Getenv(legacy); v != "" {
+		*dst = v
+		slog.Warn(legacy + " is deprecated; rename to " + key)
+	}
+}
+
+// envParsed sets *dst from key through parse. A value parse rejects is an error naming the variable,
+// never a zero: "True" or "1" used to read as false and silently switch authentication off on a
+// server whose config file had enabled it.
+func envParsed[T any](key string, dst *T, parse func(string) (T, error)) error {
+	v := os.Getenv(key)
+	if v == "" {
+		return nil
+	}
+	parsed, err := parse(v)
+	if err != nil {
+		return fmt.Errorf("%s: %w", key, err)
+	}
+	*dst = parsed
+	return nil
+}
+
 func (c *Config) loadFromEnv() error {
 	// ERPNEXT_* is the deprecated fallback that keeps upgraded deployments starting; drop it no earlier than 2026-10-01.
-	if baseURL := os.Getenv("FRAPPE_BASE_URL"); baseURL != "" {
-		c.ERPNext.BaseURL = baseURL
-	} else if legacy := os.Getenv("ERPNEXT_BASE_URL"); legacy != "" {
-		c.ERPNext.BaseURL = legacy
-		slog.Warn("ERPNEXT_BASE_URL is deprecated; rename to FRAPPE_BASE_URL")
-	}
-	if apiKey := os.Getenv("FRAPPE_API_KEY"); apiKey != "" {
-		c.ERPNext.APIKey = apiKey
-	} else if legacy := os.Getenv("ERPNEXT_API_KEY"); legacy != "" {
-		c.ERPNext.APIKey = legacy
-		slog.Warn("ERPNEXT_API_KEY is deprecated; rename to FRAPPE_API_KEY")
-	}
-	if apiSecret := os.Getenv("FRAPPE_API_SECRET"); apiSecret != "" {
-		c.ERPNext.APISecret = apiSecret
-	} else if legacy := os.Getenv("ERPNEXT_API_SECRET"); legacy != "" {
-		c.ERPNext.APISecret = legacy
-		slog.Warn("ERPNEXT_API_SECRET is deprecated; rename to FRAPPE_API_SECRET")
-	}
+	envRenamed("FRAPPE_BASE_URL", "ERPNEXT_BASE_URL", &c.ERPNext.BaseURL)
+	envRenamed("FRAPPE_API_KEY", "ERPNEXT_API_KEY", &c.ERPNext.APIKey)
+	envRenamed("FRAPPE_API_SECRET", "ERPNEXT_API_SECRET", &c.ERPNext.APISecret)
 
-	// Server configuration
-	if host := os.Getenv("SERVER_HOST"); host != "" {
-		c.Server.Host = host
-	}
-	if port := os.Getenv("SERVER_PORT"); port != "" {
-		n, err := strconv.Atoi(port)
-		if err != nil {
-			return fmt.Errorf("SERVER_PORT: %w", err)
-		}
-		c.Server.Port = n
-	}
+	envString("SERVER_HOST", &c.Server.Host)
+	envString("LOG_LEVEL", &c.Logging.Level)
+	envString("OAUTH_TOKEN_INFO_URL", &c.Auth.OAuth2.TokenInfoURL)
+	envString("OAUTH_ISSUER_URL", &c.Auth.OAuth2.IssuerURL)
 
-	// Logging configuration
-	if level := os.Getenv("LOG_LEVEL"); level != "" {
-		c.Logging.Level = level
-	}
-	// a deployment whose site has no rag turns the knowledge base off without a config file of its own
-	if kb := os.Getenv("TOOLS_KNOWLEDGE_BASE"); kb != "" {
-		on, err := strconv.ParseBool(kb)
+	// TOOLS_KNOWLEDGE_BASE: a deployment whose site has no rag turns the knowledge base off without a
+	// config file of its own. The first rejection wins, in the order written here.
+	for _, err := range []error{
+		envParsed("SERVER_PORT", &c.Server.Port, strconv.Atoi),
+		envParsed("TOOLS_KNOWLEDGE_BASE", &c.Tools.KnowledgeBase, strconv.ParseBool),
+		envParsed("AUTH_ENABLED", &c.Auth.Enabled, strconv.ParseBool),
+		envParsed("AUTH_REQUIRE_AUTH", &c.Auth.RequireAuth, strconv.ParseBool),
+		envParsed("OAUTH_TIMEOUT", &c.Auth.OAuth2.Timeout, time.ParseDuration),
+		envParsed("CACHE_TTL", &c.Auth.TokenCache.TTL, time.ParseDuration),
+	} {
 		if err != nil {
-			return fmt.Errorf("TOOLS_KNOWLEDGE_BASE: %w", err)
+			return err
 		}
-		c.Tools.KnowledgeBase = on
 	}
-
-	// Auth configuration
-	// a value strconv.ParseBool does not know is an error, not a false: "True" or "1" used to read as false here and
-	// silently switch authentication off on a server whose config file had enabled it
-	if enabled := os.Getenv("AUTH_ENABLED"); enabled != "" {
-		on, err := strconv.ParseBool(enabled)
-		if err != nil {
-			return fmt.Errorf("AUTH_ENABLED: %w", err)
-		}
-		c.Auth.Enabled = on
-	}
-	if requireAuth := os.Getenv("AUTH_REQUIRE_AUTH"); requireAuth != "" {
-		on, err := strconv.ParseBool(requireAuth)
-		if err != nil {
-			return fmt.Errorf("AUTH_REQUIRE_AUTH: %w", err)
-		}
-		c.Auth.RequireAuth = on
-	}
-	if tokenInfoURL := os.Getenv("OAUTH_TOKEN_INFO_URL"); tokenInfoURL != "" {
-		c.Auth.OAuth2.TokenInfoURL = tokenInfoURL
-	}
-	if issuerURL := os.Getenv("OAUTH_ISSUER_URL"); issuerURL != "" {
-		c.Auth.OAuth2.IssuerURL = issuerURL
-	}
-	if timeout := os.Getenv("OAUTH_TIMEOUT"); timeout != "" {
-		duration, err := time.ParseDuration(timeout)
-		if err != nil {
-			return fmt.Errorf("OAUTH_TIMEOUT: %w", err)
-		}
-		c.Auth.OAuth2.Timeout = duration
-	}
-	if cacheTTL := os.Getenv("CACHE_TTL"); cacheTTL != "" {
-		duration, err := time.ParseDuration(cacheTTL)
-		if err != nil {
-			return fmt.Errorf("CACHE_TTL: %w", err)
-		}
-		c.Auth.TokenCache.TTL = duration
-	}
-
 	return nil
 }
 
