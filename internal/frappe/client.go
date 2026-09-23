@@ -394,7 +394,9 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 		}
 		// full jitter up to an exponential bound, so the retries of many calls do not arrive together
 		bound := min(c.retryConfig.MaxDelay, c.retryConfig.InitialDelay<<min(attempt-1, 30))
-		delay := rand.N(bound + 1) //nolint:gosec // G404: backoff jitter is not a secret (CWE-338 does not apply)
+		// #nosec G404 -- backoff jitter is not a secret, so CWE-338 does not apply. gosec only reads a
+		// directive that leads its comment, and golangci-lint only reads nolint, so both must be here.
+		delay := rand.N(bound + 1) //nolint:gosec
 		slog.Debug("Retrying request", "attempt", attempt+1, "delay", delay, "error", err)
 		select {
 		case <-ctx.Done():

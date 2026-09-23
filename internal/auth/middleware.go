@@ -41,7 +41,9 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 				// the session was never judged: 401 would have the caller tell the user it was rejected
 				status, message = http.StatusServiceUnavailable, "Frappe did not answer"
 			}
-			// a refused request is a security event: record why, never the credential
+			// a refused request is a security event: record why, never the credential.
+			// #nosec G706 -- main.go installs slog.NewJSONHandler, which JSON-encodes every value, so a
+			// newline in a path or a remote address cannot forge a second log entry (CWE-117).
 			slog.Warn("authentication failed", "reason", err.Error(), "status", status, "path", r.URL.Path, "remote_addr", r.RemoteAddr)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)
