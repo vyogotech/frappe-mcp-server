@@ -14,7 +14,7 @@ import (
 // test can reach the write behind the confirmation gate without naming another project's API.
 const ConfirmRedeemMethod = "test_confirm.redeem"
 
-func MockERPNextServer(t *testing.T) *httptest.Server {
+func MockERPNextServer(t testing.TB) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set response headers
 		w.Header().Set("Content-Type", "application/json")
