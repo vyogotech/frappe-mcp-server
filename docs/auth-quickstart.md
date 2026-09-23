@@ -31,7 +31,7 @@ auth:
   enabled: true
   require_auth: false   # Set true in production
   oauth2:
-    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo"
+    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid_profile"
     issuer_url: "http://localhost:8000"
     validate_remote: true
     timeout: "30s"
@@ -64,7 +64,7 @@ auth:
   enabled: true
   require_auth: false
   oauth2:
-    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo"
+    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid_profile"
     issuer_url: "http://localhost:8000"
     trusted_clients:
       - "YOUR_CLIENT_ID"

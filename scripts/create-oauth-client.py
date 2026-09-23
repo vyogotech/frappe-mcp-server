@@ -51,7 +51,7 @@ auth:
   enabled: true
   require_auth: false  # Set to true for production
   oauth2:
-    token_info_url: "{base_url}/api/method/frappe.integrations.oauth2.openid.userinfo"
+    token_info_url: "{base_url}/api/method/frappe.integrations.oauth2.openid_profile"
     issuer_url: "{base_url}"
     trusted_clients:
       - "{client_id}"
@@ -64,7 +64,7 @@ export OAUTH_CLIENT_ID='{client_id}'
 export OAUTH_CLIENT_SECRET='{client_secret}'
 export AUTH_ENABLED=true
 export AUTH_REQUIRE_AUTH=false
-export OAUTH_TOKEN_INFO_URL='{base_url}/api/method/frappe.integrations.oauth2.openid.userinfo'
+export OAUTH_TOKEN_INFO_URL='{base_url}/api/method/frappe.integrations.oauth2.openid_profile'
 export OAUTH_ISSUER_URL='{base_url}'
 """)
             
@@ -107,7 +107,7 @@ def test_oauth_client(base_url, client_id, client_secret):
                 # Validate the token
                 print("\nValidating token...")
                 user_info_response = requests.get(
-                    f"{base_url}/api/method/frappe.integrations.oauth2.openid.userinfo",
+                    f"{base_url}/api/method/frappe.integrations.oauth2.openid_profile",
                     headers={"Authorization": f"Bearer {access_token}"},
                 )
                 

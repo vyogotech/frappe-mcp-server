@@ -148,7 +148,7 @@
      enabled: true
      require_auth: false
      oauth2:
-       token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo"
+       token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid_profile"
        trusted_clients: ["your-client-id"]
    ```
 
