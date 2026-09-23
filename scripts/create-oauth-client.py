@@ -164,11 +164,7 @@ def main():
         # Test the client
         test_oauth_client(base_url, client_id, client_secret)
         
-        print("\n✓ Setup complete! You can now test OAuth2 authentication.")
-        print("\nRun the test script:")
-        print(f"  OAUTH_CLIENT_ID='{client_id}' \\")
-        print(f"  OAUTH_CLIENT_SECRET='{client_secret}' \\")
-        print("  ./test-oauth.sh")
+        print("\n✓ Setup complete.")
     else:
         print("\n✗ Failed to create OAuth client")
         sys.exit(1)

@@ -276,13 +276,6 @@ This logs auth decisions, sid validation calls, token cache hits/misses, and CSR
 ```bash
 # Run auth unit tests
 go test ./internal/auth/... -v
-
-# Test with sid cookie
-export SID='your-sid-value'
-./test_sid_auth.sh
-
-# Test OAuth2 flow
-./test-oauth.sh
 ```
 
 ## Related
