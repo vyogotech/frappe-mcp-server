@@ -24,9 +24,8 @@ type Server struct {
 	name      string
 	version   string
 	sdkServer *gosdk.Server
-	// toolNames and resourceURIs are tracked locally for legacy helper methods.
-	toolNames    []string
-	resourceURIs []string
+	// toolNames is tracked locally for legacy helper methods.
+	toolNames []string
 	// toolMeta stores the description + input schema for each registered tool
 	// so the MCP tools/list handler can return real schemas to clients.
 	toolMeta map[string]ToolMeta
@@ -217,18 +216,6 @@ func (s *Server) ToolMetadata(name string) ToolMeta {
 		return meta
 	}
 	return ToolMeta{InputSchema: map[string]interface{}{"type": "object"}}
-}
-
-// RegisterResource registers a resource whose reads return an empty result.
-func (s *Server) RegisterResource(uri, description string) {
-	s.resourceURIs = append(s.resourceURIs, uri)
-	s.sdkServer.AddResource(
-		&gosdk.Resource{URI: uri, Description: description},
-		func(ctx context.Context, req *gosdk.ReadResourceRequest) (*gosdk.ReadResourceResult, error) {
-			return &gosdk.ReadResourceResult{}, nil
-		},
-	)
-	slog.Debug("Registered MCP resource", "uri", uri)
 }
 
 func (s *Server) Run(ctx context.Context, transport gosdk.Transport) error {

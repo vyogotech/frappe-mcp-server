@@ -36,17 +36,19 @@ make coverage
 ```
 frappe-mcp-server/
 ├── cmd/
-│   ├── mcp-stdio/          # STDIO server for Cursor/Claude
-│   ├── test-client/        # Test client
-│   └── ollama-client/      # Ollama test client
+│   └── mcp-stdio/          # STDIO server for Cursor/Claude
 ├── internal/
+│   ├── auth/               # Authentication strategies and middleware
+│   ├── buildinfo/          # Version, read from the build's VCS stamp
 │   ├── config/             # Configuration management
-│   ├── erpnext/            # ERPNext client
+│   ├── frappe/             # Frappe/ERPNext HTTP client
+│   ├── llm/                # LLM clients for the REST chat pipeline
 │   ├── mcp/                # MCP protocol implementation
 │   ├── server/             # HTTP server & handlers
+│   ├── telemetry/          # OpenTelemetry tracing
+│   ├── testutils/          # Mock Frappe server for the tests
 │   ├── tools/              # MCP tools implementation
-│   ├── types/              # Shared types
-│   └── utils/              # Utilities
+│   └── types/              # Shared types
 ├── docs/                   # Documentation (GitHub Pages)
 ├── configs/                # Configuration examples
 ├── main.go                 # HTTP server entry point

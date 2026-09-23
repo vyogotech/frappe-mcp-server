@@ -33,7 +33,6 @@ All notable changes to ERPNext MCP Server.
   - Server wraps `gosdk.Server`; all tool handlers use the SDK's `ToolRequest`/`ToolResponse` types
 
 ### Fixed
-- **gosec G204** — `cmd/ollama-client`: subprocess path resolved via `filepath.Abs(filepath.Clean(...))` + `os.Stat` validation before `exec.Command`
 - **Auth gap on Streamable HTTP** — `POST /mcp` placed on main mux instead of a separate port, ensuring OAuth2/SID/API-key middleware is always applied
 
 ### Changed
@@ -43,6 +42,8 @@ All notable changes to ERPNext MCP Server.
 ### Removed
 - Deleted unused `create_oauth_client.py` and `create_oauth_client_fixed.py`
 - **Neo4j configuration** — the `neo4j:` block and `NEO4J_BOLT_URL` / `NEO4J_USERNAME` / `NEO4J_PASSWORD` are gone; nothing has read them since the FrappeForge graph tools left. Config files are read strictly, so a leftover `neo4j:` block now stops the server at startup: delete it.
+- **Demo CLIs `cmd/ollama-client` and `cmd/test-client`**, `Dockerfile.ollama-client`, their `make build-ollama-client` / `build-test-client` / `build-clients` targets, the `tests/*.sh` scripts that drove `ollama-client`, and `internal/utils`, which `cmd/ollama-client` alone imported. Neither shipped binary linked them, and `github.com/ollama/ollama` leaves `go.mod` with them: 9 of the module's 11 reachable advisories go with it.
+- **`mcp.Server.RegisterResource`** and the resource URIs it tracked; its only caller left in 474d594 and the server has published no resources since.
 
 ## [Unreleased] - 2025-11-13
 

@@ -32,11 +32,3 @@ func TestRegisterTool(t *testing.T) {
 
 	assert.Contains(t, server.toolNames, "test_tool")
 }
-
-func TestRegisterResource(t *testing.T) {
-	server := NewServer("test-server", "1.0.0")
-
-	server.RegisterResource("test://resource", "Test Resource")
-
-	assert.Contains(t, server.resourceURIs, "test://resource")
-}

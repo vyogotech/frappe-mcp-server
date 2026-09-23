@@ -22,7 +22,7 @@ NC=\033[0m # No Color
 .PHONY: all build clean test coverage lint run dev setup help audit audit-clean
 
 # Default target
-all: clean lint test build build-stdio build-test-client build-ollama-client
+all: clean lint test build build-stdio
 
 # Build the application
 build:
@@ -48,24 +48,6 @@ build-stdio-all:
 	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-stdio-darwin-arm64 ./cmd/mcp-stdio/main.go
 	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-stdio-windows-amd64.exe ./cmd/mcp-stdio/main.go
 	@echo "$(GREEN)Multi-platform stdio builds complete$(NC)"
-
-# Build test client
-build-test-client:
-	@echo "$(GREEN)Building test client...$(NC)"
-	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/test-client -v ./cmd/test-client/main.go
-	@echo "$(GREEN)Test client build complete: $(BUILD_DIR)/test-client$(NC)"
-
-# Build Ollama client
-build-ollama-client:
-	@echo "$(GREEN)Building Ollama client...$(NC)"
-	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/ollama-client -v ./cmd/ollama-client/main.go
-	@echo "$(GREEN)Ollama client build complete: $(BUILD_DIR)/ollama-client$(NC)"
-
-# Build all client components
-build-clients: build-stdio build-test-client build-ollama-client
-	@echo "$(GREEN)All clients built successfully$(NC)"
 
 # Build for multiple platforms
 build-all:
