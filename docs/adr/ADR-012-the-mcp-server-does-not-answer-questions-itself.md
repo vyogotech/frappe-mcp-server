@@ -18,7 +18,7 @@ That is the same job `frappe-ai-agent` does. `frappe-ai-agent` is the FastAPI se
 the question, runs the tool-use loop over this server's MCP tools, and streams SSE from its own
 `POST /api/v1/chat`. Every consumer in the three projects points at this server's `/mcp` endpoint and at nothing else:
 
-```
+```text
 ragbot/compose.demo.yaml:180        AI_AGENT_MCP_SERVER_URL: http://mcp:8080/mcp
 ragbot/compose.test.yaml:82,115     AI_AGENT_MCP_SERVER_URL: http://test-mcp:8080/mcp
 frappe-ai-agent .github/workflows/ci.yml:243  AI_AGENT_INTEGRATION_MCP_URL: http://localhost:8080/mcp

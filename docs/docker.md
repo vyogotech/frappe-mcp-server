@@ -54,8 +54,9 @@ This starts everything including a local ERPNext instance.
 | `FRAPPE_BASE_URL` | `http://localhost:8000` | Frappe instance URL |
 | `FRAPPE_API_KEY` | - | Frappe API key (required) |
 | `FRAPPE_API_SECRET` | - | Frappe API secret (required) |
-| `MCP_PORT` | `8080` | MCP server port |
+| `MCP_PORT` | `8080` | Host port the MCP server is published on (read by `compose.yml`, not by the server) |
 | `LOG_LEVEL` | `info` | Logging level |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OTLP/HTTP collector; tracing stays off while it is unset |
 
 ### Custom Configuration
 
@@ -188,7 +189,7 @@ services:
     restart: always
     environment:
       LOG_LEVEL: warn
-      ENABLE_METRICS: true
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     deploy:
       resources:
         limits:

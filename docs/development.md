@@ -227,8 +227,8 @@ curl -X POST http://localhost:8080/api/v1/tools/list_documents \
 
 ```yaml
 # config.yaml
-server:
-  log_level: "debug"
+logging:
+  level: "debug"
 ```
 
 Or:

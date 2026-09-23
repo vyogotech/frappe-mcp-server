@@ -33,6 +33,7 @@ All notable changes to ERPNext MCP Server.
   - Server wraps `gosdk.Server`; all tool handlers use the SDK's `ToolRequest`/`ToolResponse` types
 
 ### Fixed
+- **The documentation describes the schema the code reads** — `logging.level` instead of the `server.log_level` that never existed, `SERVER_HOST`, `LOG_LEVEL`, `AUTH_ENABLED`, `AUTH_REQUIRE_AUTH`, `OAUTH_TOKEN_INFO_URL`, `OAUTH_TIMEOUT`, `CACHE_TTL`, `TOOLS_KNOWLEDGE_BASE` and `OTEL_EXPORTER_OTLP_ENDPOINT` listed in `docs/configuration.md`, `ENABLE_METRICS` (read nowhere) dropped from `docs/docker.md`, and fifteen broken relative links in the docs repaired.
 - **Environment variables are parsed, not guessed** — `AUTH_ENABLED` and `AUTH_REQUIRE_AUTH` go through `strconv.ParseBool`, and `SERVER_PORT`, `OAUTH_TIMEOUT` and `CACHE_TTL` return their parse errors. `AUTH_ENABLED=True`, `=1` or `=yes` used to read as false and switch authentication off on a server whose configuration file had enabled it; the first two now mean true and the third stops startup.
 - **Auth gap on Streamable HTTP** — `POST /mcp` placed on main mux instead of a separate port, ensuring OAuth2/SID/API-key middleware is always applied
 

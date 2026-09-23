@@ -10,7 +10,10 @@ The server reads from `config.yaml` by default. You can specify a different path
 server:
   host: "0.0.0.0"          # Server bind address
   port: 8080               # HTTP server port
-  log_level: "info"        # Logging level: debug, info, warn, error
+  timeout: "30s"           # Read and write timeout for one request
+
+logging:
+  level: "info"            # debug, info, warn, error
 
 erpnext:
   base_url: "http://localhost:8000"  # ERPNext instance URL
@@ -40,7 +43,19 @@ Configuration can be overridden using environment variables:
 | `FRAPPE_BASE_URL` | Frappe URL | `https://erp.company.com` |
 | `FRAPPE_API_KEY` | API key | `abc123...` |
 | `FRAPPE_API_SECRET` | API secret | `xyz789...` |
+| `SERVER_HOST` | Bind address | `0.0.0.0` |
 | `SERVER_PORT` | HTTP port | `8080` |
+| `LOG_LEVEL` | Logging level | `debug` |
+| `AUTH_ENABLED` | Turn authentication on or off | `true` |
+| `AUTH_REQUIRE_AUTH` | Refuse an unauthenticated request | `true` |
+| `OAUTH_TOKEN_INFO_URL` | Bearer token introspection endpoint | `https://erp.company.com/api/method/frappe.integrations.oauth2.openid_profile` |
+| `OAUTH_TIMEOUT` | Timeout for token validation | `30s` |
+| `CACHE_TTL` | How long a validated token is cached | `5m` |
+| `TOOLS_KNOWLEDGE_BASE` | Offer `search_knowledge_base` | `true` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP collector; tracing is off when unset | `http://otel-collector:4318` |
+
+A numeric or boolean variable whose value cannot be parsed stops the server at startup and names the variable;
+booleans take the spellings `strconv.ParseBool` accepts (`true`, `True`, `1`, `t`, `false`, `0`, ...).
 
 Environment variables take precedence over config file values.
 
@@ -143,9 +158,9 @@ server:
 
 ```yaml
 # config.dev.yaml
-server:
-  log_level: "debug"
-  
+logging:
+  level: "debug"
+
 erpnext:
   base_url: "http://localhost:8000"
 ```
@@ -155,8 +170,10 @@ erpnext:
 ```yaml
 # config.prod.yaml
 server:
-  log_level: "warn"
   host: "127.0.0.1"
+
+logging:
+  level: "warn"
 
 erpnext:
   base_url: "https://erp.company.com"
@@ -176,9 +193,11 @@ CONFIG_FILE=config.prod.yaml ./bin/frappe-mcp-server
 Set log level:
 
 ```yaml
-server:
-  log_level: "debug"  # debug, info, warn, error
+logging:
+  level: "debug"  # debug, info, warn, error
 ```
+
+Or set `LOG_LEVEL` in the environment.
 
 Logs are written to:
 - **STDOUT** for HTTP server

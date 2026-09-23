@@ -47,6 +47,7 @@ cp config.yaml.example config.yaml
 **Complete documentation:** [https://vyogotech.github.io/frappe-mcp-server/](https://vyogotech.github.io/frappe-mcp-server/)
 
 **Key guides:**
+
 - [Quick Start](https://vyogotech.github.io/frappe-mcp-server/quick-start) - Get running in 5 minutes
 - [Authentication](https://vyogotech.github.io/frappe-mcp-server/authentication) - sid cookie, OAuth2, and API key auth
 - [Auth Quick Start](https://vyogotech.github.io/frappe-mcp-server/auth-quickstart) - Set up auth in 5 minutes
@@ -57,7 +58,7 @@ cp config.yaml.example config.yaml
 
 ### Cursor IDE
 
-```
+```text
 @erpnext List all open projects
 @erpnext Show me customer ABC-CORP
 @erpnext What are the pending tasks?
@@ -94,7 +95,7 @@ Add to `claude_desktop_config.json`:
 
 ## 🏗️ Architecture
 
-```
+```text
 ┌─────────────────┐
 │   AI Clients    │
 │ Cursor, Claude  │

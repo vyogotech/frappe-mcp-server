@@ -450,9 +450,9 @@ curl -X POST http://localhost:8080/api/v1/tools/list_documents \
 
 ### Documentation
 
-- [Full Authentication Guide](docs/authentication.md)
-- [Quick Start Guide](docs/auth-quickstart.md)
-- [Configuration Reference](config.yaml.example)
+- [Full Authentication Guide](authentication.md)
+- [Quick Start Guide](auth-quickstart.md)
+- [Configuration Reference](../config.yaml.example)
 
 ### Testing
 

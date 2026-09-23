@@ -287,8 +287,8 @@ export SID='your-sid-value'
 
 ## Related
 
-- [Auth Quick Start](auth-quickstart) — Set up auth in 5 minutes
-- [Configuration](configuration) — Full config reference
+- [Auth Quick Start](auth-quickstart.md) — Set up auth in 5 minutes
+- [Configuration](configuration.md) — Full config reference
 - [OAuth2 RFC 6749](https://tools.ietf.org/html/rfc6749)
 - [Frappe OAuth2 Docs](https://frappeframework.com/docs/user/en/guides/integration/oauth)
 

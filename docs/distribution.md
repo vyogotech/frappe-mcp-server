@@ -273,9 +273,9 @@ After release, track:
 ## 📚 Documentation
 
 Complete documentation at:
-- [Installation Guide](docs/installation.md)
-- [Release Process](docs/releases.md)
-- [Quick Start](docs/quick-start.md)
+- [Installation Guide](installation.md)
+- [Release Process](releases.md)
+- [Quick Start](quick-start.md)
 
 ## ✅ Summary
 

@@ -39,7 +39,7 @@
 **Created**:
 - `docs/authentication.md` - Complete guide (400+ lines)
 - `docs/auth-quickstart.md` - 5-minute setup (300+ lines)
-- `OAUTH2_IMPLEMENTATION.md` - Technical implementation details
+- `docs/oauth2-implementation.md` - Technical implementation details
 - `IMPLEMENTATION_SUMMARY.md` - This file
 
 **Updated**:
@@ -70,7 +70,7 @@
 ### Documentation (5 files)
 7. `docs/authentication.md` - Full authentication guide
 8. `docs/auth-quickstart.md` - Quick start guide
-9. `OAUTH2_IMPLEMENTATION.md` - Implementation details
+9. `docs/oauth2-implementation.md` - Implementation details
 10. `IMPLEMENTATION_SUMMARY.md` - This summary
 
 ### Configuration (1 file)
@@ -255,14 +255,14 @@ ok  	frappe-mcp-server/internal/auth/strategies	1.323s	coverage: 93.8%
 
 ### User Guides
 
-- **[Authentication Guide](docs/authentication.md)** - Complete OAuth2 documentation
+- **[Authentication Guide](authentication.md)** - Complete OAuth2 documentation
   - Architecture and flow diagrams
   - Configuration reference
   - Security best practices
   - Troubleshooting guide
   - API reference
 
-- **[Quick Start Guide](docs/auth-quickstart.md)** - 5-minute setup
+- **[Quick Start Guide](auth-quickstart.md)** - 5-minute setup
   - Step-by-step setup
   - Common scenarios
   - Migration path
@@ -270,7 +270,7 @@ ok  	frappe-mcp-server/internal/auth/strategies	1.323s	coverage: 93.8%
 
 ### Technical Documentation
 
-- **[Implementation Details](OAUTH2_IMPLEMENTATION.md)** - Technical deep dive
+- **[Implementation Details](oauth2-implementation.md)** - Technical deep dive
   - Architecture decisions
   - Code organization
   - Testing strategy
@@ -278,7 +278,7 @@ ok  	frappe-mcp-server/internal/auth/strategies	1.323s	coverage: 93.8%
 
 ### Configuration
 
-- **[config.yaml.example](config.yaml.example)** - Configuration template
+- **[config.yaml.example](../config.yaml.example)** - Configuration template
   - Full auth configuration
   - Inline documentation
   - Production examples
@@ -324,14 +324,14 @@ ok  	frappe-mcp-server/internal/auth/strategies	1.323s	coverage: 93.8%
 
 ### For Developers
 
-1. Read the [Quick Start Guide](docs/auth-quickstart.md)
+1. Read the [Quick Start Guide](auth-quickstart.md)
 2. Follow the 5-minute setup
 3. Test with your Frappe instance
 4. Implement Frappe backend integration
 
 ### For Production
 
-1. Review [Authentication Guide](docs/authentication.md)
+1. Review [Authentication Guide](authentication.md)
 2. Follow security best practices
 3. Start with optional auth mode
 4. Gradually migrate clients
