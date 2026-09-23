@@ -56,15 +56,12 @@ git push origin v1.0.0
 Once the tag is pushed, GitHub Actions automatically:
 
 1. **Runs CI tests** - Ensures code quality
-2. **Builds binaries** for all platforms:
-   - `frappe-mcp-server-stdio-linux-amd64.tar.gz`
-   - `frappe-mcp-server-stdio-linux-arm64.tar.gz`
-   - `frappe-mcp-server-stdio-darwin-amd64.tar.gz`
-   - `frappe-mcp-server-stdio-darwin-arm64.tar.gz`
-   - `frappe-mcp-server-stdio-windows-amd64.zip`
+2. **Builds both binaries** for all platforms, the HTTP server and the STDIO server:
+   - `frappe-mcp-server-{linux,darwin}-{amd64,arm64}.tar.gz`, `frappe-mcp-server-windows-amd64.zip`
+   - `frappe-mcp-server-stdio-{linux,darwin}-{amd64,arm64}.tar.gz`, `frappe-mcp-server-stdio-windows-amd64.zip`
 3. **Creates packages** with:
    - Binary
-   - README
+   - README.md
    - Configuration template
 4. **Generates checksums** (SHA256SUMS), a CycloneDX SBOM and a build-provenance attestation
 5. **Creates GitHub Release** with:

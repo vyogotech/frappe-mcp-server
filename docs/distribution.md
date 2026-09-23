@@ -31,7 +31,7 @@ make release            # Full release build (HTTP + STDIO, all platforms)
   - Docs: markdownlint
   - Build: cross-compile the server and the STDIO binary for all platforms
   - Security: gosec, govulncheck, semgrep
-  - Build Image: `docker build` on every pull request
+  - Build Image: `docker build` on every push and pull request
   - Build & Push Container: only on a push to `main`
 
 #### Release Workflow (`.github/workflows/release.yml`)
@@ -131,20 +131,21 @@ Each release includes:
 
 ### Binaries
 ```
-frappe-mcp-server-stdio-linux-amd64.tar.gz
-frappe-mcp-server-stdio-linux-arm64.tar.gz
-frappe-mcp-server-stdio-darwin-amd64.tar.gz
-frappe-mcp-server-stdio-darwin-arm64.tar.gz
+frappe-mcp-server-{linux,darwin}-{amd64,arm64}.tar.gz
+frappe-mcp-server-windows-amd64.zip
+frappe-mcp-server-stdio-{linux,darwin}-{amd64,arm64}.tar.gz
 frappe-mcp-server-stdio-windows-amd64.zip
 ```
 
 ### Package Contents
-- Binary (frappe-mcp-server-stdio)
-- README with quick start
+- Binary (the HTTP server, or the STDIO server)
+- README.md
 - env.example (configuration template)
 
-### Checksums
+### Checksums and provenance
 - SHA256SUMS file for verification
+- sbom.cyclonedx.json
+- a build-provenance attestation over every file in SHA256SUMS
 
 ## 🔄 Release Workflow
 

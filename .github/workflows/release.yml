@@ -88,4 +88,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --generate-notes --title "$TAG" dist/*
+        # create refuses a tag that already has a published release, so a re-run uploads instead
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" --generate-notes --title "$TAG" dist/*
+          fi
