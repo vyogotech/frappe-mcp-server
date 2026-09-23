@@ -14,10 +14,10 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"golang.org/x/time/rate"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
@@ -31,10 +31,15 @@ type Client struct {
 	apiKey      string
 	apiSecret   string
 	httpClient  *http.Client
-	rateLimiter *rate.Limiter
+	rateLimit   config.RateLimitConfig
+	limiters    *cache.Cache
+	limitersMu  sync.Mutex
 	retryConfig config.RetryConfig
 	csrfTokens  *cache.Cache
 }
+
+// limiterTTL drops the bucket of a caller that has stopped calling; an idle bucket is a full bucket anyway.
+const limiterTTL = 10 * time.Minute
 
 // maxResponseBody bounds what one Frappe answer may cost this process: an unbounded read is a memory risk, and a
 // result this large is past anything a model can read anyway.
@@ -73,18 +78,13 @@ func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 		Timeout:   cfg.Timeout,
 	}
 
-	// Create rate limiter
-	rateLimiter := rate.NewLimiter(
-		rate.Limit(cfg.RateLimit.RequestsPerSecond),
-		cfg.RateLimit.Burst,
-	)
-
 	return &Client{
 		baseURL:     strings.TrimSuffix(cfg.BaseURL, "/"),
 		apiKey:      cfg.APIKey,
 		apiSecret:   cfg.APISecret,
 		httpClient:  httpClient,
-		rateLimiter: rateLimiter,
+		rateLimit:   cfg.RateLimit,
+		limiters:    cache.New(limiterTTL, 2*limiterTTL),
 		retryConfig: cfg.Retry,
 		csrfTokens:  cache.New(csrfTokenTTL, 2*csrfTokenTTL),
 	}, nil
@@ -386,7 +386,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 		attempts = max(1, c.retryConfig.MaxAttempts)
 	}
 	for attempt := 1; ; attempt++ {
-		if err := c.rateLimiter.Wait(ctx); err != nil {
+		if err := c.limiter(ctx).Wait(ctx); err != nil {
 			return fmt.Errorf("rate limit error: %w", err)
 		}
 		err := c.doRequest(ctx, method, endpoint, body, result)
