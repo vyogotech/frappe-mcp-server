@@ -308,6 +308,31 @@ func (c *Client) SearchKnowledgeBase(ctx context.Context, query string, limit in
 	return response.Message, nil
 }
 
+// RedeemConfirmation spends the one-time token the user's click minted, as the user. The token is in the body and
+// nowhere else: not in the error this returns, not in a log line, not in the tool result the model reads.
+func (c *Client) RedeemConfirmation(ctx context.Context, method, token, tool, doctype, name string) error {
+	if method == "" {
+		return fmt.Errorf("no confirmation redeem method is configured")
+	}
+	if token == "" {
+		return fmt.Errorf("no confirmation token")
+	}
+
+	var response struct {
+		Message struct {
+			OK bool `json:"ok"`
+		} `json:"message"`
+	}
+	body := map[string]interface{}{"token": token, "tool": tool, "doctype": doctype, "name": name}
+	if err := c.makeRequest(ctx, "POST", "/api/method/"+method, body, &response); err != nil {
+		return fmt.Errorf("confirmation redeem failed: %w", err)
+	}
+	if !response.Message.OK {
+		return fmt.Errorf("confirmation was not redeemed")
+	}
+	return nil
+}
+
 // GlobalSearch calls Frappe's global search, frappe.utils.global_search.search.
 func (c *Client) GlobalSearch(ctx context.Context, req GlobalSearchRequest) ([]GlobalSearchResult, error) {
 	if req.Text == "" {

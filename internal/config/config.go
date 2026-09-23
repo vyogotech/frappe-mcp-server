@@ -31,9 +31,15 @@ type Config struct {
 	Tools       ToolsConfig       `yaml:"tools"`
 }
 
+// DefaultConfirmationRedeemMethod is the frappe_ai method a write tool's one-time token is spent against. There is no
+// switch that turns the gate off: a site without the method refuses every write, which is the fail-closed side.
+const DefaultConfirmationRedeemMethod = "frappe_ai.api.confirm.redeem"
+
 // ToolsConfig switches on tools that need more than Frappe itself
 type ToolsConfig struct {
 	KnowledgeBase bool `yaml:"knowledge_base"` // search_knowledge_base answers only where the rag app is installed
+	// ConfirmationRedeemMethod names the whitelisted Frappe method a write tool redeems its confirmation token against.
+	ConfirmationRedeemMethod string `yaml:"confirmation_redeem_method"`
 }
 
 type ServerConfig struct {
@@ -198,6 +204,9 @@ func Load() (*Config, error) {
 	}
 	if config.ERPNext.Retry.MaxDelay == 0 {
 		config.ERPNext.Retry.MaxDelay = 5 * time.Second
+	}
+	if config.Tools.ConfirmationRedeemMethod == "" {
+		config.Tools.ConfirmationRedeemMethod = DefaultConfirmationRedeemMethod
 	}
 	// one site URL has to point the whole server at a site: Frappe serves its own OAuth2 introspection
 	if config.Auth.OAuth2.TokenInfoURL == "" && config.ERPNext.BaseURL != "" {

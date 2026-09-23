@@ -1,5 +1,8 @@
 [
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "description": "Count, sum or average ERPNext records. Use this for any \"how many\" question: with metric=\"count\" it returns the exact total of all matching records, not just one page.",
     "inputSchema": {
       "properties": {
@@ -37,6 +40,9 @@
     "name": "aggregate_documents"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "description": "Analyze any ERPNext document with optional related data",
     "inputSchema": {
       "properties": {
@@ -63,18 +69,25 @@
     "name": "analyze_document"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "inputSchema": {
       "type": "object"
     },
     "name": "analyze_project_timeline"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "inputSchema": {
       "type": "object"
     },
     "name": "budget_variance_analysis"
   },
   {
+    "annotations": {},
     "description": "Create a new ERPNext document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args).",
     "inputSchema": {
       "properties": {
@@ -96,13 +109,10 @@
     "name": "create_document"
   },
   {
-    "description": "Delete an ERPNext document (requires confirm: true)",
+    "annotations": {},
+    "description": "Delete an ERPNext document",
     "inputSchema": {
       "properties": {
-        "confirm": {
-          "description": "Must be true to confirm deletion",
-          "type": "boolean"
-        },
         "doctype": {
           "description": "ERPNext document type",
           "type": "string"
@@ -121,12 +131,18 @@
     "name": "delete_document"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "inputSchema": {
       "type": "object"
     },
     "name": "generate_project_report"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "description": "Retrieve a single ERPNext document by doctype and name",
     "inputSchema": {
       "properties": {
@@ -148,18 +164,27 @@
     "name": "get_document"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "inputSchema": {
       "type": "object"
     },
     "name": "get_project_status"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "inputSchema": {
       "type": "object"
     },
     "name": "get_resource_allocation"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "description": "Full-text search across all indexed Frappe/ERPNext doctypes",
     "inputSchema": {
       "properties": {
@@ -191,6 +216,9 @@
     "name": "global_search"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "description": "Fetch document rows to read their contents. Returns at most page_length rows (default 20), so it CANNOT be used to count records - use aggregate_documents for counts.",
     "inputSchema": {
       "properties": {
@@ -227,12 +255,18 @@
     "name": "list_documents"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "inputSchema": {
       "type": "object"
     },
     "name": "resource_utilization_analysis"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "description": "Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.)",
     "inputSchema": {
       "properties": {
@@ -253,6 +287,9 @@
     "name": "run_report"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "description": "Search ERPNext documents of a given doctype using full-text search",
     "inputSchema": {
       "properties": {
@@ -282,6 +319,9 @@
     "name": "search_documents"
   },
   {
+    "annotations": {
+      "readOnlyHint": true
+    },
     "description": "Search the user's uploaded documents (HR, expense, travel, security and vehicle policies) for a passage answering a question. Use for any policy, entitlement, limit or deadline question.",
     "inputSchema": {
       "properties": {
@@ -306,6 +346,7 @@
     "name": "search_knowledge_base"
   },
   {
+    "annotations": {},
     "description": "Update an existing ERPNext document. `data` is a flat object of fieldname→value pairs for fields to change.",
     "inputSchema": {
       "properties": {

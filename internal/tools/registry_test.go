@@ -206,11 +206,9 @@ func TestDeleteDocument(t *testing.T) {
 	client := createTestClient(t)
 	registry := NewRegistry(client)
 
-	// Test without confirmation
 	params := map[string]interface{}{
 		"doctype": "Project",
 		"name":    "TEST-PROJ-001",
-		"confirm": false,
 	}
 	paramsJSON, err := json.Marshal(params)
 	require.NoError(t, err)
@@ -224,19 +222,7 @@ func TestDeleteDocument(t *testing.T) {
 	ctx := context.Background()
 	response, err := registry.DeleteDocument(ctx, request)
 
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.Contains(t, response.Content[0].Text, "Are you sure you want to delete")
-
-	// Test with confirmation
-	params["confirm"] = true
-	paramsJSON, err = json.Marshal(params)
-	require.NoError(t, err)
-
-	request.Params = paramsJSON
-	response, err = registry.DeleteDocument(ctx, request)
-
-	// We expect an error since our mock server doesn't handle DELETE requests
+	// The context carries no confirmation the user gave, so the delete is refused before the mock server is asked
 	assert.Error(t, err)
 	assert.Nil(t, response)
 }

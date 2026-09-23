@@ -85,6 +85,7 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 
 	// Create tool registry
 	toolRegistry := tools.NewRegistry(frappeClient)
+	toolRegistry.ConfirmationRedeemMethod = cfg.Tools.ConfirmationRedeemMethod
 
 	// Create LLM client (legacy)
 	llmClient, err := llm.NewClient(cfg.LLM)
@@ -196,7 +197,7 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	}
 
 	// Register all tools
-	if err := mcpServer.registerTools(); err != nil {
+	if err := mcpServer.registerTools(toolCatalog()); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
 
@@ -253,14 +254,21 @@ var publicPaths = map[string]bool{
 
 // withMiddleware skips auth for publicPaths only; recovery, logging and cross-origin protection wrap every path.
 func (s *MCPServer) withMiddleware(handler http.Handler) http.Handler {
-	h := handler
+	// innermost, so /mcp and both REST tool paths carry the write gate's token the same way
+	inner := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if token := r.Header.Get("X-Frappe-Confirmation"); token != "" {
+			r = r.WithContext(auth.WithConfirmation(r.Context(), token))
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	h := inner
 
 	// Apply auth middleware if enabled, but skip for public paths.
 	if s.authMiddleware != nil {
-		authed := s.authMiddleware.Handler(handler)
+		authed := s.authMiddleware.Handler(inner)
 		h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if publicPaths[r.URL.Path] {
-				handler.ServeHTTP(w, r)
+				inner.ServeHTTP(w, r)
 				return
 			}
 			authed.ServeHTTP(w, r)
@@ -356,6 +364,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 	strProp := func(desc string) map[string]interface{} {
 		return map[string]interface{}{"type": "string", "description": desc}
 	}
+	readOnly := func(b bool) *bool { return &b }
 	objSchema := func(props map[string]interface{}, required ...string) map[string]interface{} {
 		schema := map[string]interface{}{
 			"type":       "object",
@@ -368,6 +377,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 	}
 	return map[string]mcp.ToolMeta{
 		"get_document": {
+			ReadOnly:    readOnly(true),
 			Description: "Retrieve a single ERPNext document by doctype and name",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype": strProp("ERPNext document type (e.g., Customer, Sales Order)"),
@@ -375,6 +385,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 			}, "doctype", "name"),
 		},
 		"list_documents": {
+			ReadOnly:    readOnly(true),
 			Description: "Fetch document rows to read their contents. Returns at most page_length rows (default 20), so it CANNOT be used to count records - use aggregate_documents for counts.",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype":     strProp("ERPNext document type"),
@@ -385,6 +396,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 			}, "doctype"),
 		},
 		"create_document": {
+			ReadOnly:    readOnly(false),
 			Description: "Create a new ERPNext document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args).",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype": strProp("ERPNext document type (e.g., Customer, Sales Order)"),
@@ -392,6 +404,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 			}, "doctype", "data"),
 		},
 		"update_document": {
+			ReadOnly:    readOnly(false),
 			Description: "Update an existing ERPNext document. `data` is a flat object of fieldname→value pairs for fields to change.",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype": strProp("ERPNext document type"),
@@ -400,14 +413,15 @@ func toolCatalog() map[string]mcp.ToolMeta {
 			}, "doctype", "name", "data"),
 		},
 		"delete_document": {
-			Description: "Delete an ERPNext document (requires confirm: true)",
+			ReadOnly:    readOnly(false),
+			Description: "Delete an ERPNext document",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype": strProp("ERPNext document type"),
 				"name":    strProp("Document name or ID"),
-				"confirm": map[string]interface{}{"type": "boolean", "description": "Must be true to confirm deletion"},
 			}, "doctype", "name"),
 		},
 		"search_documents": {
+			ReadOnly:    readOnly(true),
 			Description: "Search ERPNext documents of a given doctype using full-text search",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype":     strProp("Document type to search"),
@@ -417,6 +431,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 			}, "doctype"),
 		},
 		"analyze_document": {
+			ReadOnly:    readOnly(true),
 			Description: "Analyze any ERPNext document with optional related data",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype":         strProp("ERPNext document type"),
@@ -425,6 +440,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 			}, "doctype", "name"),
 		},
 		"aggregate_documents": {
+			ReadOnly:    readOnly(true),
 			Description: "Count, sum or average ERPNext records. Use this for any \"how many\" question: with metric=\"count\" it returns the exact total of all matching records, not just one page.",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype":  strProp("Document type to aggregate over"),
@@ -436,6 +452,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 			}, "doctype", "metric"),
 		},
 		"run_report": {
+			ReadOnly:    readOnly(true),
 			Description: "Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.)",
 			InputSchema: objSchema(map[string]interface{}{
 				"report_name": strProp("Exact report name (e.g. 'Sales Analytics')"),
@@ -443,6 +460,7 @@ func toolCatalog() map[string]mcp.ToolMeta {
 			}, "report_name"),
 		},
 		"search_knowledge_base": {
+			ReadOnly:    readOnly(true),
 			Description: "Search the user's uploaded documents (HR, expense, travel, security and vehicle policies) for a passage answering a question. Use for any policy, entitlement, limit or deadline question.",
 			InputSchema: objSchema(map[string]interface{}{
 				"query":   strProp("The user's question, in their own words"),
@@ -450,7 +468,16 @@ func toolCatalog() map[string]mcp.ToolMeta {
 				"session": strProp("The chat the question comes from, whose attached files are searched too. Filled by the agent, not the model"),
 			}, "query"),
 		},
+		// the legacy six: catalogued only so registerTools has a declaration for them; tools/list is unchanged, because
+		// an empty description and a nil schema is exactly what RegisterTool published before.
+		"get_project_status":            {ReadOnly: readOnly(true)},
+		"analyze_project_timeline":      {ReadOnly: readOnly(true)},
+		"get_resource_allocation":       {ReadOnly: readOnly(true)},
+		"generate_project_report":       {ReadOnly: readOnly(true)},
+		"resource_utilization_analysis": {ReadOnly: readOnly(true)},
+		"budget_variance_analysis":      {ReadOnly: readOnly(true)},
 		"global_search": {
+			ReadOnly:    readOnly(true),
 			Description: "Full-text search across all indexed Frappe/ERPNext doctypes",
 			InputSchema: objSchema(map[string]interface{}{
 				"text":    strProp("Search keyword or phrase"),
@@ -463,17 +490,20 @@ func toolCatalog() map[string]mcp.ToolMeta {
 	}
 }
 
-func (s *MCPServer) registerTools() error {
+// registerTools publishes every tool from catalog. A tool with no entry, or one whose entry does not declare ReadOnly,
+// is an error: the write gate keys on that declaration, so an undeclared tool must stop the server, not slip through.
+func (s *MCPServer) registerTools(catalog map[string]mcp.ToolMeta) error {
 	slog.Info("Registering MCP tools...")
 
-	catalog := toolCatalog()
 	registered := 0
+	var undeclared []string
 	reg := func(name string, handler mcp.ToolHandler) {
-		if meta, ok := catalog[name]; ok {
-			s.server.RegisterToolWithSchema(name, meta.Description, meta.InputSchema, handler)
-		} else {
-			s.server.RegisterTool(name, handler)
+		meta, ok := catalog[name]
+		if !ok || meta.ReadOnly == nil {
+			undeclared = append(undeclared, name)
+			return
 		}
+		s.server.RegisterToolWithSchema(name, meta, handler)
 		registered++
 	}
 
@@ -509,7 +539,11 @@ func (s *MCPServer) registerTools() error {
 	reg("resource_utilization_analysis", s.tools.ResourceUtilizationAnalysis)
 	reg("budget_variance_analysis", s.tools.BudgetVarianceAnalysis)
 
-	slog.Info("Registered MCP tools", "count", registered, "with_schema", len(catalog), "legacy", registered-len(catalog))
+	if len(undeclared) > 0 {
+		return fmt.Errorf("tools registered without a ReadOnly declaration: %s", strings.Join(undeclared, ", "))
+	}
+
+	slog.Info("Registered MCP tools", "count", registered)
 	return nil
 }
 

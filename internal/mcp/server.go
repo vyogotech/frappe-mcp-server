@@ -32,10 +32,12 @@ type Server struct {
 	toolMeta map[string]ToolMeta
 }
 
-// ToolMeta is what tools/list publishes for a tool.
+// ToolMeta is what tools/list publishes for a tool. ReadOnly is nil when the tool never declared whether it writes;
+// the server refuses to register such a tool, so the gate is never skipped by omission.
 type ToolMeta struct {
 	Description string
 	InputSchema map[string]interface{}
+	ReadOnly    *bool
 }
 
 type ToolHandler func(ctx context.Context, request ToolRequest) (*ToolResponse, error)
@@ -91,21 +93,30 @@ func (s *Server) StreamableHTTPHandler() http.Handler {
 	)
 }
 
-// RegisterTool publishes the tool with an empty description and a permissive schema; prefer RegisterToolWithSchema.
+// RegisterTool publishes the tool with an empty description, a permissive schema and no ReadOnly declaration; prefer
+// RegisterToolWithSchema.
 func (s *Server) RegisterTool(name string, handler ToolHandler) {
-	s.RegisterToolWithSchema(name, "", nil, handler)
+	s.RegisterToolWithSchema(name, ToolMeta{}, handler)
 }
 
-// RegisterToolWithSchema publishes description and inputSchema in tools/list; a nil inputSchema allows any object.
-func (s *Server) RegisterToolWithSchema(name, description string, inputSchema map[string]interface{}, handler ToolHandler) {
+// RegisterToolWithSchema publishes meta in tools/list; a nil InputSchema allows any object, and a declared ReadOnly
+// becomes the tool's annotations.readOnlyHint.
+func (s *Server) RegisterToolWithSchema(name string, meta ToolMeta, handler ToolHandler) {
 	if s.toolMeta == nil {
 		s.toolMeta = make(map[string]ToolMeta)
 	}
+	inputSchema := meta.InputSchema
 	if inputSchema == nil {
 		inputSchema = map[string]interface{}{"type": "object"}
 	}
-	s.toolMeta[name] = ToolMeta{Description: description, InputSchema: inputSchema}
+	meta.InputSchema = inputSchema
+	s.toolMeta[name] = meta
 	s.toolNames = append(s.toolNames, name)
+
+	var annotations *gosdk.ToolAnnotations
+	if meta.ReadOnly != nil {
+		annotations = &gosdk.ToolAnnotations{ReadOnlyHint: *meta.ReadOnly}
+	}
 
 	schemaBytes, err := json.Marshal(inputSchema)
 	if err != nil {
@@ -118,8 +129,9 @@ func (s *Server) RegisterToolWithSchema(name, description string, inputSchema ma
 	s.sdkServer.AddTool(
 		&gosdk.Tool{
 			Name:        name,
-			Description: description,
+			Description: meta.Description,
 			InputSchema: json.RawMessage(schemaBytes),
+			Annotations: annotations,
 		},
 		func(ctx context.Context, req *gosdk.CallToolRequest) (*gosdk.CallToolResult, error) {
 			var args map[string]json.RawMessage

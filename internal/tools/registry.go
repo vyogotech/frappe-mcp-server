@@ -14,6 +14,8 @@ import (
 
 type ToolRegistry struct {
 	frappeClient *frappe.Client
+	// ConfirmationRedeemMethod is the Frappe method a write's one-time token is redeemed against; empty means the default.
+	ConfirmationRedeemMethod string
 }
 
 func NewRegistry(frappeClient *frappe.Client) *ToolRegistry {
@@ -113,6 +115,10 @@ func (t *ToolRegistry) CreateDocument(ctx context.Context, request mcp.ToolReque
 		return nil, fmt.Errorf("doctype and data are required")
 	}
 
+	if err := t.requireConfirmation(ctx, "create_document", params.DocType, ""); err != nil {
+		return nil, err
+	}
+
 	doc, err := t.frappeClient.CreateDocument(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create document: %w", err)
@@ -157,6 +163,10 @@ func (t *ToolRegistry) UpdateDocument(ctx context.Context, request mcp.ToolReque
 		return nil, fmt.Errorf("doctype, name, and data are required")
 	}
 
+	if err := t.requireConfirmation(ctx, "update_document", params.DocType, params.Name); err != nil {
+		return nil, err
+	}
+
 	doc, err := t.frappeClient.UpdateDocument(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update document: %w", err)
@@ -186,7 +196,6 @@ func (t *ToolRegistry) DeleteDocument(ctx context.Context, request mcp.ToolReque
 	var params struct {
 		DocType string `json:"doctype"`
 		Name    string `json:"name"`
-		Confirm bool   `json:"confirm"`
 	}
 
 	if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -197,16 +206,9 @@ func (t *ToolRegistry) DeleteDocument(ctx context.Context, request mcp.ToolReque
 		return nil, fmt.Errorf("doctype and name are required")
 	}
 
-	if !params.Confirm {
-		return &mcp.ToolResponse{
-			ID: request.ID,
-			Content: []mcp.Content{
-				{
-					Type: "text",
-					Text: fmt.Sprintf("Are you sure you want to delete %s document: %s? Set 'confirm' to true to proceed.", params.DocType, params.Name),
-				},
-			},
-		}, nil
+	// never a `confirm` argument again: the caller who asks for the delete cannot be the one who confirms it
+	if err := t.requireConfirmation(ctx, "delete_document", params.DocType, params.Name); err != nil {
+		return nil, err
 	}
 
 	err := t.frappeClient.DeleteDocument(ctx, params.DocType, params.Name)
