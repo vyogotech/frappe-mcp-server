@@ -198,11 +198,11 @@ func (c *Config) loadFromEnv() error {
 		c.Server.Host = host
 	}
 	if port := os.Getenv("SERVER_PORT"); port != "" {
-		// Parse port from string
-		var portInt int
-		if _, err := fmt.Sscanf(port, "%d", &portInt); err == nil {
-			c.Server.Port = portInt
+		n, err := strconv.Atoi(port)
+		if err != nil {
+			return fmt.Errorf("SERVER_PORT: %w", err)
 		}
+		c.Server.Port = n
 	}
 
 	// Logging configuration
@@ -219,11 +219,21 @@ func (c *Config) loadFromEnv() error {
 	}
 
 	// Auth configuration
+	// a value strconv.ParseBool does not know is an error, not a false: "True" or "1" used to read as false here and
+	// silently switch authentication off on a server whose config file had enabled it
 	if enabled := os.Getenv("AUTH_ENABLED"); enabled != "" {
-		c.Auth.Enabled = enabled == "true"
+		on, err := strconv.ParseBool(enabled)
+		if err != nil {
+			return fmt.Errorf("AUTH_ENABLED: %w", err)
+		}
+		c.Auth.Enabled = on
 	}
 	if requireAuth := os.Getenv("AUTH_REQUIRE_AUTH"); requireAuth != "" {
-		c.Auth.RequireAuth = requireAuth == "true"
+		on, err := strconv.ParseBool(requireAuth)
+		if err != nil {
+			return fmt.Errorf("AUTH_REQUIRE_AUTH: %w", err)
+		}
+		c.Auth.RequireAuth = on
 	}
 	if tokenInfoURL := os.Getenv("OAUTH_TOKEN_INFO_URL"); tokenInfoURL != "" {
 		c.Auth.OAuth2.TokenInfoURL = tokenInfoURL
@@ -232,14 +242,18 @@ func (c *Config) loadFromEnv() error {
 		c.Auth.OAuth2.IssuerURL = issuerURL
 	}
 	if timeout := os.Getenv("OAUTH_TIMEOUT"); timeout != "" {
-		if duration, err := time.ParseDuration(timeout); err == nil {
-			c.Auth.OAuth2.Timeout = duration
+		duration, err := time.ParseDuration(timeout)
+		if err != nil {
+			return fmt.Errorf("OAUTH_TIMEOUT: %w", err)
 		}
+		c.Auth.OAuth2.Timeout = duration
 	}
 	if cacheTTL := os.Getenv("CACHE_TTL"); cacheTTL != "" {
-		if duration, err := time.ParseDuration(cacheTTL); err == nil {
-			c.Auth.TokenCache.TTL = duration
+		duration, err := time.ParseDuration(cacheTTL)
+		if err != nil {
+			return fmt.Errorf("CACHE_TTL: %w", err)
 		}
+		c.Auth.TokenCache.TTL = duration
 	}
 
 	return nil
