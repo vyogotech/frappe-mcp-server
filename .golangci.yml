@@ -12,6 +12,8 @@ linters:
     - staticcheck
     - unused
     - gosec
+    # the package layering below, which nothing else enforces
+    - depguard
     # the four classes a server making outbound calls gets wrong; the v2 default group has none of them
     - bodyclose
     - sqlclosecheck
@@ -29,6 +31,42 @@ linters:
       min-complexity: 15
     dupl:
       threshold: 150
+    depguard:
+      rules:
+        # the layers, bottom to top: types/buildinfo/config, auth, frappe + mcp + telemetry, tools, server
+        leaves-stay-leaves:
+          files:
+            - "**/internal/types/**"
+            - "**/internal/buildinfo/**"
+            - "**/internal/config/**"
+          deny:
+            - pkg: frappe-mcp-server/internal
+              desc: the bottom layer; everything else may import it, it imports nothing of ours
+        nothing-imports-the-server:
+          files:
+            - "**/internal/auth/**"
+            - "**/internal/frappe/**"
+            - "**/internal/mcp/**"
+            - "**/internal/telemetry/**"
+            - "**/internal/tools/**"
+          deny:
+            - pkg: frappe-mcp-server/internal/server
+              desc: the server is the top layer; it calls these, they never call back
+        below-the-tools:
+          files:
+            - "**/internal/auth/**"
+            - "**/internal/frappe/**"
+            - "**/internal/mcp/**"
+            - "**/internal/telemetry/**"
+          deny:
+            - pkg: frappe-mcp-server/internal/tools
+              desc: a tool is assembled from these; they do not know the catalogue exists
+        testutils-only-in-tests:
+          files:
+            - "!$test"
+          deny:
+            - pkg: frappe-mcp-server/internal/testutils
+              desc: test helpers; importing them from service code ships a mock server
 
 issues:
   max-issues-per-linter: 0
