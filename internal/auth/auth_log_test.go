@@ -25,7 +25,7 @@ func TestARefusedRequestIsLoggedWithItsReason(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(previous) })
 
 	strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{
-		TokenInfoURL: frappe.URL + "/userinfo", IssuerURL: frappe.URL, ValidateRemote: true, Timeout: 5 * time.Second,
+		TokenInfoURL: frappe.URL + "/userinfo", BaseURL: frappe.URL, ValidateRemote: true, Timeout: 5 * time.Second,
 	})
 	handler := NewMiddleware(strategy, true).Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("a refused request reached the handler")

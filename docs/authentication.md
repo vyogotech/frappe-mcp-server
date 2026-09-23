@@ -37,8 +37,8 @@ User (logged into ERPNext)
   │  1. Request with Cookie: sid=abc123
   ▼
 MCP Server (auth middleware)
-  │  2. Validate sid with Frappe /api/method/frappe.integrations.oauth2.openid.userinfo
-  │  3. Extract CSRF token from response
+  │  2. Validate sid at erpnext.base_url /api/method/frappe.auth.get_logged_user
+  │  3. Read the CSRF token out of the desk page at erpnext.base_url /app
   │  4. Store {SessionID, CSRFToken, Email} in request context
   ▼
 Tool Handler
@@ -62,9 +62,13 @@ auth:
   require_auth: false
 
   oauth2:
-    # Frappe userinfo endpoint (used for both sid validation and Bearer token introspection)
-    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo"
-    issuer_url: "http://localhost:8000"
+    # Bearer token introspection only. Optional: it defaults to erpnext.base_url plus
+    # /api/method/frappe.integrations.oauth2.openid_profile, so a Frappe site needs it only
+    # when an external provider introspects the tokens.
+    # token_info_url: "https://your-identity-provider/userinfo"
+
+    # issuer_url is still accepted so existing config files keep working, but nothing reads it:
+    # sessions are validated on the site erpnext.base_url names, the only site their sid is valid on.
 
     # Backend clients that can pass user context via X-MCP-User-* headers
     trusted_clients:
@@ -91,8 +95,7 @@ erpnext:
 ```bash
 AUTH_ENABLED=true
 AUTH_REQUIRE_AUTH=false
-OAUTH_TOKEN_INFO_URL=http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo
-OAUTH_ISSUER_URL=http://localhost:8000
+OAUTH_TOKEN_INFO_URL=https://your-identity-provider/userinfo   # optional, see above
 OAUTH_TIMEOUT=30s
 CACHE_TTL=5m
 CACHE_CLEANUP_INTERVAL=10m
@@ -242,16 +245,18 @@ type User struct {
 ### `401 Unauthorized` on all requests
 
 - Check `auth.enabled` and `auth.require_auth` in `config.yaml`
-- Verify `token_info_url` points to a reachable Frappe endpoint
+- Verify `erpnext.base_url` names the site the caller logged in to: a sid is valid only there
 - Enable debug logging: `logging.level: debug`
 
-### `"invalid session: status 401"` with sid cookie
+### `"invalid session: status 403"` with sid cookie
 
-The `sid` has expired. The user needs to log in to ERPNext again. Sessions expire based on Frappe's session lifetime setting.
+The `sid` has expired. Frappe resumes an expired session as Guest, and `frappe.auth.get_logged_user` then answers
+403, so that is the status in the log. The user needs to log in to Frappe again; sessions expire on Frappe's own
+session lifetime setting.
 
 ### `"CSRF token required"` on POST/PUT/DELETE with sid auth
 
-MCP server couldn't extract the CSRF token during session validation. Check Frappe server logs and ensure the `token_info_url` endpoint returns the `X-Frappe-CSRF-Token` response header.
+MCP server couldn't extract the CSRF token during session validation. Check Frappe server logs and ensure the desk page at `erpnext.base_url` + `/app` answers the sid with its `csrf_token`.
 
 ### User context is nil in tool handler
 

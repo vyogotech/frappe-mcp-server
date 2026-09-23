@@ -48,7 +48,7 @@ func TestASidFrappeNeverJudgedIsAnOutageNotARejection(t *testing.T) {
 
 			frappe := frappeThatAnswers(t, c.frappe)
 			strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{
-				TokenInfoURL: frappe + "/userinfo", IssuerURL: frappe, ValidateRemote: true, Timeout: 5 * time.Second,
+				TokenInfoURL: frappe + "/userinfo", BaseURL: frappe, ValidateRemote: true, Timeout: 5 * time.Second,
 			})
 			handler := NewMiddleware(strategy, true).Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				t.Error("a refused request reached the handler")

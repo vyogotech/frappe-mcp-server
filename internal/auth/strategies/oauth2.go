@@ -28,7 +28,7 @@ var ErrFrappeUnavailable = errors.New("frappe did not answer")
 
 type OAuth2Strategy struct {
 	tokenInfoURL   string
-	issuerURL      string
+	baseURL        string
 	trustedClients map[string]bool
 	cache          *cache.Cache
 	httpClient     *http.Client
@@ -37,8 +37,9 @@ type OAuth2Strategy struct {
 }
 
 type OAuth2StrategyConfig struct {
-	TokenInfoURL   string
-	IssuerURL      string
+	TokenInfoURL string
+	// BaseURL is the Frappe site the sessions belong to: a sid is valid only on the site that issued it.
+	BaseURL        string
 	TrustedClients []string
 	Timeout        time.Duration
 	CacheTTL       time.Duration
@@ -61,7 +62,7 @@ func NewOAuth2Strategy(config OAuth2StrategyConfig) *OAuth2Strategy {
 
 	return &OAuth2Strategy{
 		tokenInfoURL:   config.TokenInfoURL,
-		issuerURL:      config.IssuerURL,
+		baseURL:        config.BaseURL,
 		trustedClients: trustedMap,
 		cache:          cache.New(config.CacheTTL, config.CacheTTL*2),
 		httpClient: &http.Client{
@@ -247,7 +248,7 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 
 	// Validate session with Frappe by calling /api/method/frappe.auth.get_logged_user
 	req, err := http.NewRequestWithContext(ctx, "GET",
-		s.issuerURL+"/api/method/frappe.auth.get_logged_user", nil)
+		s.baseURL+"/api/method/frappe.auth.get_logged_user", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session validation request: %w", err)
 	}
@@ -299,7 +300,7 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 
 // fetchCSRFToken reads the sid's CSRF token out of the desk page's inline JS.
 func (s *OAuth2Strategy) fetchCSRFToken(ctx context.Context, sidCookie *http.Cookie) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", s.issuerURL+"/app", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", s.baseURL+"/app", nil)
 	if err != nil {
 		return "", fmt.Errorf("build desk request: %w", err)
 	}

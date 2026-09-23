@@ -149,7 +149,7 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 		slog.Info("Authentication enabled", "require_auth", cfg.Auth.RequireAuth)
 		oauth2Strategy := strategies.NewOAuth2Strategy(strategies.OAuth2StrategyConfig{
 			TokenInfoURL:   cfg.Auth.OAuth2.TokenInfoURL,
-			IssuerURL:      cfg.Auth.OAuth2.IssuerURL,
+			BaseURL:        cfg.ERPNext.BaseURL,
 			TrustedClients: cfg.Auth.OAuth2.TrustedClients,
 			Timeout:        cfg.Auth.OAuth2.Timeout,
 			CacheTTL:       cfg.Auth.TokenCache.TTL,

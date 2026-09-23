@@ -133,9 +133,10 @@ auth:
   
   # OAuth2 Configuration
   oauth2:
-    # Frappe OAuth2 endpoints
-    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo"
-    issuer_url: "http://localhost:8000"
+    # Bearer token introspection, optional: it defaults to erpnext.base_url plus
+    # /api/method/frappe.integrations.oauth2.openid_profile. issuer_url is still accepted but
+    # nothing reads it; sessions are validated on the site erpnext.base_url names.
+    # token_info_url: "https://your-identity-provider/userinfo"
     
     # Trusted backend clients (can provide user context via headers)
     trusted_clients:
@@ -162,8 +163,7 @@ auth:
 #   enabled: true
 #   require_auth: true
 #   oauth2:
-#     token_info_url: "https://your-frappe-instance.com/api/method/frappe.integrations.oauth2.openid.userinfo"
-#     issuer_url: "https://your-frappe-instance.com"
+#     token_info_url: "https://your-frappe-instance.com/api/method/frappe.integrations.oauth2.openid_profile"
 #     trusted_clients:
 #       - "frappe-mcp-backend"
 #       - "mobile-app-client"

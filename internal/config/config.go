@@ -17,6 +17,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// frappeUserinfoPath is Frappe's own OpenID userinfo method, whitelisted as frappe.integrations.oauth2.openid_profile.
+const frappeUserinfoPath = "/api/method/frappe.integrations.oauth2.openid_profile"
+
 type Config struct {
 	Server      ServerConfig      `yaml:"server"`
 	ERPNext     ERPNextConfig     `yaml:"erpnext"`
@@ -116,9 +119,10 @@ type AuthConfig struct {
 }
 
 type OAuth2Config struct {
-	// Frappe OAuth endpoints
+	// TokenInfoURL introspects Bearer tokens; it defaults to the userinfo endpoint of erpnext.base_url.
 	TokenInfoURL string `yaml:"token_info_url"`
-	IssuerURL    string `yaml:"issuer_url"`
+	// IssuerURL is still read so deployments that set it keep starting; sessions are validated against erpnext.base_url.
+	IssuerURL string `yaml:"issuer_url"`
 
 	// Trusted backend clients (can provide user context headers)
 	TrustedClients []string `yaml:"trusted_clients"`
@@ -194,6 +198,10 @@ func Load() (*Config, error) {
 	}
 	if config.ERPNext.Retry.MaxDelay == 0 {
 		config.ERPNext.Retry.MaxDelay = 5 * time.Second
+	}
+	// one site URL has to point the whole server at a site: Frappe serves its own OAuth2 introspection
+	if config.Auth.OAuth2.TokenInfoURL == "" && config.ERPNext.BaseURL != "" {
+		config.Auth.OAuth2.TokenInfoURL = strings.TrimSuffix(config.ERPNext.BaseURL, "/") + frappeUserinfoPath
 	}
 
 	// Validate configuration
@@ -329,14 +337,9 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
 	}
 
-	// Validate OAuth2 config if auth is enabled
-	if c.Auth.Enabled {
-		if c.Auth.OAuth2.TokenInfoURL == "" {
-			return fmt.Errorf("OAuth2 token_info_url is required when auth is enabled")
-		}
-		if c.Auth.OAuth2.IssuerURL == "" {
-			return fmt.Errorf("OAuth2 issuer_url is required when auth is enabled")
-		}
+	if c.Auth.Enabled && c.Auth.OAuth2.IssuerURL != "" && c.Auth.OAuth2.IssuerURL != c.ERPNext.BaseURL {
+		slog.Warn("auth.oauth2.issuer_url is ignored; sessions are validated against erpnext.base_url",
+			"issuer_url", c.Auth.OAuth2.IssuerURL, "base_url", c.ERPNext.BaseURL)
 	}
 
 	return nil

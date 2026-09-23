@@ -18,7 +18,7 @@ const mockOAuthEndpoint = "http://localhost:8000"
 func TestNewOAuth2Strategy(t *testing.T) {
 	config := OAuth2StrategyConfig{
 		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
-		IssuerURL:      mockOAuthEndpoint,
+		BaseURL:        mockOAuthEndpoint,
 		TrustedClients: []string{"client1", "client2"},
 		Timeout:        10 * time.Second,
 		CacheTTL:       5 * time.Minute,
@@ -29,7 +29,7 @@ func TestNewOAuth2Strategy(t *testing.T) {
 
 	assert.NotNil(t, strategy)
 	assert.Equal(t, "http://localhost:8000/userinfo", strategy.tokenInfoURL)
-	assert.Equal(t, "http://localhost:8000", strategy.issuerURL)
+	assert.Equal(t, "http://localhost:8000", strategy.baseURL)
 	assert.True(t, strategy.isTrustedClient("client1"))
 	assert.True(t, strategy.isTrustedClient("client2"))
 	assert.False(t, strategy.isTrustedClient("client3"))
