@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"frappe-mcp-server/internal/buildinfo"
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/server"
@@ -73,7 +74,7 @@ func main() {
 	}()
 
 	// Start server
-	slog.Info("Starting ERPNext MCP Server", "version", "1.0.0")
+	slog.Info("Starting ERPNext MCP Server", "version", buildinfo.Version())
 	if err := mcpServer.Run(ctx); err != nil {
 		slog.Error("Server error", "error", err)
 		os.Exit(1)

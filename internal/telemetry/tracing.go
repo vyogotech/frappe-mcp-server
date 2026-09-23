@@ -5,8 +5,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+
+	"frappe-mcp-server/internal/buildinfo"
 	"os"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -36,15 +37,10 @@ func Init(ctx context.Context) (func(context.Context) error, error) {
 		return noopShutdown, nil
 	}
 
-	version := "unknown"
-	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
-		version = info.Main.Version
-	}
-
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			attribute.String("service.name", serviceName),
-			attribute.String("service.version", version),
+			attribute.String("service.version", buildinfo.Version()),
 		),
 	)
 	if err != nil {

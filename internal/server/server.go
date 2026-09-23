@@ -15,6 +15,7 @@ import (
 
 	"frappe-mcp-server/internal/auth"
 	"frappe-mcp-server/internal/auth/strategies"
+	"frappe-mcp-server/internal/buildinfo"
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/llm"
@@ -80,7 +81,7 @@ const maxRequestBody = 1 << 20
 
 func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, error) {
 	// Create MCP server
-	server := mcp.NewServer("frappe-mcp-server", "1.0.0")
+	server := mcp.NewServer("frappe-mcp-server", buildinfo.Version())
 
 	// Create tool registry
 	toolRegistry := tools.NewRegistry(frappeClient)
@@ -229,9 +230,6 @@ func (s *MCPServer) Run(ctx context.Context) error {
 }
 
 func (s *MCPServer) healthCheck(w http.ResponseWriter, r *http.Request) {
-	slog.Debug("/health endpoint called",
-		"method", strings.ReplaceAll(r.Method, "\n", " "),
-		"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "))
 	w.Header().Set("Content-Type", "application/json")
 
 	// Simple health check - could be enhanced to check ERPNext connectivity
@@ -239,7 +237,6 @@ func (s *MCPServer) healthCheck(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write([]byte(`{"status":"healthy","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`)); err != nil {
 		slog.Error("Failed to write health response", "error", err)
 	}
-	slog.Debug("/health response sent")
 }
 
 // publicPaths skip auth so probes need no credentials; never add a tool or chat path here.
@@ -300,18 +297,19 @@ func (s *MCPServer) recoveryMiddleware(next http.Handler) http.Handler {
 func (s *MCPServer) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		slog.Info("HTTP request received",
-			"method", strings.ReplaceAll(r.Method, "\n", " "),
-			"path", strings.ReplaceAll(r.URL.Path, "\n", " "),
-			"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "),
-			"user_agent", strings.ReplaceAll(r.UserAgent(), "\n", " "))
-
 		ww := &statusRecorder{ResponseWriter: w, status: 200}
 		next.ServeHTTP(ww, r)
 
-		slog.Info("HTTP request completed",
+		// the health probe runs every few seconds, and at Info it is most of the log
+		level := slog.LevelInfo
+		if publicPaths[r.URL.Path] {
+			level = slog.LevelDebug
+		}
+		slog.Log(r.Context(), level, "HTTP request",
 			"method", strings.ReplaceAll(r.Method, "\n", " "),
 			"path", strings.ReplaceAll(r.URL.Path, "\n", " "),
+			"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "),
+			"user_agent", strings.ReplaceAll(r.UserAgent(), "\n", " "),
 			"status", ww.status,
 			"bytes", ww.bytes,
 			"duration", time.Since(start))
@@ -511,9 +509,6 @@ func (s *MCPServer) registerTools() error {
 
 // listTools serves REST /tools from toolCatalog; legacy tools with no catalogue entry stay callable but unlisted.
 func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/tools endpoint called",
-		"method", strings.ReplaceAll(r.Method, "\n", " "),
-		"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "))
 	w.Header().Set("Content-Type", "application/json")
 
 	catalog := toolCatalog()
@@ -546,14 +541,9 @@ func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		slog.Error("Failed to encode tools response", "error", err)
 	}
-	slog.Info("/tools response sent", "count", len(tools))
 }
 
 func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
-	slog.Info("Tool endpoint called",
-		"method", strings.ReplaceAll(r.Method, "\n", " "),
-		"path", strings.ReplaceAll(r.URL.Path, "\n", " "),
-		"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "))
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		slog.Warn("Tool method not allowed",
@@ -650,7 +640,6 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		slog.Error("Failed to encode tool response", "error", err)
 	}
-	slog.Info("/tool/ response sent", "tool", toolName, "request_id", request.ID)
 }
 
 func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
@@ -662,10 +651,6 @@ func (s *MCPServer) handleChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *MCPServer) handleChatJSON(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/api/v1/chat endpoint called",
-		"method", strings.ReplaceAll(r.Method, "\n", " "),
-		"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "))
-
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -725,7 +710,6 @@ func (s *MCPServer) handleChatJSON(w http.ResponseWriter, r *http.Request) {
 			if err := json.NewEncoder(w).Encode(response); err != nil {
 				slog.Error("Failed to encode chat response", "error", err)
 			}
-			slog.Info("Chat response sent - rate limited", "data_size", 0)
 			return
 		}
 
@@ -756,7 +740,6 @@ func (s *MCPServer) handleChatJSON(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			slog.Error("Failed to encode response", "error", err)
 		}
-		slog.Info("Chat response sent", "data_size", 0)
 		return
 	}
 
@@ -1002,7 +985,6 @@ Write a natural, helpful response.`, chatRequest.Message, reportName, missingPar
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					slog.Error("Failed to encode chat response", "error", err)
 				}
-				slog.Info("Chat response sent", "data_size", response["data_size"])
 				return
 			}
 		}
@@ -1078,7 +1060,6 @@ Write a natural, helpful response.`, chatRequest.Message, reportName, missingPar
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		slog.Error("Failed to encode chat response", "error", err)
 	}
-	slog.Info("Chat response sent", "data_size", response["data_size"])
 }
 
 func (s *MCPServer) formatResponseWithLLM(ctx context.Context, userQuery string, rawData string) (string, error) {
@@ -2240,16 +2221,13 @@ func extractEntityName(query string) string {
 }
 
 func (s *MCPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
-	slog.Info("/api/v1/openapi.json endpoint called",
-		"method", strings.ReplaceAll(r.Method, "\n", " "),
-		"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "))
 	w.Header().Set("Content-Type", "application/json")
 
 	spec := map[string]interface{}{
 		"openapi": "3.0.0",
 		"info": map[string]interface{}{
 			"title":       "ERPNext MCP Server API",
-			"version":     "1.0.0",
+			"version":     buildinfo.Version(),
 			"description": "API for accessing ERPNext data through MCP protocol",
 		},
 		"servers": []map[string]string{
@@ -2310,5 +2288,4 @@ func (s *MCPServer) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(spec); err != nil {
 		slog.Error("Failed to encode OpenAPI spec", "error", err)
 	}
-	slog.Info("OpenAPI spec sent")
 }

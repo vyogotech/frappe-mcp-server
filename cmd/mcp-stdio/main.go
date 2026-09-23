@@ -10,6 +10,8 @@ import (
 
 	gosdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"frappe-mcp-server/internal/buildinfo"
+
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/mcp"
@@ -45,7 +47,7 @@ func main() {
 	}
 
 	// Create MCP server (backed by go-sdk).
-	mcpServer := mcp.NewServer("frappe-mcp-server", "1.0.0")
+	mcpServer := mcp.NewServer("frappe-mcp-server", buildinfo.Version())
 
 	// Create tool registry and register all tools.
 	toolRegistry := tools.NewRegistry(frappeClient)
