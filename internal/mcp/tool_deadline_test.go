@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -20,17 +19,18 @@ func TestAToolCallEndsAtItsDeadline(t *testing.T) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
-	done := make(chan *ToolResponse, 1)
+	done := make(chan rpcResponse, 1)
 	go func() {
-		done <- server.executeToolRequest(context.Background(), ToolRequest{ID: "1", Tool: "hangs", Params: json.RawMessage(`{}`)})
+		done <- decodeRPC(t, postMCP(t, server,
+			`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"hangs","arguments":{}}}`, nil))
 	}()
 	select {
 	case resp := <-done:
 		text := ""
-		for _, c := range resp.Content {
+		for _, c := range resp.Result.Content {
 			text += c.Text
 		}
-		if resp.Error == nil && !strings.Contains(text, "deadline") {
+		if !resp.Result.IsError || !strings.Contains(text, "deadline") {
 			t.Fatalf("expected a deadline error, got %+v", resp)
 		}
 	case <-time.After(5 * time.Second):

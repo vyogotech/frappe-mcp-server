@@ -33,7 +33,7 @@ func TestToolsListMatchesSnapshot(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	rec := httptest.NewRecorder()
-	s.server.HandleStreamableHTTP(rec, req)
+	s.httpServer.Handler.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	var resp struct {

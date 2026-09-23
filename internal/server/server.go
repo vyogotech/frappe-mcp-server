@@ -163,10 +163,16 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	// Setup HTTP server with health checks and MCP endpoints
 	mux := http.NewServeMux()
 
-	// MCP Streamable HTTP endpoint (JSON-RPC 2.0, used by frappe-copilot-agent)
-	// Auth middleware is applied via withMiddleware below, so every tool call
-	// executes on behalf of the authenticated user.
-	mux.HandleFunc("/mcp", mcpServer.server.HandleStreamableHTTP)
+	// withMiddleware authenticates this route too; mounted outside that chain, every tool call would run as nobody.
+	mcpHandler := mcpServer.server.StreamableHTTPHandler()
+	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
+		// the SDK reads the body itself and calls an over-long one a bad request; too long is 413
+		if r.ContentLength > maxRequestBody {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		mcpHandler.ServeHTTP(w, r)
+	})
 
 	// API v1 endpoints (for Open WebUI integration)
 	mux.HandleFunc("/api/v1/health", mcpServer.healthCheck)

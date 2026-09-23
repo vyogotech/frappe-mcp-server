@@ -63,14 +63,12 @@
     "name": "analyze_document"
   },
   {
-    "description": "",
     "inputSchema": {
       "type": "object"
     },
     "name": "analyze_project_timeline"
   },
   {
-    "description": "",
     "inputSchema": {
       "type": "object"
     },
@@ -123,7 +121,6 @@
     "name": "delete_document"
   },
   {
-    "description": "",
     "inputSchema": {
       "type": "object"
     },
@@ -151,14 +148,12 @@
     "name": "get_document"
   },
   {
-    "description": "",
     "inputSchema": {
       "type": "object"
     },
     "name": "get_project_status"
   },
   {
-    "description": "",
     "inputSchema": {
       "type": "object"
     },
@@ -232,7 +227,6 @@
     "name": "list_documents"
   },
   {
-    "description": "",
     "inputSchema": {
       "type": "object"
     },

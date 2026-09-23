@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	gosdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -80,6 +82,15 @@ func (s *Server) SDKServer() *gosdk.Server {
 	return s.sdkServer
 }
 
+// StreamableHTTPHandler serves /mcp. Stateless: each request gets its own session, so the caller the auth middleware
+// put in the request context is the one every tool handler runs as.
+func (s *Server) StreamableHTTPHandler() http.Handler {
+	return gosdk.NewStreamableHTTPHandler(
+		func(*http.Request) *gosdk.Server { return s.sdkServer },
+		&gosdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
+	)
+}
+
 // RegisterTool publishes the tool with an empty description and a permissive schema; prefer RegisterToolWithSchema.
 func (s *Server) RegisterTool(name string, handler ToolHandler) {
 	s.RegisterToolWithSchema(name, "", nil, handler)
@@ -111,6 +122,22 @@ func (s *Server) RegisterToolWithSchema(name, description string, inputSchema ma
 			InputSchema: json.RawMessage(schemaBytes),
 		},
 		func(ctx context.Context, req *gosdk.CallToolRequest) (*gosdk.CallToolResult, error) {
+			var args map[string]json.RawMessage
+			if len(req.Params.Arguments) > 0 {
+				if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+					// the caller's mistake, not a call for the tool to refuse
+					return nil, &jsonrpc.Error{Code: jsonrpc.CodeInvalidParams, Message: "tools/call params.arguments must be an object"}
+				}
+			}
+
+			ctx, span := otel.Tracer(tracerName).Start(ctx, "tool."+name,
+				trace.WithAttributes(attribute.String("tool.name", name)))
+			defer span.End()
+			var doctype string
+			if json.Unmarshal(args["doctype"], &doctype) == nil && doctype != "" {
+				span.SetAttributes(attribute.String("tool.doctype", doctype))
+			}
+
 			ctx, cancel := context.WithTimeout(ctx, ToolDeadline)
 			defer cancel()
 			toolReq := ToolRequest{
@@ -121,7 +148,10 @@ func (s *Server) RegisterToolWithSchema(name, description string, inputSchema ma
 			resp, err := handler(ctx, toolReq)
 			auditToolCall(ctx, name, req.Params.Arguments, err, time.Since(start))
 			if err != nil {
-				// Return as a tool-level error (IsError=true), not a protocol error.
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+				span.SetAttributes(attribute.Bool("tool.success", false))
+				// the tool ran and failed: MCP reports that as a result the model can read, not as a protocol error
 				return &gosdk.CallToolResult{
 					IsError: true,
 					Content: []gosdk.Content{&gosdk.TextContent{Text: err.Error()}},
@@ -132,6 +162,7 @@ func (s *Server) RegisterToolWithSchema(name, description string, inputSchema ma
 			for _, c := range resp.Content {
 				content = append(content, &gosdk.TextContent{Text: c.Text})
 			}
+			span.SetAttributes(attribute.Bool("tool.success", true))
 			return &gosdk.CallToolResult{Content: content}, nil
 		},
 	)
@@ -181,106 +212,4 @@ func (s *Server) RegisterResource(uri, description string) {
 func (s *Server) Run(ctx context.Context, transport gosdk.Transport) error {
 	slog.Info("Starting MCP server", "name", s.name, "version", s.version)
 	return s.sdkServer.Run(ctx, transport)
-}
-
-// executeToolRequest calls the tool through the go-sdk server, not its handler, so a /mcp tool call gets the same
-// deadline and audit line as a stdio one.
-func (s *Server) executeToolRequest(ctx context.Context, request ToolRequest) *ToolResponse {
-	if request.ID == "" {
-		request.ID = fmt.Sprintf("req_%d", time.Now().UnixNano())
-	}
-
-	ctx, span := otel.Tracer(tracerName).Start(ctx, "tool."+request.Tool,
-		trace.WithAttributes(attribute.String("tool.name", request.Tool)),
-	)
-	defer span.End()
-
-	// Best-effort: extract doctype from params for observability.
-	if len(request.Params) > 0 {
-		var paramsMap map[string]interface{}
-		if err := json.Unmarshal(request.Params, &paramsMap); err == nil {
-			if dt, ok := paramsMap["doctype"].(string); ok && dt != "" {
-				span.SetAttributes(attribute.String("tool.doctype", dt))
-			}
-		}
-	}
-
-	// Use in-memory transports to exercise the go-sdk server.
-	t1, t2 := gosdk.NewInMemoryTransports()
-	_, err := s.sdkServer.Connect(ctx, t1, nil)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return &ToolResponse{
-			ID:    request.ID,
-			Error: &Error{Code: 500, Message: fmt.Sprintf("failed to connect: %v", err)},
-		}
-	}
-
-	client := gosdk.NewClient(&gosdk.Implementation{Name: "internal", Version: "1.0.0"}, nil)
-	cs, err := client.Connect(ctx, t2, nil)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return &ToolResponse{
-			ID:    request.ID,
-			Error: &Error{Code: 500, Message: fmt.Sprintf("failed to connect client: %v", err)},
-		}
-	}
-	defer func() { _ = cs.Close() }()
-
-	slog.Debug("Executing tool", "tool", request.Tool, "id", request.ID)
-
-	sdkResult, err := cs.CallTool(ctx, &gosdk.CallToolParams{
-		Name:      request.Tool,
-		Arguments: mustUnmarshalMap(request.Params),
-	})
-	if err != nil {
-		slog.Error("Tool execution failed", "tool", request.Tool, "error", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		span.SetAttributes(attribute.Bool("tool.success", false))
-		return &ToolResponse{
-			ID:    request.ID,
-			Error: &Error{Code: 500, Message: err.Error()},
-		}
-	}
-
-	if sdkResult.IsError {
-		msg := ""
-		if len(sdkResult.Content) > 0 {
-			if tc, ok := sdkResult.Content[0].(*gosdk.TextContent); ok {
-				msg = tc.Text
-			}
-		}
-		span.SetAttributes(attribute.Bool("tool.success", false))
-		span.SetStatus(codes.Error, msg)
-		// the tool ran and failed: MCP reports that as a result the model can read, not as a JSON-RPC error
-		return &ToolResponse{
-			ID:      request.ID,
-			Content: []Content{{Type: "text", Text: msg}},
-			IsError: true,
-		}
-	}
-
-	content := make([]Content, 0, len(sdkResult.Content))
-	for _, c := range sdkResult.Content {
-		if tc, ok := c.(*gosdk.TextContent); ok {
-			content = append(content, Content{Type: "text", Text: tc.Text})
-		}
-	}
-	span.SetAttributes(attribute.Bool("tool.success", true))
-	return &ToolResponse{ID: request.ID, Content: content}
-}
-
-// mustUnmarshalMap returns an empty map, never an error, for anything that is not a JSON object.
-func mustUnmarshalMap(data json.RawMessage) map[string]any {
-	if len(data) == 0 {
-		return map[string]any{}
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return map[string]any{}
-	}
-	return m
 }

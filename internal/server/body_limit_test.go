@@ -25,6 +25,7 @@ func TestAnOversizedBodyIsRefusedBeforeItIsRead(t *testing.T) {
 	post := func(body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewBufferString(body))
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
 		rec := httptest.NewRecorder()
 		s.httpServer.Handler.ServeHTTP(rec, req)
 		return rec

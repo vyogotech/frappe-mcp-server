@@ -25,6 +25,7 @@ func TestACrossOriginBrowserRequestIsRefused(t *testing.T) {
 	post := func(origin string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
 		if origin != "" {
 			req.Header.Set("Origin", origin)
 			req.Header.Set("Sec-Fetch-Site", "cross-site")

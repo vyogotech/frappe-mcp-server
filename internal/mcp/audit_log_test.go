@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -31,13 +33,19 @@ func TestEveryToolCallLeavesOneAuditLine(t *testing.T) {
 		return nil, errors.New("frappe said no")
 	})
 
-	// the HTTP path: tools/call through executeToolRequest, with the user the auth middleware attached
+	// the HTTP path: tools/call over /mcp, with the user the auth middleware attached
 	ctx := auth.WithUser(context.Background(), &types.User{Email: "alice@example.test"})
-	args := json.RawMessage(`{"doctype":"ToDo","name":"TD-1","data":{"description":"the-private-argument"}}`)
-	server.executeToolRequest(ctx, ToolRequest{ID: "7", Tool: "update_document", Params: args})
-	server.executeToolRequest(ctx, ToolRequest{ID: "8", Tool: "broken", Params: json.RawMessage(`{}`)})
+	call := func(body string) {
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body)).WithContext(ctx)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		server.StreamableHTTPHandler().ServeHTTP(httptest.NewRecorder(), req)
+	}
+	call(`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"update_document",` +
+		`"arguments":{"doctype":"ToDo","name":"TD-1","data":{"description":"the-private-argument"}}}}`)
+	call(`{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"broken","arguments":{}}}`)
 
-	// the stdio path: a client talks to the SDK server directly, without executeToolRequest
+	// the stdio path: a client talks to the SDK server directly, not over HTTP
 	serverSide, clientSide := gosdk.NewInMemoryTransports()
 	if _, err := server.sdkServer.Connect(context.Background(), serverSide, nil); err != nil {
 		t.Fatal(err)
