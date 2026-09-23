@@ -71,7 +71,7 @@ frappe-mcp-server-stdio --help
 For developers or if you want the latest unreleased version:
 
 #### Prerequisites
-- **Go 1.24+** - [Download](https://go.dev/dl/)
+- **Go 1.25+** - [Download](https://go.dev/dl/)
 - **Git**
 - **Make** (optional, but recommended)
 

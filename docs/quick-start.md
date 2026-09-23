@@ -36,7 +36,7 @@ This will:
 ### Option C: Build from Source
 
 ```bash
-# Requires Go 1.24+
+# Requires Go 1.25+
 git clone https://github.com/vyogotech/frappe-mcp-server
 cd frappe-mcp-server
 

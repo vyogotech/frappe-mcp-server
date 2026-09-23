@@ -25,7 +25,7 @@ Perform SQL-like aggregations on your ERPNext data without writing SQL.
 
 **Direct API:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/tool/aggregate_documents \
+curl -X POST http://localhost:8080/api/v1/tools/aggregate_documents \
   -H "Content-Type: application/json" \
   -d '{
     "doctype": "Sales Invoice",
@@ -65,7 +65,7 @@ Execute any standard or custom ERPNext report with filters.
 
 **Direct API:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/tool/run_report \
+curl -X POST http://localhost:8080/api/v1/tools/run_report \
   -H "Content-Type: application/json" \
   -d '{
     "report_name": "Sales Analytics",
@@ -92,7 +92,7 @@ curl -X POST http://localhost:8080/api/v1/tool/run_report \
 
 ### aggregate_documents
 
-**Endpoint:** `POST /api/v1/tool/aggregate_documents`
+**Endpoint:** `POST /api/v1/tools/aggregate_documents`
 
 **Parameters:**
 
@@ -147,7 +147,7 @@ curl -X POST http://localhost:8080/api/v1/tool/run_report \
 
 ### run_report
 
-**Endpoint:** `POST /api/v1/tool/run_report`
+**Endpoint:** `POST /api/v1/tools/run_report`
 
 **Parameters:**
 
@@ -218,7 +218,7 @@ import requests
 
 # Aggregation
 response = requests.post(
-    'http://localhost:8080/api/v1/tool/aggregate_documents',
+    'http://localhost:8080/api/v1/tools/aggregate_documents',
     json={
         'doctype': 'Sales Invoice',
         'fields': ['customer', 'SUM(grand_total) as revenue'],
@@ -231,7 +231,7 @@ top_customers = response.json()['results']
 
 # Report
 response = requests.post(
-    'http://localhost:8080/api/v1/tool/run_report',
+    'http://localhost:8080/api/v1/tools/run_report',
     json={
         'report_name': 'Sales Analytics',
         'filters': {'company': 'My Company'}

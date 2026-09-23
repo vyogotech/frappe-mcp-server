@@ -24,7 +24,6 @@ ERPNext MCP Server bridges ERPNext and other Frappe-based applications with AI a
 ### Security (NEW!)
 - **[OAuth2 Authentication](authentication.md)** - 🔐 Complete OAuth2 authentication guide
 - [Auth Quick Start](auth-quickstart.md) - Set up authentication in 5 minutes
-- [Implementation Details](oauth2-implementation.md) - Technical implementation deep dive
 
 ### Deployment & Operations
 - [Docker Deployment](docker.md) - Deploy with Docker Compose

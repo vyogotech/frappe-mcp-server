@@ -95,6 +95,7 @@ erpnext:
 AUTH_ENABLED=true
 AUTH_REQUIRE_AUTH=false
 OAUTH_TOKEN_INFO_URL=https://your-identity-provider/userinfo   # optional, see above
+OAUTH_ISSUER_URL=https://your-frappe-instance.com               # accepted, read by nothing but the startup warning
 OAUTH_TIMEOUT=30s
 CACHE_TTL=5m
 ```

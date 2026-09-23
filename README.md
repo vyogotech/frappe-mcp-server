@@ -4,7 +4,7 @@
 
 Publish ERPNext and other Frappe-based apps to an AI assistant as MCP tools. Use with Cursor IDE, Claude Desktop, and any other MCP client.
 
-[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## ✨ Features
@@ -68,6 +68,10 @@ cp config.yaml.example config.yaml
 
 ### HTTP API
 
+Every path except the health probes is authenticated when `auth.require_auth` is on, as
+`config.yaml.example` ships it: send the caller's OAuth2 bearer token or their Frappe `sid` cookie.
+Without one the server answers `401 Unauthorized`.
+
 ```bash
 # List the tools this server publishes
 curl http://localhost:8080/api/v1/tools
@@ -116,16 +120,41 @@ Add to `claude_desktop_config.json`:
 
 ## 🛠️ Prerequisites
 
-- Go 1.24+
+- Go 1.25+
 - ERPNext instance (local or remote)
 
 ## 📋 Available Tools
 
-- **CRUD Operations**: `get_document`, `list_documents`, `create_document`, `update_document`, `delete_document`
-- **Search**: `search_documents` - Find documents by query, `global_search` - Cross-doctype full-text search
-- **Aggregation**: `aggregate_documents` - SUM/COUNT/AVG/MIN/MAX with optional GROUP BY and TOP N
-- **Reports**: `run_report` - Execute Frappe/ERPNext reports (Sales Analytics, Purchase Register, etc.)
-- **Analysis**: `analyze_document` - Deep analysis with related documents (works with ANY doctype)
+Both binaries register the same catalogue, so `tools/list` answers the same over stdio and over
+HTTP. `search_knowledge_base` is registered only where the `rag` app it reads is installed
+(`tools.knowledge_base`). The six legacy names are still callable and carry no description, so a
+model is never told to reach for them. `go test ./internal/tools -run Readme` fails when the table
+below and the catalogue drift apart, and prints the table to paste back in.
+
+<!-- tools:start -->
+| Tool | What the model is told |
+| --- | --- |
+| `get_document` | Retrieve a single ERPNext document by doctype and name |
+| `list_documents` | Fetch document rows to read their contents. Returns at most page_length rows (default 20), so it CANNOT be used to count records - use aggregate_documents for counts. |
+| `create_document` | Create a new ERPNext document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args). |
+| `update_document` | Update an existing ERPNext document. `data` is a flat object of fieldname→value pairs for fields to change. |
+| `delete_document` | Delete an ERPNext document |
+| `search_documents` | Search ERPNext documents of a given doctype using full-text search |
+| `aggregate_documents` | Count, sum or average ERPNext records. Use this for any "how many" question: with metric="count" it returns the exact total of all matching records, not just one page. |
+| `run_report` | Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.) |
+| `global_search` | Full-text search across all indexed Frappe/ERPNext doctypes |
+| `search_knowledge_base` | Search the user's uploaded documents (HR, expense, travel, security and vehicle policies) for a passage answering a question. Use for any policy, entitlement, limit or deadline question. |
+| `analyze_document` | Analyze any ERPNext document with optional related data |
+| `get_project_status` | Legacy name, still callable, described to nobody |
+| `analyze_project_timeline` | Legacy name, still callable, described to nobody |
+| `get_resource_allocation` | Legacy name, still callable, described to nobody |
+| `generate_project_report` | Legacy name, still callable, described to nobody |
+| `resource_utilization_analysis` | Legacy name, still callable, described to nobody |
+| `budget_variance_analysis` | Legacy name, still callable, described to nobody |
+<!-- tools:end -->
+
+The REST listing at `GET /api/v1/tools` publishes only the described tools; `POST /mcp` publishes
+all of them.
 
 ## 🤝 Contributing
 

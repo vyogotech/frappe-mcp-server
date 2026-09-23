@@ -6,7 +6,7 @@ Contributing to and extending ERPNext MCP Server.
 
 ### Prerequisites
 
-- **Go 1.24+**
+- **Go 1.25+**
 - **Make**
 - **Git**
 - **ERPNext instance** (for testing)
