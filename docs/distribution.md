@@ -37,12 +37,12 @@ make release            # Full release build (HTTP + STDIO, all platforms)
 #### Release Workflow (`.github/workflows/release.yml`)
 - **Triggered on**: Version tags (v*)
 - **Automated Process**:
-  1. Build binaries for all 5 platforms
+  1. Build the server and the STDIO binary for all 5 platforms
   2. Create distribution packages (.tar.gz, .zip)
   3. Generate SHA256 checksums
-  4. Create GitHub Release with all artifacts
-  5. Auto-generate release notes
-  6. Update install.sh with new version
+  4. Generate a CycloneDX SBOM and attest build provenance
+  5. Create GitHub Release with all artifacts
+  6. Auto-generate release notes
 
 ### 3. **Installation Script** ✅
 

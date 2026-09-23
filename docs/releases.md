@@ -66,12 +66,11 @@ Once the tag is pushed, GitHub Actions automatically:
    - Binary
    - README
    - Configuration template
-4. **Generates checksums** (SHA256SUMS)
+4. **Generates checksums** (SHA256SUMS), a CycloneDX SBOM and a build-provenance attestation
 5. **Creates GitHub Release** with:
    - All platform binaries
-   - Checksums file
+   - Checksums file, SBOM and attestation
    - Auto-generated release notes
-6. **Updates install.sh** with the new version
 
 ### 4. Verify the Release
 
@@ -257,7 +256,7 @@ Each release includes:
 ### Install Script Issues
 
 1. Test install script locally
-2. Update VERSION in install.sh manually if auto-update fails
+2. `install.sh` resolves the latest tag itself; it has no version to update
 3. Check download URLs are correct
 
 ## Support

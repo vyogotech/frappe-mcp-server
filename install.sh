@@ -5,7 +5,7 @@
 # MCP clients like Cursor IDE and Claude Desktop.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/varkrish/frappe-mcp-server/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 #   OR
 #   ./install.sh
 
@@ -13,7 +13,7 @@ set -e
 
 # Configuration
 VERSION="latest"
-REPO="varkrish/frappe-mcp-server"
+REPO="vyogotech/frappe-mcp-server"
 BINARY_NAME="frappe-mcp-server-stdio"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 
@@ -114,6 +114,8 @@ download_binary() {
     
     log_success "Downloaded successfully"
     
+    verify_checksum "$archive_name"
+    
     # Extract archive
     log_info "Extracting archive..."
     if [ "$OS" = "windows" ]; then
@@ -132,6 +134,31 @@ download_binary() {
     CONFIG_TEMPLATE="${temp_dir}/${extracted_dir}/env.example"
     
     log_success "Extracted successfully"
+}
+
+# Verify the archive against the release's SHA256SUMS
+verify_checksum() {
+    local archive="$1"
+    local sums_url="https://github.com/${REPO}/releases/download/v${VERSION}/SHA256SUMS"
+    local checker
+    
+    if command -v sha256sum >/dev/null 2>&1; then
+        checker="sha256sum"
+    elif command -v shasum >/dev/null 2>&1; then
+        checker="shasum -a 256"
+    else
+        log_error "Neither sha256sum nor shasum is available; cannot verify the download"
+    fi
+    
+    log_info "Verifying checksum..."
+    if ! curl -fsSL -o SHA256SUMS "$sums_url"; then
+        log_error "Failed to download SHA256SUMS from $sums_url"
+    fi
+    
+    grep " [ *]\{0,1\}${archive}\$" SHA256SUMS > SHA256SUMS.one || log_error "No checksum for ${archive} in SHA256SUMS"
+    $checker -c SHA256SUMS.one >/dev/null 2>&1 || log_error "Checksum mismatch for ${archive}"
+    
+    log_success "Checksum verified"
 }
 
 # Install binary
