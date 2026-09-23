@@ -12,9 +12,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/patrickmn/go-cache"
 	"golang.org/x/time/rate"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -31,7 +33,15 @@ type Client struct {
 	httpClient  *http.Client
 	rateLimiter *rate.Limiter
 	retryConfig config.RetryConfig
+	csrfTokens  *cache.Cache
 }
+
+// csrfTokenTTL bounds how long a session's scraped token is reused; Frappe issues a new one with a new sid,
+// so the key already changes when the session does.
+const csrfTokenTTL = 5 * time.Minute
+
+// csrfTokenPattern reads a session's CSRF token out of the desk page: frappe.sessions.get_csrf_token is not whitelisted.
+var csrfTokenPattern = regexp.MustCompile(`csrf_token\s*=\s*"([a-f0-9]{20,64})"`)
 
 // NewClient takes the API key and secret both or neither; without them, a call needs a user in its context.
 func NewClient(cfg config.ERPNextConfig) (*Client, error) {
@@ -72,6 +82,7 @@ func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 		httpClient:  httpClient,
 		rateLimiter: rateLimiter,
 		retryConfig: cfg.Retry,
+		csrfTokens:  cache.New(csrfTokenTTL, 2*csrfTokenTTL),
 	}, nil
 }
 
@@ -418,11 +429,12 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 		// Priority 1: Use Frappe session cookie (user-level permissions)
 		// a request carries a cookie as name=value only: Secure, HttpOnly and SameSite belong to Set-Cookie
 		req.Header.Set("Cookie", "sid="+user.SessionID)
-		slog.Debug("Using sid cookie for outbound request", "user", user.Email, "method", method, "csrf_token_len", len(user.CSRFToken))
-		// Frappe rejects sid-auth writes without the session's CSRF token (scraped in validateSessionCookie).
-		if (method == "POST" || method == "PUT" || method == "DELETE") && user.CSRFToken != "" {
-			req.Header.Set("X-Frappe-CSRF-Token", user.CSRFToken)
-			slog.Debug("Set X-Frappe-CSRF-Token header", "user", user.Email, "method", method, "token_len", len(user.CSRFToken))
+		slog.Debug("Using sid cookie for outbound request", "user", user.Email, "method", method)
+		// Frappe rejects sid-auth writes without the session's CSRF token, and only these methods are writes.
+		if method == "POST" || method == "PUT" || method == "DELETE" {
+			if token := c.csrfToken(ctx, user); token != "" {
+				req.Header.Set("X-Frappe-CSRF-Token", token)
+			}
 		}
 	} else if user != nil && user.Token != "" {
 		// Priority 2: Use user's OAuth2 token for user-level permissions in Frappe

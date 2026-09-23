@@ -97,7 +97,7 @@ func sidRequest(sid string) *http.Request {
 	return r
 }
 
-func TestSidIsValidatedAndItsCSRFTokenScrapedFromTheDesk(t *testing.T) {
+func TestSidIsValidatedWithoutRenderingTheDesk(t *testing.T) {
 	desk := newFrappeDesk(t)
 
 	user, err := sidStrategy(desk).Authenticate(context.Background(), sidRequest("the-session-id"))
@@ -106,44 +106,11 @@ func TestSidIsValidatedAndItsCSRFTokenScrapedFromTheDesk(t *testing.T) {
 	require.NotNil(t, user)
 	assert.Equal(t, "alice@example.com", user.Email, "the user is whoever get_logged_user names")
 	assert.Equal(t, "the-session-id", user.SessionID, "the sid rides on for the outbound Frappe calls")
-	assert.Equal(t, deskCSRFToken, user.CSRFToken, "the csrf_token in the desk page is the session's write token")
 
 	_, seen := desk.calls()
 	assert.Equal(t, []string{
 		"/api/method/frappe.auth.get_logged_user sid=the-session-id",
-		"/app sid=the-session-id",
-	}, seen, "both calls carry the sid: a token scraped without it belongs to another session")
-}
-
-func TestASidWhoseDeskHasNoCSRFTokenStillReads(t *testing.T) {
-	desk := newFrappeDesk(t)
-	desk.set(http.StatusOK, "<html><body>no token here</body></html>")
-
-	user, err := sidStrategy(desk).Authenticate(context.Background(), sidRequest("the-session-id"))
-
-	require.NoError(t, err, "a missing CSRF token must not refuse the session: reads need no token")
-	require.NotNil(t, user)
-	assert.Equal(t, "alice@example.com", user.Email)
-	assert.Empty(t, user.CSRFToken)
-}
-
-// A user with no CSRF token cannot write (frappe/auth.py:83-99 throws CSRFTokenError), so caching one keeps every
-// write failing for the whole TTL, including long after the desk is back.
-func TestASidWhoseCSRFFetchFailedIsNotCached(t *testing.T) {
-	desk := newFrappeDesk(t)
-	desk.set(http.StatusInternalServerError, "")
-	strategy := sidStrategy(desk)
-	request := sidRequest("the-session-id")
-
-	user, err := strategy.Authenticate(context.Background(), request)
-	require.NoError(t, err)
-	require.Empty(t, user.CSRFToken, "the desk was down, so there is no token")
-
-	desk.set(http.StatusOK, deskPage)
-
-	user, err = strategy.Authenticate(context.Background(), request)
-	require.NoError(t, err)
-	assert.Equal(t, deskCSRFToken, user.CSRFToken, "the desk recovered, so the very next call must pick the token up")
+	}, seen, "a read needs no CSRF token, so validating a session must not render the desk")
 }
 
 func TestAValidatedSidIsCached(t *testing.T) {
@@ -154,9 +121,9 @@ func TestAValidatedSidIsCached(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		user, err := strategy.Authenticate(context.Background(), request)
 		require.NoError(t, err)
-		require.Equal(t, deskCSRFToken, user.CSRFToken)
+		require.Equal(t, "alice@example.com", user.Email)
 	}
 
 	validations, _ := desk.calls()
-	assert.Equal(t, 1, validations, "a complete session is validated once, not on every request")
+	assert.Equal(t, 1, validations, "a validated session is validated once, not on every request")
 }
