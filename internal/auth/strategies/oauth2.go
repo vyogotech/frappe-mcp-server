@@ -23,6 +23,9 @@ import (
 // csrfTokenPattern scrapes a sid's CSRF token from the desk HTML: frappe.sessions.get_csrf_token is not whitelisted.
 var csrfTokenPattern = regexp.MustCompile(`csrf_token\s*=\s*"([a-f0-9]{20,64})"`)
 
+// ErrFrappeUnavailable marks a session Frappe never judged, because it did not answer: an outage, not a rejection.
+var ErrFrappeUnavailable = errors.New("frappe did not answer")
+
 type OAuth2Strategy struct {
 	tokenInfoURL   string
 	issuerURL      string
@@ -254,11 +257,14 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("session validation failed: %w", err)
+		return nil, fmt.Errorf("session validation failed: %w: %w", ErrFrappeUnavailable, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode >= 500 {
+			return nil, fmt.Errorf("session validation failed: status %d: %w", resp.StatusCode, ErrFrappeUnavailable)
+		}
 		return nil, fmt.Errorf("invalid session: status %d", resp.StatusCode)
 	}
 

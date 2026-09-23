@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"frappe-mcp-server/internal/auth/strategies"
 	"log/slog"
 	"net/http"
@@ -35,13 +36,18 @@ func (m *Middleware) Handler(next http.Handler) http.Handler {
 
 		// Required auth - fail if no valid auth
 		if err != nil {
+			status, message := http.StatusUnauthorized, "Valid authentication required"
+			if errors.Is(err, strategies.ErrFrappeUnavailable) {
+				// the session was never judged: 401 would have the caller tell the user it was rejected
+				status, message = http.StatusServiceUnavailable, "Frappe did not answer"
+			}
 			// a refused request is a security event: record why, never the credential
-			slog.Warn("authentication failed", "reason", err.Error(), "path", r.URL.Path, "remote_addr", r.RemoteAddr)
+			slog.Warn("authentication failed", "reason", err.Error(), "status", status, "path", r.URL.Path, "remote_addr", r.RemoteAddr)
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
+			w.WriteHeader(status)
 			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error":   "Unauthorized",
-				"message": "Valid authentication required",
+				"error":   http.StatusText(status),
+				"message": message,
 			})
 			return
 		}
