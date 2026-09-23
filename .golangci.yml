@@ -44,20 +44,16 @@ linters:
               desc: the bottom layer; everything else may import it, it imports nothing of ours
         nothing-imports-the-server:
           files:
-            - "**/internal/auth/**"
-            - "**/internal/frappe/**"
-            - "**/internal/mcp/**"
-            - "**/internal/telemetry/**"
-            - "**/internal/tools/**"
+            - "**/internal/**"
+            - "!**/internal/server/**"
           deny:
             - pkg: frappe-mcp-server/internal/server
               desc: the server is the top layer; it calls these, they never call back
         below-the-tools:
           files:
-            - "**/internal/auth/**"
-            - "**/internal/frappe/**"
-            - "**/internal/mcp/**"
-            - "**/internal/telemetry/**"
+            - "**/internal/**"
+            - "!**/internal/server/**"
+            - "!**/internal/tools/**"
           deny:
             - pkg: frappe-mcp-server/internal/tools
               desc: a tool is assembled from these; they do not know the catalogue exists
