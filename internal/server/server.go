@@ -133,7 +133,7 @@ func (s *MCPServer) Run(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		slog.Info("Shutting down MCP server...")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
 
 		slog.Info("Shutting down HTTP server...")

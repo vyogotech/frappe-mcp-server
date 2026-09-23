@@ -12,6 +12,11 @@ linters:
     - staticcheck
     - unused
     - gosec
+    # the four classes a server making outbound calls gets wrong; the v2 default group has none of them
+    - bodyclose
+    - sqlclosecheck
+    - contextcheck
+    - nilerr
   settings:
     errcheck:
       exclude-functions:
