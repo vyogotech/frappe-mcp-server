@@ -38,6 +38,7 @@ All notable changes to ERPNext MCP Server.
 - **Auth gap on Streamable HTTP** — `POST /mcp` placed on main mux instead of a separate port, ensuring OAuth2/SID/API-key middleware is always applied
 
 ### Changed
+- **OpenTelemetry bumped to v1.46.0** (contrib otelhttp v0.71.0), which requires `google.golang.org/grpc` v1.83.1 and so clears GO-2026-6348 and GO-2026-6061. `govulncheck ./...` now reports no reachable vulnerability at all.
 - Go toolchain bumped to **1.25** (required by OTEL v1.43.0 indirect dependency)
 - `Dockerfile` base image updated to `golang:1.25-alpine`
 
