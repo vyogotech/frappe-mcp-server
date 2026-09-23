@@ -297,17 +297,8 @@ Comprehensive project analysis.
 }
 ```
 
-#### `portfolio_dashboard`
-Portfolio-wide metrics.
-
-```json
-{
-  "status_filter": "Open"
-}
-```
-
 #### `analyze_project_timeline`
-Timeline analysis and delay detection.
+The project, its tasks ordered by start date, and the project's own dates and percent complete.
 
 ## Configuration
 

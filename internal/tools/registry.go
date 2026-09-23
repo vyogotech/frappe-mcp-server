@@ -368,17 +368,14 @@ func (t *ToolRegistry) AnalyzeProjectTimeline(ctx context.Context, request mcp.T
 		return nil, fmt.Errorf("failed to get project tasks: %w", err)
 	}
 
-	// Analyze timeline
+	// Every value here is read from the project or counted from its tasks; a field nothing computes is not reported.
 	analysis := map[string]interface{}{
 		"project": project,
 		"timeline_analysis": map[string]interface{}{
-			"total_tasks":         len(tasks.Data),
-			"project_start_date":  project["expected_start_date"],
-			"project_end_date":    project["expected_end_date"],
-			"project_progress":    project["percent_complete"],
-			"critical_path_tasks": []interface{}{}, // TODO: Implement critical path analysis
-			"milestones":          []interface{}{}, // TODO: Get milestones
-			"timeline_health":     "analyzing...",
+			"total_tasks":        len(tasks.Data),
+			"project_start_date": project["expected_start_date"],
+			"project_end_date":   project["expected_end_date"],
+			"project_progress":   project["percent_complete"],
 		},
 		"tasks": tasks.Data,
 	}
@@ -393,67 +390,6 @@ func (t *ToolRegistry) AnalyzeProjectTimeline(ctx context.Context, request mcp.T
 			{
 				Type: "text",
 				Text: fmt.Sprintf("Timeline Analysis for Project: %s", params.ProjectName),
-			},
-			{
-				Type: "text",
-				Text: string(result),
-			},
-		},
-	}, nil
-}
-
-// CalculateProjectMetrics returns placeholder numbers, so the HTTP server does not offer it.
-func (t *ToolRegistry) CalculateProjectMetrics(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
-	var params struct {
-		ProjectName string `json:"project_name"`
-	}
-
-	if err := json.Unmarshal(request.Params, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
-	}
-
-	if params.ProjectName == "" {
-		return nil, fmt.Errorf("project_name is required")
-	}
-
-	// Get project data
-	project, err := t.frappeClient.GetDocument(ctx, "Project", params.ProjectName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get project: %w", err)
-	}
-
-	// Calculate basic metrics (simplified)
-	metrics := types.ProjectMetrics{
-		BurnRate:   0.0,     // TODO: Calculate from timesheets
-		Velocity:   0.0,     // TODO: Calculate from task completion
-		Efficiency: 0.0,     // TODO: Calculate from time vs estimates
-		RiskScore:  0.0,     // TODO: Calculate risk assessment
-		Health:     "Green", // TODO: Determine health based on metrics
-	}
-
-	// Build response
-	response := map[string]interface{}{
-		"project": project,
-		"metrics": metrics,
-		"calculations": map[string]string{
-			"burn_rate":  "Total cost / elapsed time",
-			"velocity":   "Completed tasks / time period",
-			"efficiency": "Actual time / estimated time",
-			"risk_score": "Based on delays, budget variance, and resource allocation",
-			"health":     "Overall project health indicator",
-		},
-	}
-
-	result, err := json.Marshal(response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return &mcp.ToolResponse{
-		Content: []mcp.Content{
-			{
-				Type: "text",
-				Text: fmt.Sprintf("Project Metrics for: %s", params.ProjectName),
 			},
 			{
 				Type: "text",
@@ -499,64 +435,6 @@ func (t *ToolRegistry) GetResourceAllocation(ctx context.Context, request mcp.To
 			{
 				Type: "text",
 				Text: "Resource Allocation Analysis",
-			},
-			{
-				Type: "text",
-				Text: string(result),
-			},
-		},
-	}, nil
-}
-
-// ProjectRiskAssessment returns placeholder numbers, so the HTTP server does not offer it.
-func (t *ToolRegistry) ProjectRiskAssessment(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
-	var params struct {
-		ProjectName string `json:"project_name"`
-	}
-
-	if err := json.Unmarshal(request.Params, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
-	}
-
-	if params.ProjectName == "" {
-		return nil, fmt.Errorf("project_name is required")
-	}
-
-	// Get project data
-	project, err := t.frappeClient.GetDocument(ctx, "Project", params.ProjectName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get project: %w", err)
-	}
-
-	// Simplified risk assessment
-	riskFactors := map[string]interface{}{
-		"schedule_risk": "Low", // TODO: Calculate based on timeline
-		"budget_risk":   "Low", // TODO: Calculate based on budget variance
-		"resource_risk": "Low", // TODO: Calculate based on resource availability
-		"scope_risk":    "Low", // TODO: Calculate based on scope changes
-		"overall_risk":  "Low",
-		"recommendations": []string{
-			"Monitor project timeline closely",
-			"Regular stakeholder communication",
-			"Track budget variance weekly",
-		},
-	}
-
-	response := map[string]interface{}{
-		"project":         project,
-		"risk_assessment": riskFactors,
-	}
-
-	result, err := json.Marshal(response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return &mcp.ToolResponse{
-		Content: []mcp.Content{
-			{
-				Type: "text",
-				Text: fmt.Sprintf("Risk Assessment for Project: %s", params.ProjectName),
 			},
 			{
 				Type: "text",
@@ -640,56 +518,6 @@ func (t *ToolRegistry) GenerateProjectReport(ctx context.Context, request mcp.To
 			{
 				Type: "text",
 				Text: fmt.Sprintf("%s Report for Project: %s", params.ReportType, params.ProjectName),
-			},
-			{
-				Type: "text",
-				Text: string(result),
-			},
-		},
-	}, nil
-}
-
-// PortfolioDashboard returns placeholder numbers, so the HTTP server does not offer it.
-func (t *ToolRegistry) PortfolioDashboard(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
-	// Get all projects
-	projectReq := types.SearchRequest{
-		DocType:  "Project",
-		Fields:   []string{"name", "project_name", "status", "percent_complete", "priority"},
-		OrderBy:  "creation desc",
-		PageSize: 50,
-	}
-
-	projects, err := t.frappeClient.GetDocumentList(ctx, projectReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get projects: %w", err)
-	}
-
-	// Calculate portfolio metrics
-	dashboard := map[string]interface{}{
-		"portfolio_overview": map[string]interface{}{
-			"total_projects":     len(projects.Data),
-			"active_projects":    0, // TODO: Count by status
-			"completed_projects": 0,
-			"overdue_projects":   0,
-		},
-		"projects": projects.Data,
-		"kpis": map[string]interface{}{
-			"average_completion": 0.0, // TODO: Calculate
-			"on_time_delivery":   0.0, // TODO: Calculate
-			"budget_utilization": 0.0, // TODO: Calculate
-		},
-	}
-
-	result, err := json.Marshal(dashboard)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return &mcp.ToolResponse{
-		Content: []mcp.Content{
-			{
-				Type: "text",
-				Text: "Portfolio Dashboard",
 			},
 			{
 				Type: "text",

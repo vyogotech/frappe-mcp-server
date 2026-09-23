@@ -86,14 +86,6 @@ type Budget struct {
 	Variance       float64 `json:"variance"`
 }
 
-type ProjectMetrics struct {
-	BurnRate   float64 `json:"burn_rate"`
-	Velocity   float64 `json:"velocity"`
-	Efficiency float64 `json:"efficiency"`
-	RiskScore  float64 `json:"risk_score"`
-	Health     string  `json:"health"`
-}
-
 type User struct {
 	ID        string                 `json:"id"`
 	Email     string                 `json:"email"`

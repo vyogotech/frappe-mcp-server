@@ -437,32 +437,6 @@ Generic analysis tool for ANY doctype.
 
 ---
 
-#### Portfolio Dashboard
-
-**POST** `/api/v1/tool/portfolio_dashboard`
-
-```json
-{
-  "status_filter": "Open"  // optional
-}
-```
-
-**Response:**
-```json
-{
-  "total_projects": 12,
-  "by_status": {
-    "Open": 8,
-    "Completed": 3,
-    "On Hold": 1
-  },
-  "overall_health": "good",
-  "projects": [ /* project summaries */ ]
-}
-```
-
----
-
 ### OpenAPI Specification
 
 **GET** `/api/v1/openapi.json`

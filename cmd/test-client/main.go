@@ -73,10 +73,9 @@ func (c *TestClient) runInteractive() {
 	fmt.Println("  2. get project       - Get specific project")
 	fmt.Println("  3. search            - Search documents")
 	fmt.Println("  4. project status    - Get project status")
-	fmt.Println("  5. portfolio         - Portfolio dashboard")
-	fmt.Println("  6. health            - Server health check")
-	fmt.Println("  7. help              - Show this help")
-	fmt.Println("  8. quit              - Exit")
+	fmt.Println("  5. health            - Server health check")
+	fmt.Println("  6. help              - Show this help")
+	fmt.Println("  7. quit              - Exit")
 	fmt.Println("\nType a command number or name:")
 
 	for {
@@ -121,21 +120,18 @@ func (c *TestClient) runInteractive() {
 					c.testProjectStatus(projectName)
 				}
 			}
-		case "5", "portfolio":
-			c.testPortfolio()
-		case "6", "health":
+		case "5", "health":
 			c.testHealth()
-		case "7", "help":
+		case "6", "help":
 			fmt.Println("\n📋 Available Commands:")
 			fmt.Println("  1. list projects     - List all projects")
 			fmt.Println("  2. get project       - Get specific project")
 			fmt.Println("  3. search            - Search documents")
 			fmt.Println("  4. project status    - Get project status")
-			fmt.Println("  5. portfolio         - Portfolio dashboard")
-			fmt.Println("  6. health            - Server health check")
-			fmt.Println("  7. help              - Show this help")
-			fmt.Println("  8. quit              - Exit")
-		case "8", "quit", "exit":
+			fmt.Println("  5. health            - Server health check")
+			fmt.Println("  6. help              - Show this help")
+			fmt.Println("  7. quit              - Exit")
+		case "7", "quit", "exit":
 			fmt.Println("Goodbye! 👋")
 			return
 		default:
@@ -153,7 +149,6 @@ func (c *TestClient) runTests() {
 	}{
 		{"Health Check", c.testHealthCheck},
 		{"List Projects", c.testListProjectsAPI},
-		{"Portfolio Dashboard", c.testPortfolioAPI},
 	}
 
 	passed := 0
@@ -182,11 +177,6 @@ func (c *TestClient) runDemo() {
 			"Basic Data Access",
 			"Demonstrates basic CRUD operations",
 			c.demoBasicAccess,
-		},
-		{
-			"Project Management",
-			"Shows project management capabilities",
-			c.demoProjectManagement,
 		},
 		{
 			"Business Analytics",
@@ -249,15 +239,6 @@ func (c *TestClient) testProjectStatus(name string) {
 	}
 
 	response := c.callTool("get_project_status", params)
-	c.printResponse(response)
-}
-
-func (c *TestClient) testPortfolio() {
-	fmt.Println("\n📈 Portfolio Dashboard...")
-
-	params := map[string]interface{}{}
-
-	response := c.callTool("portfolio_dashboard", params)
 	c.printResponse(response)
 }
 
@@ -405,17 +386,6 @@ func (c *TestClient) testListProjectsAPI() error {
 	return nil
 }
 
-func (c *TestClient) testPortfolioAPI() error {
-	params := map[string]interface{}{}
-
-	response := c.callTool("portfolio_dashboard", params)
-	if response.Error != nil {
-		return fmt.Errorf("portfolio_dashboard error: %s", *response.Error)
-	}
-
-	return nil
-}
-
 func (c *TestClient) demoBasicAccess() {
 	fmt.Println("   • Listing projects...")
 	c.testListProjects()
@@ -424,15 +394,6 @@ func (c *TestClient) demoBasicAccess() {
 
 	fmt.Println("\n   • Searching for customers...")
 	c.testSearch("Customer", "test")
-}
-
-func (c *TestClient) demoProjectManagement() {
-	fmt.Println("   • Getting portfolio dashboard...")
-	c.testPortfolio()
-
-	time.Sleep(2 * time.Second)
-
-	fmt.Println("\n   • Note: To demo project status, you'll need actual project names from your ERPNext instance")
 }
 
 func (c *TestClient) demoAnalytics() {

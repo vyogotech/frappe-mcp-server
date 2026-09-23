@@ -101,21 +101,14 @@ else
     ((failed++))
 fi
 
-# Test 6: Direct tool call - Portfolio Dashboard
-if test_endpoint "POST" "/api/v1/tools/portfolio_dashboard" '{"params":{}}' "Direct Tool - Portfolio Dashboard"; then
-    ((passed++))
-else
-    ((failed++))
-fi
-
-# Test 7: Direct tool call - List Documents
+# Test 6: Direct tool call - List Documents
 if test_endpoint "POST" "/api/v1/tools/list_documents" '{"params":{"doctype":"Project","page_size":10}}' "Direct Tool - List Documents"; then
     ((passed++))
 else
     ((failed++))
 fi
 
-# Test 8: OpenAPI spec
+# Test 7: OpenAPI spec
 if test_endpoint "GET" "/api/v1/openapi.json" "" "OpenAPI Specification"; then
     ((passed++))
 else

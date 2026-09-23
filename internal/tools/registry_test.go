@@ -315,30 +315,6 @@ func TestAnalyzeProjectTimeline(t *testing.T) {
 	assert.Contains(t, response.Content[0].Text, "Timeline Analysis for Project: TEST-PROJ-001")
 }
 
-func TestCalculateProjectMetrics(t *testing.T) {
-	client := createTestClient(t)
-	registry := NewRegistry(client)
-
-	params := map[string]interface{}{
-		"project_name": "TEST-PROJ-001",
-	}
-	paramsJSON, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	request := mcp.ToolRequest{
-		ID:     "test-1",
-		Tool:   "calculate_project_metrics",
-		Params: paramsJSON,
-	}
-
-	ctx := context.Background()
-	response, err := registry.CalculateProjectMetrics(ctx, request)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.Contains(t, response.Content[0].Text, "Project Metrics for: TEST-PROJ-001")
-}
-
 func TestGetResourceAllocation(t *testing.T) {
 	client := createTestClient(t)
 	registry := NewRegistry(client)
@@ -355,30 +331,6 @@ func TestGetResourceAllocation(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Contains(t, response.Content[0].Text, "Resource Allocation Analysis")
-}
-
-func TestProjectRiskAssessment(t *testing.T) {
-	client := createTestClient(t)
-	registry := NewRegistry(client)
-
-	params := map[string]interface{}{
-		"project_name": "TEST-PROJ-001",
-	}
-	paramsJSON, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	request := mcp.ToolRequest{
-		ID:     "test-1",
-		Tool:   "project_risk_assessment",
-		Params: paramsJSON,
-	}
-
-	ctx := context.Background()
-	response, err := registry.ProjectRiskAssessment(ctx, request)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.Contains(t, response.Content[0].Text, "Risk Assessment for Project: TEST-PROJ-001")
 }
 
 func TestGenerateProjectReport(t *testing.T) {
@@ -433,24 +385,6 @@ func TestGenerateProjectReport(t *testing.T) {
 			assert.Contains(t, response.Content[0].Text, tt.expected)
 		})
 	}
-}
-
-func TestPortfolioDashboard(t *testing.T) {
-	client := createTestClient(t)
-	registry := NewRegistry(client)
-
-	request := mcp.ToolRequest{
-		ID:     "test-1",
-		Tool:   "portfolio_dashboard",
-		Params: []byte(`{}`),
-	}
-
-	ctx := context.Background()
-	response, err := registry.PortfolioDashboard(ctx, request)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.Contains(t, response.Content[0].Text, "Portfolio Dashboard")
 }
 
 func TestResourceUtilizationAnalysis(t *testing.T) {

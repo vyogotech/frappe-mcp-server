@@ -61,11 +61,8 @@ func main() {
 	// Legacy tools kept for backward compatibility.
 	mcpServer.RegisterTool("get_project_status", toolRegistry.GetProjectStatus)
 	mcpServer.RegisterTool("analyze_project_timeline", toolRegistry.AnalyzeProjectTimeline)
-	mcpServer.RegisterTool("calculate_project_metrics", toolRegistry.CalculateProjectMetrics)
 	mcpServer.RegisterTool("get_resource_allocation", toolRegistry.GetResourceAllocation)
-	mcpServer.RegisterTool("project_risk_assessment", toolRegistry.ProjectRiskAssessment)
 	mcpServer.RegisterTool("generate_project_report", toolRegistry.GenerateProjectReport)
-	mcpServer.RegisterTool("portfolio_dashboard", toolRegistry.PortfolioDashboard)
 	mcpServer.RegisterTool("resource_utilization_analysis", toolRegistry.ResourceUtilizationAnalysis)
 	mcpServer.RegisterTool("budget_variance_analysis", toolRegistry.BudgetVarianceAnalysis)
 

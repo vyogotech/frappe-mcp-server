@@ -388,13 +388,13 @@ NATURAL LANGUAGE UNDERSTANDING:
 You interpret business questions and map them to appropriate ERPNext data queries:
 
 CASUAL LANGUAGE → DATA QUERIES:
-• "What's up?" / "How's business?" → portfolio_dashboard (actual project data)
-• "Any problems?" / "Everything ok?" → portfolio_dashboard + search for issues
+• "What's up?" / "How's business?" → list_documents on Project (actual project rows)
+• "Any problems?" / "Everything ok?" → list_documents on Project + search for issues
 • "Money situation?" → budget_variance_analysis (real financial data)
 • "Team status?" → resource_utilization_analysis (actual team assignments)
 
 TOOL SELECTION FOR REAL DATA:
-- General status → portfolio_dashboard (real portfolio metrics)
+- General status → list_documents on Project (real project rows)
 - Specific projects → search_documents + get_document (actual project records)
 - Financial queries → budget_variance_analysis (real budget data)
 - Team questions → resource_utilization_analysis (actual resource data)
@@ -465,7 +465,7 @@ func (c *OllamaERPNextClient) ProcessOllamaResponse(response string, userQuestio
 				continue
 			}
 			// Entity resolution for project/entity fields
-			if toolName == "get_project_status" || toolName == "analyze_project_timeline" || toolName == "calculate_project_metrics" || toolName == "generate_project_report" {
+			if toolName == "get_project_status" || toolName == "analyze_project_timeline" || toolName == "generate_project_report" {
 				if userInput, ok := arguments["project_name"].(string); ok && userInput != "" {
 					resolved, err := c.ResolveEntityWithFallback(context.Background(), "Project", userInput)
 					if err == nil && resolved != "" {
