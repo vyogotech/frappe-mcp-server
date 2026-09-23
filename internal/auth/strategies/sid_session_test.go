@@ -69,12 +69,6 @@ func newFrappeDesk(t *testing.T) *frappeDesk {
 	return d
 }
 
-func (d *frappeDesk) set(status int, html string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.deskStatus, d.deskHTML = status, html
-}
-
 func (d *frappeDesk) calls() (int, []string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
