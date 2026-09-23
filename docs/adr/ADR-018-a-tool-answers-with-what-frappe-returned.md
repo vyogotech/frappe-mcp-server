@@ -19,7 +19,7 @@ returned Green, Low and zero for that project (`evidence/C10/repro-1.txt` in the
 The caller is a language model. It cannot see the literal, and nothing in the payload marks these fields as not yet
 implemented: a `TODO` in the source is invisible over JSON-RPC. The model reads `"health": "Green"` as a finding about
 the project and says so to the user, who has no way to tell it apart from a number that was measured. This is OWASP's
-LLM09, Misinformation (https://genai.owasp.org/llmrisk/llm092025-misinformation/): the system states as fact something
+LLM09, Misinformation (<https://genai.owasp.org/llmrisk/llm092025-misinformation/>): the system states as fact something
 it never determined. A tool that returns nothing is safe, because the model says it does not know. A tool that returns a
 confident constant is not.
 

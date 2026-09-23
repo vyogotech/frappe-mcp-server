@@ -99,6 +99,7 @@ tool below is that `params` value. `/tool/{tool_name}` is the same handler under
 ```
 
 **Response:**
+
 ```json
 {
   "doctype": "Project",
@@ -130,6 +131,7 @@ tool below is that `params` value. `/tool/{tool_name}` is the same handler under
 ```
 
 **Response:**
+
 ```json
 {
   "doctype": "Customer",
@@ -160,6 +162,7 @@ tool below is that `params` value. `/tool/{tool_name}` is the same handler under
 ```
 
 **Response:**
+
 ```json
 {
   "doctype": "Project",
@@ -184,6 +187,7 @@ tool below is that `params` value. `/tool/{tool_name}` is the same handler under
 Perform SQL-like aggregation queries on ERPNext data.
 
 **Request:**
+
 ```json
 {
   "doctype": "Sales Invoice",
@@ -228,6 +232,7 @@ examples: `list_documents` and `search_documents` take `page_length`, not `limit
 Execute Frappe/ERPNext standard or custom reports.
 
 **Request:**
+
 ```json
 {
   "report_name": "Sales Analytics",
@@ -240,6 +245,7 @@ Execute Frappe/ERPNext standard or custom reports.
 ```
 
 **Response:**
+
 ```json
 {
   "report_name": "Sales Analytics",
@@ -266,6 +272,7 @@ Execute Frappe/ERPNext standard or custom reports.
 ```
 
 **Common Reports:**
+
 - **Sales**: Sales Analytics, Sales Register, Sales Order Analysis
 - **Purchase**: Purchase Register, Purchase Analytics
 - **Accounting**: Customer Ledger Summary, Supplier Ledger Summary, General Ledger
@@ -291,6 +298,7 @@ Execute Frappe/ERPNext standard or custom reports.
 ```
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -317,6 +325,7 @@ Execute Frappe/ERPNext standard or custom reports.
 ```
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -339,6 +348,7 @@ Execute Frappe/ERPNext standard or custom reports.
 ```
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -363,6 +373,7 @@ Generic analysis tool for ANY doctype.
 ```
 
 **Response:**
+
 ```json
 {
   "doctype": "Project",
@@ -391,6 +402,7 @@ Generic analysis tool for ANY doctype.
 ```
 
 **Response:**
+
 ```json
 {
   "project": { /* project details */ },

@@ -15,6 +15,7 @@ nano .env
 ```
 
 Required variables in `.env`:
+
 ```bash
 FRAPPE_BASE_URL=http://your-frappe-instance:8000
 FRAPPE_API_KEY=your_api_key
@@ -23,16 +24,17 @@ FRAPPE_API_SECRET=your_api_secret
 
 ### 2. Start Services
 
-**Option A: MCP Server only** (Recommended)
+#### Option A: MCP server only (recommended)
 
 ```bash
 docker compose up -d
 ```
 
 This starts:
+
 - ERPNext MCP Server (port 8080)
 
-**Option B: Full Stack (includes local ERPNext)**
+#### Option B: full stack, including a local ERPNext
 
 ```bash
 docker compose --profile full-stack up -d
@@ -42,15 +44,15 @@ This starts everything including a local ERPNext instance.
 
 ### 3. Access Services
 
-- **ERPNext MCP API**: http://localhost:8080
-- **ERPNext** (if full-stack): http://localhost:8000
+- **ERPNext MCP API**: <http://localhost:8080>
+- **ERPNext** (if full-stack): <http://localhost:8000>
 
 ## Configuration
 
 ### Environment Variables
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `FRAPPE_BASE_URL` | `http://localhost:8000` | Frappe instance URL |
 | `FRAPPE_API_KEY` | - | Frappe API key (required) |
 | `FRAPPE_API_SECRET` | - | Frappe API secret (required) |
@@ -150,11 +152,14 @@ docker run --rm -v frappe-mcp-server_mcp_logs:/data \
 
 Volumes:
 <<<<<<< HEAD
+
 - `mcp_logs` - MCP server logs
 =======
 - `ollama_data` - AI models
 - `open_webui_data` - Open WebUI data
+
 >>>>>>> 475c30e (build(docker): build the server image from the repo itself and state the Go version once, in go.mod)
+
 - `erpnext_data` - ERPNext files (full-stack only)
 
 ## Troubleshooting
@@ -213,13 +218,14 @@ docker compose -f compose.yml -f compose.prod.yml up -d
 1. **Use HTTPS** with reverse proxy (nginx/caddy)
 
 2. **Restrict network access**:
+
 ```yaml
 services:
   erpnext:
     ports: []  # Don't expose to host
 ```
 
-3. **Regular backups** of volumes
+1. **Regular backups** of volumes
 
 ## Advanced Configuration
 
@@ -271,4 +277,3 @@ docker compose down --rmi all
 ---
 
 Back to [Documentation Home](index.md)
-

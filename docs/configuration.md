@@ -38,7 +38,7 @@ erpnext:
 Configuration can be overridden using environment variables:
 
 | Variable | Description | Example |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `CONFIG_FILE` | Path to config file | `/etc/erpnext-mcp/config.yaml` |
 | `FRAPPE_BASE_URL` | Frappe URL | `https://erp.company.com` |
 | `FRAPPE_API_KEY` | API key | `abc123...` |
@@ -64,6 +64,7 @@ Environment variables take precedence over config file values.
 ### 1. Create API Credentials
 
 In ERPNext:
+
 1. Go to **User** list
 2. Select your user
 3. Scroll to **API Access** section
@@ -73,6 +74,7 @@ In ERPNext:
 ### 2. Set Permissions
 
 Ensure the user has appropriate roles:
+
 - **System Manager** (for full access)
 - Or specific DocType permissions for limited access
 
@@ -200,6 +202,7 @@ logging:
 Or set `LOG_LEVEL` in the environment.
 
 Logs are written to:
+
 - **STDOUT** for HTTP server
 - **STDERR** for STDIO server (to not interfere with MCP protocol)
 
@@ -217,4 +220,3 @@ Test your configuration:
 ```
 
 Next: [Analytics & Reporting](analytics-features.md)
-

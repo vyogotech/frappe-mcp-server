@@ -5,6 +5,7 @@
 ## Overview
 
 The ERPNext MCP Server now includes powerful analytics and reporting capabilities that allow you to:
+
 - Perform complex aggregations (SUM, COUNT, AVG, TOP N)
 - Execute native ERPNext reports
 
@@ -15,7 +16,8 @@ The ERPNext MCP Server now includes powerful analytics and reporting capabilitie
 Perform SQL-like aggregations on your ERPNext data without writing SQL.
 
 **Examples:**
-```
+
+```text
 "Show me top 5 customers by revenue"
 "What are total sales by item this month?"
 "Which products sold the most?"
@@ -24,6 +26,7 @@ Perform SQL-like aggregations on your ERPNext data without writing SQL.
 ```
 
 **Direct API:**
+
 ```bash
 curl -X POST http://localhost:8080/api/v1/tools/aggregate_documents \
   -H "Content-Type: application/json" \
@@ -38,6 +41,7 @@ curl -X POST http://localhost:8080/api/v1/tools/aggregate_documents \
 ```
 
 **Supported Aggregation Functions:**
+
 - `SUM(field)` - Sum of all values
 - `COUNT(*)` or `COUNT(field)` - Count of records
 - `AVG(field)` - Average value
@@ -45,6 +49,7 @@ curl -X POST http://localhost:8080/api/v1/tools/aggregate_documents \
 - `MIN(field)` - Minimum value
 
 **Common Use Cases:**
+
 - **Top N Queries**: "top 10 customers by revenue"
 - **Rankings**: "highest selling products"
 - **Totals by Category**: "total sales by item"
@@ -56,7 +61,8 @@ curl -X POST http://localhost:8080/api/v1/tools/aggregate_documents \
 Execute any standard or custom ERPNext report with filters.
 
 **Examples:**
-```
+
+```text
 "Run Sales Analytics report"
 "Execute Customer Ledger Summary"
 "Show Stock Balance report"
@@ -64,6 +70,7 @@ Execute any standard or custom ERPNext report with filters.
 ```
 
 **Direct API:**
+
 ```bash
 curl -X POST http://localhost:8080/api/v1/tools/run_report \
   -H "Content-Type: application/json" \
@@ -80,7 +87,7 @@ curl -X POST http://localhost:8080/api/v1/tools/run_report \
 **Common Reports:**
 
 | Category | Reports |
-|----------|---------|
+| ---------- | --------- |
 | **Sales** | Sales Analytics, Sales Register, Sales Order Analysis, Sales Person-wise Transaction Summary |
 | **Purchase** | Purchase Register, Purchase Analytics, Supplier-wise Purchase Analytics |
 | **Accounting** | Customer Ledger Summary, Supplier Ledger Summary, General Ledger, Trial Balance |
@@ -97,7 +104,7 @@ curl -X POST http://localhost:8080/api/v1/tools/run_report \
 **Parameters:**
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+| ------- | ------ | ---------- | ------------- |
 | `doctype` | string | Yes | ERPNext DocType to query |
 | `fields` | array | Yes | Fields to select (with aggregations) |
 | `group_by` | string | No | Field to group by |
@@ -106,6 +113,7 @@ curl -X POST http://localhost:8080/api/v1/tools/run_report \
 | `filters` | object | No | WHERE clause filters |
 
 **Example Request:**
+
 ```json
 {
   "doctype": "Sales Invoice",
@@ -125,6 +133,7 @@ curl -X POST http://localhost:8080/api/v1/tools/run_report \
 ```
 
 **Response:**
+
 ```json
 {
   "doctype": "Sales Invoice",
@@ -152,12 +161,13 @@ curl -X POST http://localhost:8080/api/v1/tools/run_report \
 **Parameters:**
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+| ------- | ------ | ---------- | ------------- |
 | `report_name` | string | Yes | Exact name of the ERPNext report |
 | `filters` | object | No | Report-specific filters |
 | `user` | string | No | User context (optional) |
 
 **Example Request:**
+
 ```json
 {
   "report_name": "Sales Analytics",
@@ -171,6 +181,7 @@ curl -X POST http://localhost:8080/api/v1/tools/run_report \
 ```
 
 **Response:**
+
 ```json
 {
   "report_name": "Sales Analytics",
@@ -201,7 +212,7 @@ curl -X POST http://localhost:8080/api/v1/tools/run_report \
 
 ### In Cursor IDE
 
-```
+```text
 @erpnext Show me top 10 customers by revenue
 
 @erpnext What are total sales by item?
@@ -245,6 +256,7 @@ report_data = response.json()
 ### Complex Aggregations
 
 **Multi-level grouping:**
+
 ```json
 {
   "doctype": "Sales Invoice",
@@ -261,6 +273,7 @@ report_data = response.json()
 ```
 
 **Time-based analysis:**
+
 ```json
 {
   "doctype": "Sales Invoice",
@@ -278,6 +291,7 @@ report_data = response.json()
 ### Report Filters
 
 **Date range filtering:**
+
 ```json
 {
   "report_name": "Sales Register",
@@ -290,6 +304,7 @@ report_data = response.json()
 ```
 
 **Multi-criteria filtering:**
+
 ```json
 {
   "report_name": "Stock Balance",
@@ -304,19 +319,23 @@ report_data = response.json()
 ## Best Practices
 
 ### 1. Be Specific in Queries
-```
+
+```text
 ❌ "Show sales"
 ✅ "Show top 10 customers by total sales this year"
 ```
 
 ### 2. Use Appropriate DocTypes
+
 For aggregations, use transaction doctypes:
+
 - `Sales Invoice` - for revenue analysis
 - `Sales Order` - for order analysis
 - `Purchase Invoice` - for expense analysis
 - `Stock Entry` - for inventory movements
 
 ### 3. Add Filters for Performance
+
 ```json
 {
   "doctype": "Sales Invoice",
@@ -330,8 +349,10 @@ For aggregations, use transaction doctypes:
 ```
 
 ### 4. Request Table Format
+
 For better readability, add "in table format" to your queries:
-```
+
+```text
 "Show me top 5 customers by revenue in table format"
 ```
 
@@ -342,7 +363,8 @@ For better readability, add "in table format" to your queries:
 **Problem:** "top customers" returns a list instead of aggregation.
 
 **Solution:** Be more explicit:
-```
+
+```text
 "Show me top 10 customers by total revenue"
 ```
 
@@ -351,7 +373,8 @@ For better readability, add "in table format" to your queries:
 **Problem:** Error: "Report 'sales analytics' not found"
 
 **Solution:** Use exact report name from ERPNext:
-```
+
+```text
 "Run Sales Analytics report"  (with capital letters)
 ```
 
@@ -359,7 +382,8 @@ For better readability, add "in table format" to your queries:
 
 **Problem:** Aggregation returns no data.
 
-**Solution:** 
+**Solution:**
+
 1. Check if the DocType has data
 2. Verify filter values are correct
 3. Ensure field names match ERPNext schema
@@ -369,6 +393,7 @@ For better readability, add "in table format" to your queries:
 **Problem:** Aggregation takes too long.
 
 **Solutions:**
+
 1. Add date filters to limit data
 2. Use indexed fields in filters
 3. Consider using ERPNext reports instead for complex analyses
@@ -381,6 +406,7 @@ Both tools return structured data and nothing else. The client that called them 
 ## Future Enhancements
 
 Planned features:
+
 - Chart/visualization hints
 - Scheduled report execution
 - Export to CSV/Excel/PDF
@@ -397,4 +423,3 @@ Planned features:
 **Status:** Production Ready ✅  
 **Added:** November 2025  
 **Tools:** `aggregate_documents`, `run_report`
-

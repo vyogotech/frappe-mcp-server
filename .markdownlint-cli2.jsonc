@@ -1,0 +1,7 @@
+{
+  // markdownlint's defaults, minus MD013: line length is a prose decision, not a structural one.
+  // Without this file ci.yml's Docs job runs the bare defaults, and MD013's 80 columns fails
+  // README.md on every paragraph it has ever had.
+  "config": { "default": true, "MD013": false },
+  "ignores": ["**/node_modules/**"]
+}

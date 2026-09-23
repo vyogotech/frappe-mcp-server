@@ -13,6 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/in
 ```
 
 **What it does:**
+
 - Auto-detects your OS and architecture
 - Downloads the latest release binary
 - Installs to `~/.local/bin/frappe-mcp-server-stdio`
@@ -20,6 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/in
 - Creates configuration directory
 
 **Supported platforms:**
+
 - Linux (amd64, arm64)
 - macOS (Intel, Apple Silicon)
 - Windows (amd64)
@@ -31,7 +33,7 @@ Download pre-built binaries from [GitHub Releases](https://github.com/vyogotech/
 #### Available Downloads
 
 | Platform | Architecture | Download |
-|----------|-------------|----------|
+| ---------- | ------------- | ---------- |
 | Linux | Intel/AMD (64-bit) | `frappe-mcp-server-stdio-linux-amd64.tar.gz` |
 | Linux | ARM (64-bit) | `frappe-mcp-server-stdio-linux-arm64.tar.gz` |
 | macOS | Intel | `frappe-mcp-server-stdio-darwin-amd64.tar.gz` |
@@ -41,6 +43,7 @@ Download pre-built binaries from [GitHub Releases](https://github.com/vyogotech/
 #### Manual Installation Steps
 
 **Linux/macOS:**
+
 ```bash
 # Download (replace with your platform)
 wget https://github.com/vyogotech/frappe-mcp-server/releases/latest/download/frappe-mcp-server-stdio-darwin-arm64.tar.gz
@@ -59,6 +62,7 @@ frappe-mcp-server-stdio --help
 ```
 
 **Windows:**
+
 ```powershell
 # Download from releases page
 # Extract the .zip file
@@ -71,11 +75,15 @@ frappe-mcp-server-stdio --help
 For developers or if you want the latest unreleased version:
 
 #### Prerequisites
+
 <<<<<<< HEAD
+
 - **Go 1.25+** - [Download](https://go.dev/dl/)
 =======
 - **Go 1.25+** — `go.mod` names the toolchain the build uses - [Download](https://go.dev/dl/)
+
 >>>>>>> 475c30e (build(docker): build the server image from the repo itself and state the Go version once, in go.mod)
+
 - **Git**
 - **Make** (optional, but recommended)
 
@@ -185,6 +193,7 @@ Then reference it in MCP config:
 4. Restart Cursor
 
 Example `~/.cursor/mcp.json`:
+
 ```json
 {
   "mcpServers": {
@@ -213,6 +222,7 @@ Example `~/.cursor/mcp.json`:
 If you get "command not found":
 
 **Option 1:** Add to PATH
+
 ```bash
 # Add to ~/.bashrc or ~/.zshrc
 export PATH="$PATH:$HOME/.local/bin"
@@ -222,6 +232,7 @@ source ~/.bashrc  # or source ~/.zshrc
 ```
 
 **Option 2:** Use absolute path in MCP config
+
 ```json
 {
   "command": "/full/path/to/frappe-mcp-server-stdio"
@@ -273,4 +284,3 @@ rm -rf ~/.config/frappe-mcp-server
 - [Quick Start Guide](quick-start.md) - Get started quickly
 - [Configuration Guide](configuration.md) - Detailed configuration options
 - [API Reference](api-reference.md) - Explore available tools
-

@@ -14,6 +14,7 @@ make release            # Full release build (HTTP + STDIO, all platforms)
 ```
 
 **Supported Platforms:**
+
 - Linux AMD64
 - Linux ARM64
 - macOS Intel (AMD64)
@@ -23,6 +24,7 @@ make release            # Full release build (HTTP + STDIO, all platforms)
 ### 2. **GitHub Actions CI/CD** ✅
 
 #### CI Workflow (`.github/workflows/ci.yml`)
+
 - **Triggered on**: Push to main/develop, Pull Requests
 - **Jobs**:
   - Test: `go test -race` with coverage
@@ -35,6 +37,7 @@ make release            # Full release build (HTTP + STDIO, all platforms)
   - Build & Push Container: only on a push to `main`
 
 #### Release Workflow (`.github/workflows/release.yml`)
+
 - **Triggered on**: Version tags (v*)
 - **Automated Process**:
   1. Build the server and the STDIO binary for all 5 platforms
@@ -49,6 +52,7 @@ make release            # Full release build (HTTP + STDIO, all platforms)
 **File**: `install.sh`
 
 **Features:**
+
 - Auto-detects OS and architecture
 - Downloads latest release from GitHub
 - Installs to `~/.local/bin`
@@ -56,6 +60,7 @@ make release            # Full release build (HTTP + STDIO, all platforms)
 - Shows MCP client setup instructions
 
 **Usage:**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 ```
@@ -85,16 +90,18 @@ All documentation in `/docs`:
 ### For Users
 
 **Install:**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
 ```
 
 **Or download from releases:**
-https://github.com/vyogotech/frappe-mcp-server/releases/latest
+<https://github.com/vyogotech/frappe-mcp-server/releases/latest>
 
 ### For Maintainers
 
 **Create a Release:**
+
 ```bash
 # 1. Update CHANGELOG.md
 vim CHANGELOG.md
@@ -116,6 +123,7 @@ git push origin v1.0.0
 ```
 
 **Test Builds Locally:**
+
 ```bash
 # Test multi-platform builds
 make clean
@@ -130,7 +138,8 @@ make release
 Each release includes:
 
 ### Binaries
-```
+
+```text
 frappe-mcp-server-{linux,darwin}-{amd64,arm64}.tar.gz
 frappe-mcp-server-windows-amd64.zip
 frappe-mcp-server-stdio-{linux,darwin}-{amd64,arm64}.tar.gz
@@ -138,18 +147,20 @@ frappe-mcp-server-stdio-windows-amd64.zip
 ```
 
 ### Package Contents
+
 - Binary (the HTTP server, or the STDIO server)
 - README.md
 - env.example (configuration template)
 
 ### Checksums and provenance
+
 - SHA256SUMS file for verification
 - sbom.cyclonedx.json
 - a build-provenance attestation over every file in SHA256SUMS
 
 ## 🔄 Release Workflow
 
-```
+```text
 Developer                GitHub Actions              Users
    │                            │                       │
    ├─ Create tag (v1.0.0)       │                       │
@@ -171,7 +182,8 @@ Developer                GitHub Actions              Users
 ## 🧪 Tested
 
 ✅ All 5 platform binaries build successfully:
-```
+
+```text
 -rwxr-xr-x  9.6M frappe-mcp-server-stdio-darwin-amd64
 -rwxr-xr-x  9.1M frappe-mcp-server-stdio-darwin-arm64
 -rwxr-xr-x  9.6M frappe-mcp-server-stdio-linux-amd64
@@ -181,7 +193,7 @@ Developer                GitHub Actions              Users
 
 ## 📝 Next Steps
 
-### To Create First Release:
+### To Create First Release
 
 1. **Verify GitHub repo settings:**
    - Repository name: `vyogotech/frappe-mcp-server`
@@ -189,6 +201,7 @@ Developer                GitHub Actions              Users
    - Verify GITHUB_TOKEN has write permissions
 
 2. **Create first release:**
+
    ```bash
    git tag -a v1.0.0 -m "Initial release"
    git push origin v1.0.0
@@ -200,13 +213,15 @@ Developer                GitHub Actions              Users
    - Verify artifacts are uploaded
 
 4. **Test installation:**
+
    ```bash
    curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
    ```
 
-### For Distribution:
+### For Distribution
 
 Users can install via:
+
 1. **Install script** (recommended)
 2. **Download from releases** (manual)
 3. **Build from source** (developers)
@@ -225,12 +240,14 @@ All methods documented in `/docs/installation.md`
 ## 🔧 Maintenance
 
 ### Update Dependencies
+
 ```bash
 go mod tidy
 go mod verify
 ```
 
 ### Security Updates
+
 ```bash
 # Run security scan
 make security
@@ -241,6 +258,7 @@ go mod tidy
 ```
 
 ### Build Verification
+
 ```bash
 # Clean build all platforms
 make clean
@@ -253,6 +271,7 @@ ls -lh bin/
 ## 📊 Metrics
 
 After release, track:
+
 - Download counts (GitHub Insights)
 - Install script usage (if tracking added)
 - Issue reports
@@ -261,16 +280,19 @@ After release, track:
 ## 🆘 Troubleshooting
 
 ### GitHub Actions Fails
+
 1. Check workflow logs in Actions tab
 2. Test locally: `make release`
 3. Verify Go version compatibility
 
 ### Install Script Issues
+
 1. Test locally first
 2. Check download URLs
 3. Verify release artifacts exist
 
 ### Binary Issues
+
 1. Test on target platform
 2. Check cross-compilation: `file bin/*`
 3. Verify no CGO dependencies
@@ -278,6 +300,7 @@ After release, track:
 ## 📚 Documentation
 
 Complete documentation at:
+
 - [Installation Guide](installation.md)
 - [Release Process](releases.md)
 - [Quick Start](quick-start.md)
@@ -285,6 +308,7 @@ Complete documentation at:
 ## ✅ Summary
 
 **Implemented:**
+
 - ✅ Multi-platform build system (Makefile)
 - ✅ GitHub Actions CI (testing, linting, security)
 - ✅ GitHub Actions Release (automated releases)
@@ -293,7 +317,7 @@ Complete documentation at:
 - ✅ Build verification (tested successfully)
 
 **Ready for:**
+
 - First release (just create and push a tag!)
 - Users to install via script or releases
 - Automated distribution on every tag
-

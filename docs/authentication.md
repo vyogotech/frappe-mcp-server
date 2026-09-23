@@ -7,7 +7,7 @@ This document describes how to set up and use authentication with the Frappe MCP
 The Frappe MCP Server supports **three authentication methods** with automatic priority-based fallback:
 
 | Priority | Method | Use Case | Permissions |
-|----------|--------|----------|-------------|
+| ---------- | -------- | ---------- | ------------- |
 | 1 | **Frappe `sid` cookie** | Frappe apps (Awesome Bar, desk widgets) | User-level — respects Frappe roles |
 | 2 | **OAuth2 Bearer token** | External apps (Open WebUI, VS Code, mobile) | User or system-level |
 | 3 | **API key/secret** | Server-to-server, fallback | System-level |
@@ -20,7 +20,7 @@ Authentication is **optional by default** — set `require_auth: true` in produc
 
 The server tries each method in order, using the first that succeeds:
 
-```
+```text
 Incoming Request
      │
      ├─1─► sid cookie present?  → Validate with Frappe → ✅ User-level permissions
@@ -32,7 +32,7 @@ Incoming Request
 
 ### Request Flow (sid cookie)
 
-```
+```text
 User (logged into ERPNext)
   │  1. Request with Cookie: sid=abc123
   ▼
@@ -285,5 +285,3 @@ go test ./internal/auth/... -v
 - [Configuration](configuration.md) — Full config reference
 - [OAuth2 RFC 6749](https://tools.ietf.org/html/rfc6749)
 - [Frappe OAuth2 Docs](https://frappeframework.com/docs/user/en/guides/integration/oauth)
-
-

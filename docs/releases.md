@@ -74,10 +74,13 @@ Once the tag is pushed, GitHub Actions automatically:
 1. Go to [Releases](https://github.com/vyogotech/frappe-mcp-server/releases)
 2. Check that all binaries are attached
 3. Test the install script:
+
    ```bash
    curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
    ```
+
 4. Verify binary works:
+
    ```bash
    frappe-mcp-server-stdio --version
    ```
@@ -221,16 +224,19 @@ curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/in
 Each release includes:
 
 ### Binaries
+
 - Cross-compiled for 5 platforms
 - Statically linked (no dependencies)
 - Optimized with `-ldflags "-s -w"`
 
 ### Archives
+
 - `.tar.gz` for Linux/macOS
 - `.zip` for Windows
 - Includes binary + README + config template
 
 ### Checksums
+
 - `SHA256SUMS` file
 - Verifiable with: `shasum -a 256 -c SHA256SUMS`
 
@@ -260,4 +266,3 @@ Each release includes:
 
 - **Issues**: [GitHub Issues](https://github.com/vyogotech/frappe-mcp-server/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/vyogotech/frappe-mcp-server/discussions)
-

@@ -33,7 +33,7 @@ make coverage
 
 ## Project Structure
 
-```
+```text
 frappe-mcp-server/
 ├── cmd/
 │   └── mcp-stdio/          # STDIO server for Cursor/Claude
@@ -312,6 +312,7 @@ git commit -m "feat: add new feature"
 ```
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):
+
 - `feat:` - New feature
 - `fix:` - Bug fix
 - `docs:` - Documentation
@@ -419,6 +420,7 @@ func MyFunction(param1 string) (string, error) {
 ### README Updates
 
 When adding features, update:
+
 - Main `README.md`
 - Relevant docs in `docs/`
 - API reference if adding endpoints
@@ -447,4 +449,3 @@ godoc -http=:6060
 ---
 
 Happy coding! 🚀
-

@@ -137,4 +137,3 @@ go test ./internal/auth/... -v
 ## More
 
 See [Authentication](authentication.md) for the full reference including CSRF handling, token caching, and troubleshooting.
-

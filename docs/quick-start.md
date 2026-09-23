@@ -17,6 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/in
 ```
 
 This will:
+
 - Detect your platform (Linux/Mac/Windows)
 - Download the latest release
 - Install to `~/.local/bin/frappe-mcp-server-stdio`
@@ -121,7 +122,8 @@ curl -X POST http://localhost:8080/api/v1/tools/list_documents \
 ### Test in Cursor
 
 Open Cursor and type:
-```
+
+```text
 @erpnext List all ERPNext projects
 ```
 
@@ -158,11 +160,13 @@ curl -X POST http://localhost:8080/api/v1/tools/run_report \
 ## Troubleshooting
 
 ### Connection Refused
+
 - Ensure ERPNext is running and accessible
 - Check `base_url` in `config.yaml`
 - Verify API credentials
 
 ### Cursor Not Detecting Server
+
 - Use absolute paths in `mcp.json`
 - Completely restart Cursor (Cmd+Q)
 - Check Cursor's MCP logs
@@ -171,4 +175,3 @@ curl -X POST http://localhost:8080/api/v1/tools/run_report \
 
 - [Configuration Guide](configuration.md) - Detailed configuration options
 - [API Reference](api-reference.md) - Complete API documentation
-
