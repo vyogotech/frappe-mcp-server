@@ -5,15 +5,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/frappe"
+	"frappe-mcp-server/internal/tools"
 )
 
-// writeTools is what the gate covers today. A tool added to toolCatalog with ReadOnly false and left out of here fails
-// TestEveryWriteToolIsAccountedFor, which is how a new write tool reaches whoever has to wire it.
+// writeTools is what the gate covers today. A tool added to the catalogue with ReadOnly false and left out of here
+// fails TestEveryWriteToolIsAccountedFor, which is how a new write tool reaches whoever has to wire it.
 var writeTools = []string{"create_document", "update_document", "delete_document"}
 
 func newAnnotationsServer(t *testing.T) *MCPServer {
@@ -38,26 +40,22 @@ func newAnnotationsServer(t *testing.T) *MCPServer {
 func TestRegisterToolsRefusesAnUndeclaredTool(t *testing.T) {
 	s := newAnnotationsServer(t)
 
-	for name, meta := range toolCatalog() {
-		if meta.ReadOnly == nil {
-			t.Errorf("toolCatalog()[%q] does not declare ReadOnly", name)
+	for _, tool := range s.catalog {
+		if tool.ReadOnly == nil {
+			t.Errorf("catalogue entry %q does not declare ReadOnly", tool.Name)
 		}
 	}
 
-	t.Run("no catalogue entry", func(t *testing.T) {
-		catalog := toolCatalog()
-		delete(catalog, "create_document")
-		err := s.registerTools(catalog)
-		if err == nil || !strings.Contains(err.Error(), "create_document") {
-			t.Fatalf("registerTools err = %v; want one naming create_document", err)
-		}
-	})
-
+	// A tool with no entry is no longer a case that can arise: the table is the only place a tool is named, so a name
+	// that is not in it is not registered either. A write tool dropped from the table fails
+	// TestEveryWriteToolIsAccountedFor instead.
 	t.Run("entry without a declaration", func(t *testing.T) {
-		catalog := toolCatalog()
-		meta := catalog["get_document"]
-		meta.ReadOnly = nil
-		catalog["get_document"] = meta
+		catalog := slices.Clone(s.catalog)
+		for i := range catalog {
+			if catalog[i].Name == "get_document" {
+				catalog[i].ReadOnly = nil
+			}
+		}
 		err := s.registerTools(catalog)
 		if err == nil || !strings.Contains(err.Error(), "get_document") {
 			t.Fatalf("registerTools err = %v; want one naming get_document", err)
@@ -65,7 +63,7 @@ func TestRegisterToolsRefusesAnUndeclaredTool(t *testing.T) {
 	})
 
 	t.Run("the whole catalogue registers", func(t *testing.T) {
-		if err := s.registerTools(toolCatalog()); err != nil {
+		if err := s.registerTools(s.catalog); err != nil {
 			t.Fatalf("registerTools: %v", err)
 		}
 	})
@@ -74,9 +72,9 @@ func TestRegisterToolsRefusesAnUndeclaredTool(t *testing.T) {
 // The catalogue is the list the gate is driven from, so a write tool added later has to be added here too.
 func TestEveryWriteToolIsAccountedFor(t *testing.T) {
 	var found []string
-	for name, meta := range toolCatalog() {
-		if meta.ReadOnly != nil && !*meta.ReadOnly {
-			found = append(found, name)
+	for _, tool := range tools.NewRegistry(nil).Catalog(true) {
+		if tool.ReadOnly != nil && !*tool.ReadOnly {
+			found = append(found, tool.Name)
 		}
 	}
 	want := map[string]bool{}
@@ -85,7 +83,7 @@ func TestEveryWriteToolIsAccountedFor(t *testing.T) {
 	}
 	for _, name := range found {
 		if !want[name] {
-			t.Errorf("toolCatalog declares %q a write tool; add it to writeTools and to the confirmation tests", name)
+			t.Errorf("the catalogue declares %q a write tool; add it to writeTools and to the confirmation tests", name)
 		}
 		delete(want, name)
 	}
@@ -145,7 +143,7 @@ func TestToolsListCarriesReadOnlyHint(t *testing.T) {
 			}
 		}
 	}
-	if listed != len(toolCatalog()) {
-		t.Errorf("tools/list published %d tools, catalogue has %d", listed, len(toolCatalog()))
+	if listed != len(s.catalog) {
+		t.Errorf("tools/list published %d tools, catalogue has %d", listed, len(s.catalog))
 	}
 }

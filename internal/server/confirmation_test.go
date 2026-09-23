@@ -20,7 +20,7 @@ import (
 const testRedeemMethod = "frappe_ai.api.confirm.redeem"
 
 // writeCall is what a write tool is called with and what Frappe should be told it is about. A write tool in
-// toolCatalog with no entry here fails the test, which is how the gate reaches a tool added later.
+// the catalogue with no entry here fails the test, which is how the gate reaches a tool added later.
 var writeCall = map[string]struct{ args, doctype, name string }{
 	"create_document": {`{"doctype":"ToDo","data":{"description":"a thing"}}`, "ToDo", ""},
 	"update_document": {`{"doctype":"ToDo","name":"TODO-0001","data":{"status":"Closed"}}`, "ToDo", "TODO-0001"},

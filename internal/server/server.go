@@ -56,7 +56,19 @@ type MCPServer struct {
 	server         *mcp.Server
 	httpServer     *http.Server
 	tools          *tools.ToolRegistry
+	catalog        []tools.Tool
 	authMiddleware *auth.Middleware
+}
+
+// tool finds the tool this server offers under name; registration, the listings and both dispatch paths read the one
+// table, so nothing can be advertised without being callable.
+func (s *MCPServer) tool(name string) (tools.Tool, bool) {
+	for _, candidate := range s.catalog {
+		if candidate.Name == name {
+			return candidate, true
+		}
+	}
+	return tools.Tool{}, false
 }
 
 type QueryIntent struct {
@@ -143,6 +155,7 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 		llmManager:   llmManager, // New
 		server:       server,
 		tools:        toolRegistry,
+		catalog:      toolRegistry.Catalog(cfg.Tools.KnowledgeBase),
 	}
 
 	// Setup authentication if enabled
@@ -197,7 +210,7 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	}
 
 	// Register all tools
-	if err := mcpServer.registerTools(toolCatalog()); err != nil {
+	if err := mcpServer.registerTools(mcpServer.catalog); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
 
@@ -359,222 +372,37 @@ func (w *statusRecorder) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
-// toolCatalog feeds both MCP tools/list and REST /tools; a tool missing here is published with no description.
-func toolCatalog() map[string]mcp.ToolMeta {
-	strProp := func(desc string) map[string]interface{} {
-		return map[string]interface{}{"type": "string", "description": desc}
-	}
-	readOnly := func(b bool) *bool { return &b }
-	objSchema := func(props map[string]interface{}, required ...string) map[string]interface{} {
-		schema := map[string]interface{}{
-			"type":       "object",
-			"properties": props,
-		}
-		if len(required) > 0 {
-			schema["required"] = required
-		}
-		return schema
-	}
-	return map[string]mcp.ToolMeta{
-		"get_document": {
-			ReadOnly:    readOnly(true),
-			Description: "Retrieve a single ERPNext document by doctype and name",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype": strProp("ERPNext document type (e.g., Customer, Sales Order)"),
-				"name":    strProp("Document name or ID"),
-			}, "doctype", "name"),
-		},
-		"list_documents": {
-			ReadOnly:    readOnly(true),
-			Description: "Fetch document rows to read their contents. Returns at most page_length rows (default 20), so it CANNOT be used to count records - use aggregate_documents for counts.",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype":     strProp("ERPNext document type"),
-				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
-				"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
-				"fields":      map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Fields to return"},
-				"order_by":    strProp("Sort order (e.g., 'creation desc')"),
-			}, "doctype"),
-		},
-		"create_document": {
-			ReadOnly:    readOnly(false),
-			Description: "Create a new ERPNext document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args).",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype": strProp("ERPNext document type (e.g., Customer, Sales Order)"),
-				"data":    map[string]interface{}{"type": "object", "description": "Field values for the new document, as an object of fieldname→value"},
-			}, "doctype", "data"),
-		},
-		"update_document": {
-			ReadOnly:    readOnly(false),
-			Description: "Update an existing ERPNext document. `data` is a flat object of fieldname→value pairs for fields to change.",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype": strProp("ERPNext document type"),
-				"name":    strProp("Document name or ID"),
-				"data":    map[string]interface{}{"type": "object", "description": "Fields to update, as an object of fieldname→value"},
-			}, "doctype", "name", "data"),
-		},
-		"delete_document": {
-			ReadOnly:    readOnly(false),
-			Description: "Delete an ERPNext document",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype": strProp("ERPNext document type"),
-				"name":    strProp("Document name or ID"),
-			}, "doctype", "name"),
-		},
-		"search_documents": {
-			ReadOnly:    readOnly(true),
-			Description: "Search ERPNext documents of a given doctype using full-text search",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype":     strProp("Document type to search"),
-				"search":      strProp("Search query string"),
-				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return", "default": 20},
-				"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
-			}, "doctype"),
-		},
-		"analyze_document": {
-			ReadOnly:    readOnly(true),
-			Description: "Analyze any ERPNext document with optional related data",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype":         strProp("ERPNext document type"),
-				"name":            strProp("Document name or ID"),
-				"include_related": map[string]interface{}{"type": "boolean", "description": "Include related documents", "default": false},
-			}, "doctype", "name"),
-		},
-		"aggregate_documents": {
-			ReadOnly:    readOnly(true),
-			Description: "Count, sum or average ERPNext records. Use this for any \"how many\" question: with metric=\"count\" it returns the exact total of all matching records, not just one page.",
-			InputSchema: objSchema(map[string]interface{}{
-				"doctype":  strProp("Document type to aggregate over"),
-				"group_by": strProp("Field to group by (optional)"),
-				"metric":   strProp("Aggregation: sum|count|avg|min|max"),
-				"field":    strProp("Field to aggregate (required when metric != count)"),
-				"filters":  map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
-				"top_n":    map[string]interface{}{"type": "integer", "description": "Return top N groups only"},
-			}, "doctype", "metric"),
-		},
-		"run_report": {
-			ReadOnly:    readOnly(true),
-			Description: "Execute a Frappe/ERPNext report (Sales Analytics, Purchase Register, etc.)",
-			InputSchema: objSchema(map[string]interface{}{
-				"report_name": strProp("Exact report name (e.g. 'Sales Analytics')"),
-				"filters":     map[string]interface{}{"type": "object", "description": "Report filter values"},
-			}, "report_name"),
-		},
-		"search_knowledge_base": {
-			ReadOnly:    readOnly(true),
-			Description: "Search the user's uploaded documents (HR, expense, travel, security and vehicle policies) for a passage answering a question. Use for any policy, entitlement, limit or deadline question.",
-			InputSchema: objSchema(map[string]interface{}{
-				"query":   strProp("The user's question, in their own words"),
-				"limit":   map[string]interface{}{"type": "integer", "description": "Maximum passages to return (default 5)"},
-				"session": strProp("The chat the question comes from, whose attached files are searched too. Filled by the agent, not the model"),
-			}, "query"),
-		},
-		// the legacy six: catalogued only so registerTools has a declaration for them; tools/list is unchanged, because
-		// an empty description and a nil schema is exactly what RegisterTool published before.
-		"get_project_status":            {ReadOnly: readOnly(true)},
-		"analyze_project_timeline":      {ReadOnly: readOnly(true)},
-		"get_resource_allocation":       {ReadOnly: readOnly(true)},
-		"generate_project_report":       {ReadOnly: readOnly(true)},
-		"resource_utilization_analysis": {ReadOnly: readOnly(true)},
-		"budget_variance_analysis":      {ReadOnly: readOnly(true)},
-		"global_search": {
-			ReadOnly:    readOnly(true),
-			Description: "Full-text search across all indexed Frappe/ERPNext doctypes",
-			InputSchema: objSchema(map[string]interface{}{
-				"text":    strProp("Search keyword or phrase"),
-				"doctype": strProp("Restrict results to a single doctype (optional)"),
-				"scope":   map[string]interface{}{"description": "One doctype or list of doctypes to search within (optional)"},
-				"limit":   map[string]interface{}{"type": "integer", "description": "Maximum number of results (default 20)"},
-				"start":   map[string]interface{}{"type": "integer", "description": "Offset for pagination (default 0)"},
-			}, "text"),
-		},
-	}
-}
-
-// registerTools publishes every tool from catalog. A tool with no entry, or one whose entry does not declare ReadOnly,
-// is an error: the write gate keys on that declaration, so an undeclared tool must stop the server, not slip through.
-func (s *MCPServer) registerTools(catalog map[string]mcp.ToolMeta) error {
-	slog.Info("Registering MCP tools...")
-
-	registered := 0
-	var undeclared []string
-	reg := func(name string, handler mcp.ToolHandler) {
-		meta, ok := catalog[name]
-		if !ok || meta.ReadOnly == nil {
-			undeclared = append(undeclared, name)
-			return
-		}
-		s.server.RegisterToolWithSchema(name, meta, handler)
-		registered++
+// registerTools publishes catalog; the stdio binary registers from the same table, through tools.Register, which is
+// also where a tool that never declared whether it writes stops the server.
+func (s *MCPServer) registerTools(catalog []tools.Tool) error {
+	if err := tools.Register(s.server, catalog); err != nil {
+		return err
 	}
 
-	// Core CRUD tools (6 - Generic, work with ANY doctype)
-	reg("get_document", s.tools.GetDocument)
-	reg("list_documents", s.tools.ListDocuments)
-	reg("create_document", s.tools.CreateDocument)
-	reg("update_document", s.tools.UpdateDocument)
-	reg("delete_document", s.tools.DeleteDocument)
-	reg("search_documents", s.tools.SearchDocuments)
-
-	// Aggregation and reporting tools (2 - For analytics and reports)
-	reg("aggregate_documents", s.tools.AggregateDocuments)
-	reg("run_report", s.tools.RunReport)
-
-	// Cross-doctype search
-	reg("global_search", s.tools.GlobalSearch)
-
-	// Retrieval over the user's own documents, where the site has rag
-	if s.config.Tools.KnowledgeBase {
-		reg("search_knowledge_base", s.tools.SearchKnowledgeBase)
-	}
-
-	// Generic analysis tool
-	reg("analyze_document", s.tools.AnalyzeDocument)
-
-	// Legacy tools (kept for backward compatibility)
-	// These will be deprecated in v2.0 - use analyze_document instead
-	reg("get_project_status", s.tools.GetProjectStatus)
-	reg("analyze_project_timeline", s.tools.AnalyzeProjectTimeline)
-	reg("get_resource_allocation", s.tools.GetResourceAllocation)
-	reg("generate_project_report", s.tools.GenerateProjectReport)
-	reg("resource_utilization_analysis", s.tools.ResourceUtilizationAnalysis)
-	reg("budget_variance_analysis", s.tools.BudgetVarianceAnalysis)
-
-	if len(undeclared) > 0 {
-		return fmt.Errorf("tools registered without a ReadOnly declaration: %s", strings.Join(undeclared, ", "))
-	}
-
-	slog.Info("Registered MCP tools", "count", registered)
+	slog.Info("Registered MCP tools", "count", len(catalog))
 	return nil
 }
 
-// listTools serves REST /tools from toolCatalog; legacy tools with no catalogue entry stay callable but unlisted.
+// listTools serves REST /tools from the table the tools are registered from; a legacy tool with no description stays
+// callable but unlisted.
 func (s *MCPServer) listTools(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	catalog := toolCatalog()
-	// Emit in the same order as registerTools so the REST listing is stable.
-	order := []string{
-		"get_document", "list_documents", "create_document", "update_document",
-		"delete_document", "search_documents", "aggregate_documents", "run_report",
-		"global_search", "search_knowledge_base", "analyze_document",
-	}
-	tools := make([]map[string]interface{}, 0, len(order))
-	for _, name := range order {
-		meta, ok := catalog[name]
-		if !ok || (name == "search_knowledge_base" && !s.config.Tools.KnowledgeBase) {
+	listed := make([]map[string]interface{}, 0, len(s.catalog))
+	for _, tool := range s.catalog {
+		if tool.Description == "" {
 			continue
 		}
-		entry := map[string]interface{}{
-			"name":        name,
-			"description": meta.Description,
-			"inputSchema": meta.InputSchema,
-		}
-		tools = append(tools, entry)
+		listed = append(listed, map[string]interface{}{
+			"name":        tool.Name,
+			"description": tool.Description,
+			"inputSchema": tool.InputSchema,
+		})
 	}
 
 	response := map[string]interface{}{
-		"tools": tools,
-		"count": len(tools),
+		"tools": listed,
+		"count": len(listed),
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -621,53 +449,15 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), mcp.ToolDeadline)
 	defer cancel()
-	var result *mcp.ToolResponse
-	var err error
 
 	slog.Info("Executing tool", "tool", toolName, "request_id", request.ID)
-	switch toolName {
-	// Core CRUD tools
-	case "get_document":
-		slog.Info("Calling ERPNext GetDocument")
-		result, err = s.tools.GetDocument(ctx, request)
-	case "list_documents":
-		slog.Info("Calling ERPNext ListDocuments")
-		result, err = s.tools.ListDocuments(ctx, request)
-	case "create_document":
-		slog.Info("Calling ERPNext CreateDocument")
-		result, err = s.tools.CreateDocument(ctx, request)
-	case "update_document":
-		slog.Info("Calling ERPNext UpdateDocument")
-		result, err = s.tools.UpdateDocument(ctx, request)
-	case "delete_document":
-		slog.Info("Calling ERPNext DeleteDocument")
-		result, err = s.tools.DeleteDocument(ctx, request)
-	case "search_documents":
-		slog.Info("Calling ERPNext SearchDocuments")
-		result, err = s.tools.SearchDocuments(ctx, request)
-	case "analyze_document":
-		slog.Info("Calling ERPNext AnalyzeDocument")
-		result, err = s.tools.AnalyzeDocument(ctx, request)
-	case "get_project_status":
-		slog.Info("Calling ERPNext GetProjectStatus")
-		result, err = s.tools.GetProjectStatus(ctx, request)
-	case "analyze_project_timeline":
-		slog.Info("Calling ERPNext AnalyzeProjectTimeline")
-		result, err = s.tools.AnalyzeProjectTimeline(ctx, request)
-	case "resource_utilization_analysis":
-		slog.Info("Calling ERPNext ResourceUtilizationAnalysis")
-		result, err = s.tools.ResourceUtilizationAnalysis(ctx, request)
-	case "budget_variance_analysis":
-		slog.Info("Calling ERPNext BudgetVarianceAnalysis")
-		result, err = s.tools.BudgetVarianceAnalysis(ctx, request)
-	case "global_search":
-		slog.Info("Calling ERPNext GlobalSearch")
-		result, err = s.tools.GlobalSearch(ctx, request)
-	default:
+	tool, ok := s.tool(toolName)
+	if !ok {
 		http.Error(w, "Tool not found", http.StatusNotFound)
 		slog.Warn("Tool not found", "tool", toolName)
 		return
 	}
+	result, err := tool.Handler(ctx, request)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -2170,47 +1960,11 @@ func (s *MCPServer) executeTool(ctx context.Context, toolName string, params jso
 
 	slog.Info("Executing tool", "tool", toolName)
 
-	switch toolName {
-	// Core generic tools (work with ANY doctype)
-	case "get_document":
-		return s.tools.GetDocument(ctx, request)
-	case "list_documents":
-		return s.tools.ListDocuments(ctx, request)
-	case "create_document":
-		return s.tools.CreateDocument(ctx, request)
-	case "update_document":
-		return s.tools.UpdateDocument(ctx, request)
-	case "delete_document":
-		return s.tools.DeleteDocument(ctx, request)
-	case "search_documents":
-		return s.tools.SearchDocuments(ctx, request)
-	case "analyze_document":
-		return s.tools.AnalyzeDocument(ctx, request)
-
-	// Aggregation and reporting tools
-	case "aggregate_documents":
-		return s.tools.AggregateDocuments(ctx, request)
-	case "run_report":
-		return s.tools.RunReport(ctx, request)
-	case "global_search":
-		return s.tools.GlobalSearch(ctx, request)
-
-	// Legacy tools (deprecated - use analyze_document instead)
-	case "get_project_status":
-		return s.tools.GetProjectStatus(ctx, request)
-	case "analyze_project_timeline":
-		return s.tools.AnalyzeProjectTimeline(ctx, request)
-	case "resource_utilization_analysis":
-		return s.tools.ResourceUtilizationAnalysis(ctx, request)
-	case "budget_variance_analysis":
-		return s.tools.BudgetVarianceAnalysis(ctx, request)
-	case "generate_project_report":
-		return s.tools.GenerateProjectReport(ctx, request)
-	case "get_resource_allocation":
-		return s.tools.GetResourceAllocation(ctx, request)
-	default:
+	tool, ok := s.tool(toolName)
+	if !ok {
 		return nil, fmt.Errorf("tool not found: %s", toolName)
 	}
+	return tool.Handler(ctx, request)
 }
 
 func extractEntityName(query string) string {

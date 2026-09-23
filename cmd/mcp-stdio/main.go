@@ -49,22 +49,11 @@ func main() {
 	// Create MCP server (backed by go-sdk).
 	mcpServer := mcp.NewServer("frappe-mcp-server", buildinfo.Version())
 
-	// Create tool registry and register all tools.
+	// Create tool registry and register the same catalogue the HTTP server publishes.
 	toolRegistry := tools.NewRegistry(frappeClient)
-	mcpServer.RegisterTool("get_document", toolRegistry.GetDocument)
-	mcpServer.RegisterTool("list_documents", toolRegistry.ListDocuments)
-	mcpServer.RegisterTool("create_document", toolRegistry.CreateDocument)
-	mcpServer.RegisterTool("update_document", toolRegistry.UpdateDocument)
-	mcpServer.RegisterTool("delete_document", toolRegistry.DeleteDocument)
-	mcpServer.RegisterTool("search_documents", toolRegistry.SearchDocuments)
-	mcpServer.RegisterTool("analyze_document", toolRegistry.AnalyzeDocument)
-	// Legacy tools kept for backward compatibility.
-	mcpServer.RegisterTool("get_project_status", toolRegistry.GetProjectStatus)
-	mcpServer.RegisterTool("analyze_project_timeline", toolRegistry.AnalyzeProjectTimeline)
-	mcpServer.RegisterTool("get_resource_allocation", toolRegistry.GetResourceAllocation)
-	mcpServer.RegisterTool("generate_project_report", toolRegistry.GenerateProjectReport)
-	mcpServer.RegisterTool("resource_utilization_analysis", toolRegistry.ResourceUtilizationAnalysis)
-	mcpServer.RegisterTool("budget_variance_analysis", toolRegistry.BudgetVarianceAnalysis)
+	if err := tools.Register(mcpServer, toolRegistry.Catalog(cfg.Tools.KnowledgeBase)); err != nil {
+		log.Fatalf("Failed to register tools: %v", err)
+	}
 
 	// Handle graceful shutdown.
 	ctx, cancel := context.WithCancel(context.Background())
