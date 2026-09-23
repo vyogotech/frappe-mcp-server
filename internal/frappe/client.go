@@ -24,6 +24,7 @@ import (
 
 	"frappe-mcp-server/internal/auth"
 	"frappe-mcp-server/internal/config"
+	"frappe-mcp-server/internal/telemetry"
 	"frappe-mcp-server/internal/types"
 )
 
@@ -407,6 +408,14 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	}
 }
 
+// setRequestID names the answer that caused this call on the record Frappe writes for it. frappe.monitor
+// adopts this header and no other (frappe/monitor.py:79), and only where frappe.conf.monitor is set.
+func setRequestID(ctx context.Context, req *http.Request) {
+	if id := telemetry.RequestIDFromContext(ctx); id != "" {
+		req.Header.Set(telemetry.FrappeRequestIDHeader, id)
+	}
+}
+
 func (c *Client) doRequest(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
 	fullURL := c.baseURL + endpoint
 
@@ -427,6 +436,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	setRequestID(ctx, req)
 
 	if err := c.setCredentials(ctx, req, method, endpoint); err != nil {
 		return err

@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"frappe-mcp-server/internal/auth"
+	"frappe-mcp-server/internal/telemetry"
 )
 
 const tracerName = "frappe-mcp-server/internal/mcp"
@@ -202,8 +203,9 @@ func auditToolCall(ctx context.Context, tool string, arguments json.RawMessage, 
 	if err != nil {
 		outcome, errorType = "tool_error", fmt.Sprintf("%T", err)
 	}
-	slog.Info("tool call", "user", user, "tool", tool, "doctype", ids.Doctype, "name", ids.Name,
-		"outcome", outcome, "error_type", errorType, "duration_ms", took.Milliseconds())
+	slog.Info("tool call", "request_id", telemetry.RequestIDFromContext(ctx), "user", user, "tool", tool,
+		"doctype", ids.Doctype, "name", ids.Name, "outcome", outcome, "error_type", errorType,
+		"duration_ms", took.Milliseconds())
 }
 
 func (s *Server) Run(ctx context.Context, transport gosdk.Transport) error {

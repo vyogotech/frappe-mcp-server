@@ -42,6 +42,7 @@ func (c *Client) fetchCSRFToken(ctx context.Context, sid string) (string, error)
 	}
 	// a request carries a cookie as name=value only: Secure, HttpOnly and SameSite belong to Set-Cookie
 	req.Header.Set("Cookie", "sid="+sid)
+	setRequestID(ctx, req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

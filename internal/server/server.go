@@ -18,6 +18,7 @@ import (
 	"frappe-mcp-server/internal/config"
 	"frappe-mcp-server/internal/frappe"
 	"frappe-mcp-server/internal/mcp"
+	"frappe-mcp-server/internal/telemetry"
 	"frappe-mcp-server/internal/tools"
 )
 
@@ -222,8 +223,9 @@ func (s *MCPServer) recoveryMiddleware(next http.Handler) http.Handler {
 func (s *MCPServer) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		requestID := telemetry.RequestIDFrom(r)
 		ww := &statusRecorder{ResponseWriter: w, status: 200}
-		next.ServeHTTP(ww, r)
+		next.ServeHTTP(ww, r.WithContext(telemetry.WithRequestID(r.Context(), requestID)))
 
 		// the health probe runs every few seconds, and at Info it is most of the log
 		level := slog.LevelInfo
@@ -231,6 +233,7 @@ func (s *MCPServer) loggingMiddleware(next http.Handler) http.Handler {
 			level = slog.LevelDebug
 		}
 		slog.Log(r.Context(), level, "HTTP request",
+			"request_id", requestID,
 			"method", strings.ReplaceAll(r.Method, "\n", " "),
 			"path", strings.ReplaceAll(r.URL.Path, "\n", " "),
 			"remote_addr", strings.ReplaceAll(r.RemoteAddr, "\n", " "),
@@ -339,7 +342,7 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("Tool call received", "tool", toolName, "request_id", request.ID)
+	slog.Info("Tool call received", "tool", toolName, "tool_request_id", request.ID)
 	request.Tool = toolName
 	if request.ID == "" {
 		request.ID = fmt.Sprintf("http-%d", time.Now().UnixNano())
@@ -348,7 +351,7 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), mcp.ToolDeadline)
 	defer cancel()
 
-	slog.Info("Executing tool", "tool", toolName, "request_id", request.ID)
+	slog.Info("Executing tool", "tool", toolName, "tool_request_id", request.ID)
 	tool, ok := s.tool(toolName)
 	if !ok {
 		http.Error(w, "Tool not found", http.StatusNotFound)
@@ -363,7 +366,7 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("Tool executed successfully", "tool", toolName, "request_id", request.ID)
+	slog.Info("Tool executed successfully", "tool", toolName, "tool_request_id", request.ID)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		slog.Error("Failed to encode tool response", "error", err)
