@@ -127,6 +127,20 @@ func (t *ToolRegistry) Catalog(knowledgeBase bool) []Tool {
 				"limit":   map[string]interface{}{"type": "integer", "description": "Maximum passages to return (default 5)"},
 				"session": strProp("The chat the question comes from, whose attached files are searched too. Filled by the agent, not the model"),
 			}, "query"),
+			OutputSchema: objSchema(map[string]interface{}{
+				"passages": map[string]interface{}{
+					"type":        "array",
+					"description": "The passages found, nearest the question first",
+					"items": objSchema(map[string]interface{}{
+						"file":       strProp("Name of the file the passage was read from"),
+						"seq":        map[string]interface{}{"type": "integer", "description": "Position of the passage within that file"},
+						"content":    strProp("The passage itself"),
+						"distance":   map[string]interface{}{"type": "number", "description": "Distance from the question; smaller is nearer"},
+						"file_name":  strProp("Readable name of a file attached to the chat, which is not in the user's Drive"),
+						"attachment": map[string]interface{}{"type": "boolean", "description": "True when the passage comes from a file attached to the chat"},
+					}, "file"),
+				},
+			}, "passages"),
 		}},
 		{Name: "analyze_document", Handler: t.AnalyzeDocument, ToolMeta: mcp.ToolMeta{
 			ReadOnly:    readOnly(true),

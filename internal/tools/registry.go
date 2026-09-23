@@ -903,6 +903,9 @@ func (t *ToolRegistry) SearchKnowledgeBase(ctx context.Context, request mcp.Tool
 	if err != nil {
 		return nil, err
 	}
+	if passages == nil {
+		passages = []map[string]interface{}{} // a nil slice marshals to null, which is neither an array nor no passages
+	}
 
 	result, err := json.Marshal(passages)
 	if err != nil {
@@ -911,6 +914,8 @@ func (t *ToolRegistry) SearchKnowledgeBase(ctx context.Context, request mcp.Tool
 
 	return &mcp.ToolResponse{
 		ID: request.ID,
+		// the same passages twice: as data for a client that reads structuredContent, as text for one that does not
+		Structured: map[string]interface{}{"passages": passages},
 		Content: []mcp.Content{
 			{
 				Type: "text",

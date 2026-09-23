@@ -33,11 +33,13 @@ type Server struct {
 }
 
 // ToolMeta is what tools/list publishes for a tool. ReadOnly is nil when the tool never declared whether it writes;
-// the server refuses to register such a tool, so the gate is never skipped by omission.
+// the server refuses to register such a tool, so the gate is never skipped by omission. OutputSchema is nil unless
+// the tool fills ToolResponse.Structured, and then it describes that value: a result the tool returns must conform.
 type ToolMeta struct {
-	Description string
-	InputSchema map[string]interface{}
-	ReadOnly    *bool
+	Description  string
+	InputSchema  map[string]interface{}
+	OutputSchema map[string]interface{}
+	ReadOnly     *bool
 }
 
 type ToolHandler func(ctx context.Context, request ToolRequest) (*ToolResponse, error)
@@ -51,8 +53,11 @@ type ToolRequest struct {
 type ToolResponse struct {
 	ID      string    `json:"id"`
 	Content []Content `json:"content"`
-	IsError bool      `json:"isError,omitempty"`
-	Error   *Error    `json:"error,omitempty"`
+	// Structured is the result as data, for a client that reads it instead of parsing the text blocks. It must
+	// marshal to a JSON object and conform to the tool's declared OutputSchema.
+	Structured any    `json:"structuredContent,omitempty"`
+	IsError    bool   `json:"isError,omitempty"`
+	Error      *Error `json:"error,omitempty"`
 }
 
 type Content struct {
@@ -126,13 +131,18 @@ func (s *Server) RegisterToolWithSchema(name string, meta ToolMeta, handler Tool
 	}
 	// Wrap as json.RawMessage so the go-sdk emits the bytes as a JSON object
 	// rather than base64-encoding them as a string (the default for []byte).
+	tool := &gosdk.Tool{
+		Name:        name,
+		Description: meta.Description,
+		InputSchema: json.RawMessage(schemaBytes),
+		Annotations: annotations,
+	}
+	if meta.OutputSchema != nil {
+		// assigned only when there is one: a nil map inside the interface is not nil, and the sdk panics on it
+		tool.OutputSchema = meta.OutputSchema
+	}
 	s.sdkServer.AddTool(
-		&gosdk.Tool{
-			Name:        name,
-			Description: meta.Description,
-			InputSchema: json.RawMessage(schemaBytes),
-			Annotations: annotations,
-		},
+		tool,
 		func(ctx context.Context, req *gosdk.CallToolRequest) (*gosdk.CallToolResult, error) {
 			var args map[string]json.RawMessage
 			if len(req.Params.Arguments) > 0 {
@@ -175,7 +185,7 @@ func (s *Server) RegisterToolWithSchema(name string, meta ToolMeta, handler Tool
 				content = append(content, &gosdk.TextContent{Text: c.Text})
 			}
 			span.SetAttributes(attribute.Bool("tool.success", true))
-			return &gosdk.CallToolResult{Content: content}, nil
+			return &gosdk.CallToolResult{Content: content, StructuredContent: resp.Structured}, nil
 		},
 	)
 	slog.Debug("Registered MCP tool", "name", name, "has_schema", len(inputSchema) > 1)

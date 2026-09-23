@@ -343,7 +343,51 @@
       ],
       "type": "object"
     },
-    "name": "search_knowledge_base"
+    "name": "search_knowledge_base",
+    "outputSchema": {
+      "properties": {
+        "passages": {
+          "description": "The passages found, nearest the question first",
+          "items": {
+            "properties": {
+              "attachment": {
+                "description": "True when the passage comes from a file attached to the chat",
+                "type": "boolean"
+              },
+              "content": {
+                "description": "The passage itself",
+                "type": "string"
+              },
+              "distance": {
+                "description": "Distance from the question; smaller is nearer",
+                "type": "number"
+              },
+              "file": {
+                "description": "Name of the file the passage was read from",
+                "type": "string"
+              },
+              "file_name": {
+                "description": "Readable name of a file attached to the chat, which is not in the user's Drive",
+                "type": "string"
+              },
+              "seq": {
+                "description": "Position of the passage within that file",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "file"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "passages"
+      ],
+      "type": "object"
+    }
   },
   {
     "annotations": {},
