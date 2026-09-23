@@ -71,8 +71,8 @@ jobs:
           mkdir -p "pkg/${PACKAGE_NAME}"
           mv "${BINARY_NAME}" "pkg/${PACKAGE_NAME}/"
 
-          # Copy configuration template
-          cp ../env.example "pkg/${PACKAGE_NAME}/"
+          # Copy configuration template, and the licences the binary redistributes
+          cp ../env.example ../LICENSE ../THIRD_PARTY_NOTICES "pkg/${PACKAGE_NAME}/"
 
           # Create README for the package
           cat > "pkg/${PACKAGE_NAME}/README.md" << 'EOF'

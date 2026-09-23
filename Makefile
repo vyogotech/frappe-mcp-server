@@ -19,10 +19,20 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build clean test coverage lint run dev setup help audit audit-clean
+.PHONY: all build clean test coverage lint run dev setup help audit audit-clean notices notices-check
 
 # Default target
 all: clean lint test build build-stdio
+
+# Regenerate the third-party notices from the modules the shipped binaries link
+notices:
+	@sh scripts/third-party-notices.sh
+	@echo "$(GREEN)THIRD_PARTY_NOTICES regenerated$(NC)"
+
+# Fail when THIRD_PARTY_NOTICES no longer matches the module graph
+notices-check:
+	@sh scripts/third-party-notices.sh --check
+	@echo "$(GREEN)THIRD_PARTY_NOTICES is current$(NC)"
 
 # Build the application
 build:

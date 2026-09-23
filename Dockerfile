@@ -7,8 +7,9 @@ RUN apk --no-cache add ca-certificates tzdata curl
 # Set working directory first
 WORKDIR /app
 
-# Copy the pre-built binary
+# Copy the pre-built binary and the licences it redistributes
 COPY frappe-mcp-server /app/frappe-mcp-server
+COPY LICENSE THIRD_PARTY_NOTICES /app/
 
 # Create logs directory and set permissions before creating user
 RUN mkdir -p /app/logs

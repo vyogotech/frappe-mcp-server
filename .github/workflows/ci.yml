@@ -60,6 +60,9 @@ jobs:
           version: v2.6.1
           args: --timeout=3m
 
+      - name: Check third-party notices are current
+        run: make notices-check
+
   build:
     name: Build
     runs-on: ubuntu-latest
