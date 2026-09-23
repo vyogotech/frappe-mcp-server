@@ -64,17 +64,18 @@ jobs:
         run: |
           cd dist
           BINARY_NAME=$(ls frappe-mcp-server-stdio-*)
-          PACKAGE_NAME="${BINARY_NAME%.*}"
-          
-          # Create directory structure
-          mkdir -p "${PACKAGE_NAME}"
-          mv "${BINARY_NAME}" "${PACKAGE_NAME}/"
-          
+          # only Windows binaries carry an extension, so anything else keeps its whole name
+          PACKAGE_NAME="${BINARY_NAME%.exe}"
+
+          # staged under pkg/, because the package directory has the same name as the binary
+          mkdir -p "pkg/${PACKAGE_NAME}"
+          mv "${BINARY_NAME}" "pkg/${PACKAGE_NAME}/"
+
           # Copy configuration template
-          cp ../env.example "${PACKAGE_NAME}/"
-          
+          cp ../env.example "pkg/${PACKAGE_NAME}/"
+
           # Create README for the package
-          cat > "${PACKAGE_NAME}/README.md" << 'EOF'
+          cat > "pkg/${PACKAGE_NAME}/README.md" << 'EOF'
           # Frappe MCP Server
           
           AI-powered Model Context Protocol server for Frappe/ERPNext.
@@ -90,11 +91,11 @@ jobs:
           
           # Create archive
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            zip -r "${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"
+            (cd pkg && zip -r "../${PACKAGE_NAME}.zip" "${PACKAGE_NAME}")
             echo "ASSET_PATH=dist/${PACKAGE_NAME}.zip" >> $GITHUB_ENV
             echo "ASSET_NAME=${PACKAGE_NAME}.zip" >> $GITHUB_ENV
           else
-            tar czf "${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
+            tar czf "${PACKAGE_NAME}.tar.gz" -C pkg "${PACKAGE_NAME}"
             echo "ASSET_PATH=dist/${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
             echo "ASSET_NAME=${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
           fi
