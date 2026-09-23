@@ -90,9 +90,11 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 		user, err := s.validateSessionCookie(ctx, sidCookie)
 		if err == nil {
 			slog.Debug("Session validation successful", "csrf_token_len", len(user.CSRFToken))
-			// Cache the validated user with shorter expiration for CSRF token freshness
-			// CSRF tokens can expire, so use 2 minutes instead of default 5 minutes
-			s.cache.Set(cacheKey, user, 2*time.Minute)
+			// 2 minutes, not the default 5, because a CSRF token expires. A user without one cannot write at all,
+			// so caching that would keep every write failing for the whole TTL, including after the desk is back.
+			if user.CSRFToken != "" {
+				s.cache.Set(cacheKey, user, 2*time.Minute)
+			}
 			return user, nil
 		}
 		// If sid validation fails, continue to try Bearer token
