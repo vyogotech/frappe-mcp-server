@@ -25,10 +25,14 @@ make release            # Full release build (HTTP + STDIO, all platforms)
 #### CI Workflow (`.github/workflows/ci.yml`)
 - **Triggered on**: Push to main/develop, Pull Requests
 - **Jobs**:
-  - Test: Run tests with coverage
-  - Lint: golangci-lint
-  - Build: Cross-compile for all platforms
-  - Security: Gosec security scanning
+  - Test: `go test -race` with coverage
+  - Lint: `gofmt`, `go vet`, golangci-lint, no `fmt.Print` in `internal/`
+  - Maintainability: `deadcode`, complexity and duplication budgets
+  - Docs: markdownlint
+  - Build: cross-compile the server and the STDIO binary for all platforms
+  - Security: gosec, govulncheck, semgrep
+  - Build Image: `docker build` on every pull request
+  - Build & Push Container: only on a push to `main`
 
 #### Release Workflow (`.github/workflows/release.yml`)
 - **Triggered on**: Version tags (v*)
