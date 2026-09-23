@@ -275,38 +275,6 @@ func TestAuthenticate_SkipRemoteValidation(t *testing.T) {
 	assert.Equal(t, "anonymous@example.com", user.Email)
 }
 
-func TestClearCache(t *testing.T) {
-	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{
-		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
-		ValidateRemote: false,
-		Timeout:        5 * time.Second,
-		CacheTTL:       1 * time.Minute,
-	})
-
-	// Add something to cache by authenticating
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer test-token")
-	ctx := context.Background()
-
-	user1, err1 := strategy.Authenticate(ctx, req)
-	require.NoError(t, err1)
-	require.NotNil(t, user1)
-
-	// Verify cache is working
-	user2, err2 := strategy.Authenticate(ctx, req)
-	require.NoError(t, err2)
-	require.NotNil(t, user2)
-
-	// Clear cache
-	strategy.ClearCache()
-
-	// After clearing, should still work (but won't be from cache in this case
-	// since we're not hitting a real server)
-	user3, err3 := strategy.Authenticate(ctx, req)
-	require.NoError(t, err3)
-	require.NotNil(t, user3)
-}
-
 // One token under two X-MCP-User-* identities must give two cache keys, or the second user gets the first's identity.
 func TestTokenCacheKey_DistinguishesImpersonationHeaders(t *testing.T) {
 	token := "shared-bearer-token"

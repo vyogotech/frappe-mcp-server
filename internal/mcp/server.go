@@ -84,10 +84,6 @@ func NewServer(name, version string) *Server {
 	}
 }
 
-func (s *Server) SDKServer() *gosdk.Server {
-	return s.sdkServer
-}
-
 // StreamableHTTPHandler serves /mcp. Stateless: each request gets its own session, so the caller the auth middleware
 // put in the request context is the one every tool handler runs as.
 func (s *Server) StreamableHTTPHandler() http.Handler {
@@ -208,14 +204,6 @@ func auditToolCall(ctx context.Context, tool string, arguments json.RawMessage, 
 	}
 	slog.Info("tool call", "user", user, "tool", tool, "doctype", ids.Doctype, "name", ids.Name,
 		"outcome", outcome, "error_type", errorType, "duration_ms", took.Milliseconds())
-}
-
-// ToolMetadata gives a name never registered an empty description and a permissive schema.
-func (s *Server) ToolMetadata(name string) ToolMeta {
-	if meta, ok := s.toolMeta[name]; ok {
-		return meta
-	}
-	return ToolMeta{InputSchema: map[string]interface{}{"type": "object"}}
 }
 
 func (s *Server) Run(ctx context.Context, transport gosdk.Transport) error {

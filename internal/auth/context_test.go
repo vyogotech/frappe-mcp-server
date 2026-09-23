@@ -34,31 +34,6 @@ func TestUserFromContext_NoUser(t *testing.T) {
 	assert.Nil(t, user)
 }
 
-func TestGetUserFromContext(t *testing.T) {
-	t.Run("with user", func(t *testing.T) {
-		ctx := context.Background()
-		user := &types.User{
-			ID:    "user123",
-			Email: "test@example.com",
-		}
-
-		newCtx := WithUser(ctx, user)
-		retrievedUser, found := GetUserFromContext(newCtx)
-
-		assert.True(t, found)
-		assert.NotNil(t, retrievedUser)
-		assert.Equal(t, user.ID, retrievedUser.ID)
-	})
-
-	t.Run("without user", func(t *testing.T) {
-		ctx := context.Background()
-		retrievedUser, found := GetUserFromContext(ctx)
-
-		assert.False(t, found)
-		assert.Nil(t, retrievedUser)
-	})
-}
-
 func TestUserMethods(t *testing.T) {
 	user := &types.User{
 		ID:       "user123",

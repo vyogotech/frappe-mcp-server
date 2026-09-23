@@ -22,11 +22,6 @@ func UserFromContext(ctx context.Context) *types.User {
 	return nil
 }
 
-func GetUserFromContext(ctx context.Context) (*types.User, bool) {
-	user := UserFromContext(ctx)
-	return user, user != nil
-}
-
 // WithConfirmation carries the one-time write token from the X-Frappe-Confirmation header. It rides the context, not a
 // tool argument, so it is in no envelope, no saved history and no audit line the model can read.
 func WithConfirmation(ctx context.Context, token string) context.Context {

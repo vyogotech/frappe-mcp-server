@@ -16,7 +16,6 @@ server:
   host: "localhost"
   port: 8080
   timeout: "30s"
-  max_connections: 100
 
 erpnext:
   base_url: "https://test.erpnext.com"
@@ -33,16 +32,6 @@ erpnext:
 
 logging:
   level: "info"
-  format: "json"
-
-cache:
-  ttl: "300s"
-  max_size: 1000
-
-performance:
-  worker_pool_size: 10
-  batch_size: 50
-  enable_compression: true
 `
 
 	// Write config to temporary file
@@ -74,7 +63,6 @@ performance:
 	assert.Equal(t, "localhost", cfg.Server.Host)
 	assert.Equal(t, 8080, cfg.Server.Port)
 	assert.Equal(t, 30*time.Second, cfg.Server.Timeout)
-	assert.Equal(t, 100, cfg.Server.MaxConnections)
 
 	// Test ERPNext configuration
 	assert.Equal(t, "https://test.erpnext.com", cfg.ERPNext.BaseURL)
@@ -93,16 +81,6 @@ performance:
 
 	// Test logging configuration
 	assert.Equal(t, "info", cfg.Logging.Level)
-	assert.Equal(t, "json", cfg.Logging.Format)
-
-	// Test cache configuration
-	assert.Equal(t, 300*time.Second, cfg.Cache.TTL)
-	assert.Equal(t, 1000, cfg.Cache.MaxSize)
-
-	// Test performance configuration
-	assert.Equal(t, 10, cfg.Performance.WorkerPoolSize)
-	assert.Equal(t, 50, cfg.Performance.BatchSize)
-	assert.True(t, cfg.Performance.EnableCompression)
 }
 
 func TestLoadFromEnv(t *testing.T) {

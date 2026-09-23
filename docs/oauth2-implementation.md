@@ -84,7 +84,6 @@ auth:
     timeout: "30s"
   token_cache:
     ttl: "5m"
-    cleanup_interval: "10m"
 ```
 
 #### Environment Variables
@@ -95,7 +94,6 @@ OAUTH_TOKEN_INFO_URL=http://...
 OAUTH_ISSUER_URL=http://...
 OAUTH_TIMEOUT=30s
 CACHE_TTL=5m
-CACHE_CLEANUP_INTERVAL=10m
 ```
 
 ### 4. Testing

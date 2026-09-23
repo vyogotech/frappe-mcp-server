@@ -41,8 +41,7 @@ func TestMiddleware_RequiredAuth_ValidToken(t *testing.T) {
 
 	// Create a test handler that checks for user in context
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, found := GetUserFromContext(r.Context())
-		assert.True(t, found)
+		user := UserFromContext(r.Context())
 		assert.NotNil(t, user)
 		assert.Equal(t, "user123", user.ID)
 		w.WriteHeader(http.StatusOK)
@@ -114,8 +113,7 @@ func TestMiddleware_OptionalAuth_ValidToken(t *testing.T) {
 	middleware := NewMiddleware(strategy, false) // optional auth
 
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, found := GetUserFromContext(r.Context())
-		assert.True(t, found)
+		user := UserFromContext(r.Context())
 		assert.NotNil(t, user)
 		assert.Equal(t, "user123", user.ID)
 		w.WriteHeader(http.StatusOK)
@@ -144,9 +142,7 @@ func TestMiddleware_OptionalAuth_MissingToken(t *testing.T) {
 	handlerCalled := false
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
-		user, found := GetUserFromContext(r.Context())
-		assert.False(t, found)
-		assert.Nil(t, user)
+		assert.Nil(t, UserFromContext(r.Context()))
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -180,9 +176,7 @@ func TestMiddleware_OptionalAuth_InvalidToken(t *testing.T) {
 	handlerCalled := false
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
-		user, found := GetUserFromContext(r.Context())
-		assert.False(t, found)
-		assert.Nil(t, user)
+		assert.Nil(t, UserFromContext(r.Context()))
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -218,8 +212,8 @@ func TestMiddleware_WithUserContext(t *testing.T) {
 		ctx := WithUser(r.Context(), user)
 
 		// Verify we can retrieve it
-		retrievedUser, found := GetUserFromContext(ctx)
-		assert.True(t, found)
+		retrievedUser := UserFromContext(ctx)
+		assert.NotNil(t, retrievedUser)
 		assert.Equal(t, "test-user", retrievedUser.ID)
 
 		w.WriteHeader(http.StatusOK)

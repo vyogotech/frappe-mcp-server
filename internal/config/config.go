@@ -21,13 +21,11 @@ import (
 const frappeUserinfoPath = "/api/method/frappe.integrations.oauth2.openid_profile"
 
 type Config struct {
-	Server      ServerConfig      `yaml:"server"`
-	ERPNext     ERPNextConfig     `yaml:"erpnext"`
-	Logging     LoggingConfig     `yaml:"logging"`
-	Cache       CacheConfig       `yaml:"cache"`
-	Performance PerformanceConfig `yaml:"performance"`
-	Auth        AuthConfig        `yaml:"auth"`
-	Tools       ToolsConfig       `yaml:"tools"`
+	Server  ServerConfig  `yaml:"server"`
+	ERPNext ERPNextConfig `yaml:"erpnext"`
+	Logging LoggingConfig `yaml:"logging"`
+	Auth    AuthConfig    `yaml:"auth"`
+	Tools   ToolsConfig   `yaml:"tools"`
 }
 
 // DefaultConfirmationRedeemMethod is the frappe_ai method a write tool's one-time token is spent against. There is no
@@ -42,10 +40,9 @@ type ToolsConfig struct {
 }
 
 type ServerConfig struct {
-	Host           string        `yaml:"host"`
-	Port           int           `yaml:"port"`
-	Timeout        time.Duration `yaml:"timeout"`
-	MaxConnections int           `yaml:"max_connections"`
+	Host    string        `yaml:"host"`
+	Port    int           `yaml:"port"`
+	Timeout time.Duration `yaml:"timeout"`
 }
 
 type ERPNextConfig struct {
@@ -69,19 +66,7 @@ type RetryConfig struct {
 }
 
 type LoggingConfig struct {
-	Level  string `yaml:"level"`
-	Format string `yaml:"format"`
-}
-
-type CacheConfig struct {
-	TTL     time.Duration `yaml:"ttl"`
-	MaxSize int           `yaml:"max_size"`
-}
-
-type PerformanceConfig struct {
-	WorkerPoolSize    int  `yaml:"worker_pool_size"`
-	BatchSize         int  `yaml:"batch_size"`
-	EnableCompression bool `yaml:"enable_compression"`
+	Level string `yaml:"level"`
 }
 
 type AuthConfig struct {
@@ -108,8 +93,7 @@ type OAuth2Config struct {
 }
 
 type TokenCacheConfig struct {
-	TTL             time.Duration `yaml:"ttl"`
-	CleanupInterval time.Duration `yaml:"cleanup_interval"`
+	TTL time.Duration `yaml:"ttl"`
 }
 
 // Load reads config.yaml, or the file CONFIG_FILE names, and lets environment variables override it.
@@ -255,11 +239,6 @@ func (c *Config) loadFromEnv() error {
 	if cacheTTL := os.Getenv("CACHE_TTL"); cacheTTL != "" {
 		if duration, err := time.ParseDuration(cacheTTL); err == nil {
 			c.Auth.TokenCache.TTL = duration
-		}
-	}
-	if cleanupInterval := os.Getenv("CACHE_CLEANUP_INTERVAL"); cleanupInterval != "" {
-		if duration, err := time.ParseDuration(cleanupInterval); err == nil {
-			c.Auth.TokenCache.CleanupInterval = duration
 		}
 	}
 

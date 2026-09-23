@@ -37,7 +37,6 @@ auth:
     timeout: "30s"
   token_cache:
     ttl: "5m"
-    cleanup_interval: "10m"
 ```
 
 That's it — the MCP server validates the sid with Frappe and forwards it to all ERPNext API calls.
@@ -73,7 +72,6 @@ auth:
     timeout: "30s"
   token_cache:
     ttl: "5m"
-    cleanup_interval: "10m"
 ```
 
 ### Step 3: Get a Token and Test

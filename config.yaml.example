@@ -3,7 +3,6 @@ server:
   host: "0.0.0.0"
   port: 8080
   timeout: "30s"
-  max_connections: 100
 
 erpnext:  # Frappe instance configuration (works with ERPNext, Frappe HR, Healthcare, etc.)
   base_url: "http://localhost:8000"
@@ -23,16 +22,6 @@ erpnext:  # Frappe instance configuration (works with ERPNext, Frappe HR, Health
 
 logging:
   level: "info"
-  format: "json"
-
-cache:
-  ttl: "300s"
-  max_size: 1000
-
-performance:
-  worker_pool_size: 10
-  batch_size: 50
-  enable_compression: true
 
 # Authentication Configuration
 auth:
@@ -62,7 +51,6 @@ auth:
   # Token cache configuration
   token_cache:
     ttl: "5m"              # How long to cache validated tokens
-    cleanup_interval: "10m" # How often to clean up expired tokens
 
 # Production Auth Example with OAuth2 Token Pass-through:
 #
@@ -81,8 +69,7 @@ auth:
 #     validate_remote: true
 #     timeout: "30s"
 #   token_cache:
-#     ttl: "5m"
-#     cleanup_interval: "10m"
+#     ttl: "5m""
 #
 # erpnext:  # Frappe instance config
 #   base_url: "https://your-frappe-instance.com"

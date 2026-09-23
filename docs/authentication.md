@@ -81,7 +81,6 @@ auth:
 
   token_cache:
     ttl: "5m"
-    cleanup_interval: "10m"
 
 # ERPNext credentials — used as Priority 3 fallback
 erpnext:
@@ -98,7 +97,6 @@ AUTH_REQUIRE_AUTH=false
 OAUTH_TOKEN_INFO_URL=https://your-identity-provider/userinfo   # optional, see above
 OAUTH_TIMEOUT=30s
 CACHE_TTL=5m
-CACHE_CLEANUP_INTERVAL=10m
 ```
 
 ## Method 1: Frappe `sid` Cookie (Recommended for Frappe Apps)
