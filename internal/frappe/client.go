@@ -426,40 +426,8 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	// Keep this order: the sid and the user's token carry the user's permissions, the API key is system-level.
-	user := auth.UserFromContext(ctx)
-
-	if user != nil && user.SessionID != "" {
-		// Priority 1: Use Frappe session cookie (user-level permissions)
-		// a request carries a cookie as name=value only: Secure, HttpOnly and SameSite belong to Set-Cookie
-		req.Header.Set("Cookie", "sid="+user.SessionID)
-		slog.Debug("Using sid cookie for outbound request", "user", user.Email, "method", method)
-		// Frappe rejects sid-auth writes without the session's CSRF token, and only these methods are writes.
-		if method == "POST" || method == "PUT" || method == "DELETE" {
-			if token := c.csrfToken(ctx, user); token != "" {
-				req.Header.Set("X-Frappe-CSRF-Token", token)
-			}
-		}
-	} else if user != nil && user.Token != "" {
-		// Priority 2: Use user's OAuth2 token for user-level permissions in Frappe
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", user.Token))
-		slog.Debug("Using user OAuth2 token", "user", user.Email)
-	} else if c.apiKey != "" && c.apiSecret != "" {
-		// Priority 3: Fall back to API key/secret if no user token
-		req.Header.Set("Authorization", fmt.Sprintf("token %s:%s", c.apiKey, c.apiSecret))
-
-		// For API key auth, bypass CSRF by setting headers
-		// Frappe recognizes api/method endpoints and API key auth should bypass CSRF
-		req.Header.Set("X-Frappe-CSRF-Token", "bypass")
-
-		// Warn if using placeholder credentials
-		if c.apiKey == "your_api_key_here" || c.apiSecret == "your_api_secret_here" {
-			slog.Warn("Using placeholder API credentials - authentication will fail",
-				"endpoint", endpoint)
-		}
-		slog.Debug("Using API key/secret authentication")
-	} else {
-		return fmt.Errorf("no authentication credentials available (no session, token, or API key)")
+	if err := c.setCredentials(ctx, req, method, endpoint); err != nil {
+		return err
 	}
 
 	// Log request details (without sensitive data)
@@ -488,45 +456,8 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 		"status", resp.StatusCode,
 		"body_size", len(responseBody))
 
-	// Check for HTTP errors
 	if resp.StatusCode >= 400 {
-		// the message carries Frappe's one-line exception, never the raw body (a traceback, sometimes document text) or
-		// the endpoint (whose query string holds rag.search's question): callers log it and pass it to the model
-		var erpError types.ERPNextError
-		_ = json.Unmarshal(responseBody, &erpError)
-		erpError.StatusCode = resp.StatusCode
-		detail := erpError.Exception
-		if detail == "" {
-			detail = erpError.ExcType
-		}
-
-		// a session that ended is not a permission problem, and the model repeats this text to the user
-		if erpError.SessionExpired != 0 {
-			erpError.Message = types.SessionExpiredMessage
-		} else if erpError.Message == "" {
-			// If message is empty, provide a more helpful error based on status code
-			switch resp.StatusCode {
-			case 401:
-				erpError.Message = fmt.Sprintf("Authentication failed (HTTP %d). Please check your API credentials or OAuth2 token. %s", resp.StatusCode, detail)
-			case 403:
-				erpError.Message = fmt.Sprintf("Permission denied (HTTP %d). The current user/API key does not have permission for this operation. %s", resp.StatusCode, detail)
-			case 404:
-				erpError.Message = fmt.Sprintf("Resource not found (HTTP %d). %s", resp.StatusCode, detail)
-			case 500:
-				erpError.Message = fmt.Sprintf("Internal server error (HTTP %d). %s", resp.StatusCode, detail)
-			default:
-				erpError.Message = fmt.Sprintf("HTTP error %d. %s", resp.StatusCode, detail)
-			}
-		}
-
-		// the query string holds rag.search's question and the body can hold document text
-		slog.Error("Frappe API error",
-			"status_code", resp.StatusCode,
-			"path", strings.SplitN(endpoint, "?", 2)[0],
-			"exc_type", erpError.ExcType,
-			"session_expired", erpError.SessionExpired != 0)
-
-		return &erpError
+		return frappeError(resp.StatusCode, responseBody, endpoint)
 	}
 
 	// Parse successful response if result pointer is provided
@@ -537,6 +468,85 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	}
 
 	return nil
+}
+
+// setCredentials puts the caller's own credential on the outbound request, in this order: the sid and the user's
+// token carry the user's permissions, the configured API key is system-level.
+func (c *Client) setCredentials(ctx context.Context, req *http.Request, method, endpoint string) error {
+	user := auth.UserFromContext(ctx)
+
+	switch {
+	case user != nil && user.SessionID != "":
+		// a request carries a cookie as name=value only: Secure, HttpOnly and SameSite belong to Set-Cookie
+		req.Header.Set("Cookie", "sid="+user.SessionID)
+		slog.Debug("Using sid cookie for outbound request", "user", user.Email, "method", method)
+		// Frappe rejects sid-auth writes without the session's CSRF token, and only these methods are writes.
+		if method == "POST" || method == "PUT" || method == "DELETE" {
+			if token := c.csrfToken(ctx, user); token != "" {
+				req.Header.Set("X-Frappe-CSRF-Token", token)
+			}
+		}
+	case user != nil && user.Token != "":
+		req.Header.Set("Authorization", "Bearer "+user.Token)
+		slog.Debug("Using user OAuth2 token", "user", user.Email)
+	case c.apiKey != "" && c.apiSecret != "":
+		req.Header.Set("Authorization", fmt.Sprintf("token %s:%s", c.apiKey, c.apiSecret))
+		// Frappe exempts API-key auth from CSRF, and reads this header as the opt out
+		req.Header.Set("X-Frappe-CSRF-Token", "bypass")
+		if c.apiKey == "your_api_key_here" || c.apiSecret == "your_api_secret_here" {
+			slog.Warn("Using placeholder API credentials - authentication will fail", "endpoint", endpoint)
+		}
+		slog.Debug("Using API key/secret authentication")
+	default:
+		return fmt.Errorf("no authentication credentials available (no session, token, or API key)")
+	}
+	return nil
+}
+
+// frappeError turns a 4xx or 5xx answer into the error a tool hands the model.
+func frappeError(statusCode int, responseBody []byte, endpoint string) error {
+	// the message carries Frappe's one-line exception, never the raw body (a traceback, sometimes document text) or
+	// the endpoint (whose query string holds rag.search's question): callers log it and pass it to the model
+	var erpError types.ERPNextError
+	_ = json.Unmarshal(responseBody, &erpError)
+	erpError.StatusCode = statusCode
+	detail := erpError.Exception
+	if detail == "" {
+		detail = erpError.ExcType
+	}
+
+	// a session that ended is not a permission problem, and the model repeats this text to the user
+	switch {
+	case erpError.SessionExpired != 0:
+		erpError.Message = types.SessionExpiredMessage
+	case erpError.Message == "":
+		erpError.Message = statusMessage(statusCode, detail)
+	}
+
+	// the query string holds rag.search's question and the body can hold document text
+	slog.Error("Frappe API error",
+		"status_code", statusCode,
+		"path", strings.SplitN(endpoint, "?", 2)[0],
+		"exc_type", erpError.ExcType,
+		"session_expired", erpError.SessionExpired != 0)
+
+	return &erpError
+}
+
+// statusMessage is what a tool says when Frappe answered an error with no message of its own.
+func statusMessage(statusCode int, detail string) string {
+	switch statusCode {
+	case 401:
+		return fmt.Sprintf("Authentication failed (HTTP %d). Please check your API credentials or OAuth2 token. %s", statusCode, detail)
+	case 403:
+		return fmt.Sprintf("Permission denied (HTTP %d). The current user/API key does not have permission for this operation. %s", statusCode, detail)
+	case 404:
+		return fmt.Sprintf("Resource not found (HTTP %d). %s", statusCode, detail)
+	case 500:
+		return fmt.Sprintf("Internal server error (HTTP %d). %s", statusCode, detail)
+	default:
+		return fmt.Sprintf("HTTP error %d. %s", statusCode, detail)
+	}
 }
 
 // isRetryableError accepts a network failure or a gateway error, never a 500, a 4xx or a cancelled call.

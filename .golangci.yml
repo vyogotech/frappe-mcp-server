@@ -18,6 +18,13 @@ linters:
       exclude-functions:
         - (io.Closer).Close
         - (net/http.ResponseWriter).Write
+    # the budgets: a function stays under 15 branches, and 150 tokens is as far as a block may be copied.
+    # gocyclo and dupl are not in the enabled set above yet, because config.Load and Config.loadFromEnv are
+    # still over; they run in the maintainability check, which enables them and reads these settings.
+    gocyclo:
+      min-complexity: 15
+    dupl:
+      threshold: 150
 
 issues:
   max-issues-per-linter: 0
