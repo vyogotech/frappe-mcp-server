@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand/v2"
+	// the only use is retry backoff jitter, not a secret; gosec carries the same reasoning at its call site
+	"math/rand/v2" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used
 	"net"
 	"net/http"
 	"net/url"
