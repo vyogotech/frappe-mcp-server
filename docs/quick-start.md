@@ -36,7 +36,11 @@ This will:
 ### Option C: Build from Source
 
 ```bash
+<<<<<<< HEAD
 # Requires Go 1.25+
+=======
+# Requires Go 1.25+; go.mod names the toolchain
+>>>>>>> 475c30e (build(docker): build the server image from the repo itself and state the Go version once, in go.mod)
 git clone https://github.com/vyogotech/frappe-mcp-server
 cd frappe-mcp-server
 

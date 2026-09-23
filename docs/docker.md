@@ -149,7 +149,12 @@ docker run --rm -v frappe-mcp-server_mcp_logs:/data \
 ```
 
 Volumes:
+<<<<<<< HEAD
 - `mcp_logs` - MCP server logs
+=======
+- `ollama_data` - AI models
+- `open_webui_data` - Open WebUI data
+>>>>>>> 475c30e (build(docker): build the server image from the repo itself and state the Go version once, in go.mod)
 - `erpnext_data` - ERPNext files (full-stack only)
 
 ## Troubleshooting

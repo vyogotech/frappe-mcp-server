@@ -6,7 +6,7 @@ Contributing to and extending ERPNext MCP Server.
 
 ### Prerequisites
 
-- **Go 1.25+**
+- **Go 1.25+** — `go.mod` names the toolchain the build uses
 - **Make**
 - **Git**
 - **ERPNext instance** (for testing)

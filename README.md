@@ -120,7 +120,7 @@ Add to `claude_desktop_config.json`:
 
 ## 🛠️ Prerequisites
 
-- Go 1.25+
+- Go 1.25+ — `go.mod` names the toolchain the build uses
 - ERPNext instance (local or remote)
 
 ## 📋 Available Tools

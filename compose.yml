@@ -22,11 +22,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-      - mcp_logs:/app/logs
     networks:
       - erpnext-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -51,8 +50,6 @@ services:
     volumes:
       - erpnext_data:/home/frappe/frappe-bench/sites
       - erpnext_logs:/home/frappe/frappe-bench/logs
-      #mount frappe_ai
-      - /Users/varkrish/personal/frappista_sne_apps/apps/frappe_ai:/home/frappe/frappe-bench/apps/frappe_ai
     networks:
       - erpnext-network
     healthcheck:
@@ -66,8 +63,6 @@ networks:
   erpnext-network:
     driver: bridge
 
-volumes:
-  mcp_logs:
     driver: local
   erpnext_data:
     driver: local

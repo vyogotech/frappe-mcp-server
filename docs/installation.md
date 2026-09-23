@@ -71,7 +71,11 @@ frappe-mcp-server-stdio --help
 For developers or if you want the latest unreleased version:
 
 #### Prerequisites
+<<<<<<< HEAD
 - **Go 1.25+** - [Download](https://go.dev/dl/)
+=======
+- **Go 1.25+** — `go.mod` names the toolchain the build uses - [Download](https://go.dev/dl/)
+>>>>>>> 475c30e (build(docker): build the server image from the repo itself and state the Go version once, in go.mod)
 - **Git**
 - **Make** (optional, but recommended)
 

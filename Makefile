@@ -159,13 +159,8 @@ DOCKER_IMAGE=frappe-mcp-server
 FULL_IMAGE_NAME=$(DOCKER_REGISTRY)/$(DOCKER_IMAGE)
 VERSION?=latest
 
-# Build for Linux (static binary for Docker)
-build-linux:
-	@echo "$(GREEN)Building $(BINARY_NAME) for Linux...$(NC)"
-	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o $(BINARY_NAME) $(MAIN_PATH)
-
-# Docker build
-docker-build: build-linux
+# Docker build (the Dockerfile compiles the binary itself)
+docker-build:
 	@echo "$(GREEN)Building Docker image...$(NC)"
 	docker build -t $(FULL_IMAGE_NAME):$(VERSION) .
 	@if [ "$(VERSION)" != "latest" ]; then \
