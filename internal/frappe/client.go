@@ -455,8 +455,11 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 			detail = erpError.ExcType
 		}
 
-		// If message is empty, provide a more helpful error based on status code
-		if erpError.Message == "" {
+		// a session that ended is not a permission problem, and the model repeats this text to the user
+		if erpError.SessionExpired != 0 {
+			erpError.Message = types.SessionExpiredMessage
+		} else if erpError.Message == "" {
+			// If message is empty, provide a more helpful error based on status code
 			switch resp.StatusCode {
 			case 401:
 				erpError.Message = fmt.Sprintf("Authentication failed (HTTP %d). Please check your API credentials or OAuth2 token. %s", resp.StatusCode, detail)
@@ -475,7 +478,8 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 		slog.Error("Frappe API error",
 			"status_code", resp.StatusCode,
 			"path", strings.SplitN(endpoint, "?", 2)[0],
-			"exc_type", erpError.ExcType)
+			"exc_type", erpError.ExcType,
+			"session_expired", erpError.SessionExpired != 0)
 
 		return &erpError
 	}

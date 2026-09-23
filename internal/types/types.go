@@ -2,12 +2,17 @@ package types
 
 import "time"
 
+// SessionExpiredMessage is what a user is told when Frappe reports their session ended, on every channel.
+const SessionExpiredMessage = "Session expired. Please sign in again."
+
 type ERPNextError struct {
 	Message    string `json:"message"`
 	StatusCode int    `json:"status_code"`
 	Exc        string `json:"exc,omitempty"`
 	ExcType    string `json:"exc_type,omitempty"`
 	Exception  string `json:"exception,omitempty"`
+	// Frappe sends its session_expired flag as 1, not true.
+	SessionExpired int `json:"session_expired,omitempty"`
 }
 
 func (e *ERPNextError) Error() string {

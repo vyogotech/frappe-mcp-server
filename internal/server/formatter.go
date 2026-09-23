@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"frappe-mcp-server/internal/types"
 )
 
 func formatFrappeError(errorMsg, userQuery string) string {
@@ -84,7 +86,11 @@ func formatUserFriendlyError(errorMsg, userQuery string) string {
 	response.WriteString("❌ **I couldn't complete that request**\n\n")
 
 	// Detect specific error types and provide targeted help
-	if strings.Contains(errorLower, "fiscal year") {
+	if strings.Contains(errorLower, strings.ToLower(types.SessionExpiredMessage)) {
+		// the session ended: the permission branch below would send the user to their administrator instead
+		response.WriteString("**The issue**: " + types.SessionExpiredMessage + "\n\n")
+
+	} else if strings.Contains(errorLower, "fiscal year") {
 		response.WriteString("**The issue**: The dates you specified aren't in an active fiscal year.\n\n")
 		response.WriteString("**What this means**: Your ERPNext system needs fiscal years to be set up before running financial reports.\n\n")
 		response.WriteString("**How to fix it**:\n")
