@@ -12,19 +12,31 @@ import (
 	"frappe-mcp-server/internal/types"
 )
 
-// ToolRegistry contains all the MCP tools
 type ToolRegistry struct {
 	frappeClient *frappe.Client
+	// ConfirmationRedeemMethod is the Frappe method a write's one-time token is redeemed against; empty means the default.
+	ConfirmationRedeemMethod string
 }
 
-// NewRegistry creates a new tool registry
-func NewRegistry(frappeClient *frappe.Client,) *ToolRegistry {
+func NewRegistry(frappeClient *frappe.Client) *ToolRegistry {
 	return &ToolRegistry{
 		frappeClient: frappeClient,
 	}
 }
 
-// GetDocument retrieves a single document
+// maxRows bounds every row count a model can ask a tool for. The MCP specification sets no ceiling on the size of
+// a tool result (revision 2025-06-18, which the pinned go-sdk v1.4.1 speaks), and the whole result crosses into the
+// model's context, so the server sets one.
+const maxRows = 100
+
+// rows clamps a model's row count into 1..maxRows, keeping the tool's documented default when it asked for nothing.
+func rows(asked, byDefault int) int {
+	if asked <= 0 {
+		return byDefault
+	}
+	return min(asked, maxRows)
+}
+
 func (t *ToolRegistry) GetDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		DocType string `json:"doctype"`
@@ -64,7 +76,6 @@ func (t *ToolRegistry) GetDocument(ctx context.Context, request mcp.ToolRequest)
 	}, nil
 }
 
-// ListDocuments retrieves a list of documents with pagination
 func (t *ToolRegistry) ListDocuments(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.SearchRequest
 
@@ -76,10 +87,7 @@ func (t *ToolRegistry) ListDocuments(ctx context.Context, request mcp.ToolReques
 		return nil, fmt.Errorf("doctype is required")
 	}
 
-	// Set defaults
-	if params.PageSize == 0 {
-		params.PageSize = 20
-	}
+	params.PageSize = rows(params.PageSize, 20)
 
 	docList, err := t.frappeClient.GetDocumentList(ctx, params)
 	if err != nil {
@@ -106,7 +114,6 @@ func (t *ToolRegistry) ListDocuments(ctx context.Context, request mcp.ToolReques
 	}, nil
 }
 
-// CreateDocument creates a new document
 func (t *ToolRegistry) CreateDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.CreateDocumentRequest
 
@@ -116,6 +123,10 @@ func (t *ToolRegistry) CreateDocument(ctx context.Context, request mcp.ToolReque
 
 	if params.DocType == "" || params.Data == nil {
 		return nil, fmt.Errorf("doctype and data are required")
+	}
+
+	if err := t.requireConfirmation(ctx, "create_document", params.DocType, ""); err != nil {
+		return nil, err
 	}
 
 	doc, err := t.frappeClient.CreateDocument(ctx, params)
@@ -151,7 +162,6 @@ func (t *ToolRegistry) CreateDocument(ctx context.Context, request mcp.ToolReque
 	}, nil
 }
 
-// UpdateDocument updates an existing document
 func (t *ToolRegistry) UpdateDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.UpdateDocumentRequest
 
@@ -161,6 +171,10 @@ func (t *ToolRegistry) UpdateDocument(ctx context.Context, request mcp.ToolReque
 
 	if params.DocType == "" || params.Name == "" || params.Data == nil {
 		return nil, fmt.Errorf("doctype, name, and data are required")
+	}
+
+	if err := t.requireConfirmation(ctx, "update_document", params.DocType, params.Name); err != nil {
+		return nil, err
 	}
 
 	doc, err := t.frappeClient.UpdateDocument(ctx, params)
@@ -188,12 +202,10 @@ func (t *ToolRegistry) UpdateDocument(ctx context.Context, request mcp.ToolReque
 	}, nil
 }
 
-// DeleteDocument deletes a document
 func (t *ToolRegistry) DeleteDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		DocType string `json:"doctype"`
 		Name    string `json:"name"`
-		Confirm bool   `json:"confirm"`
 	}
 
 	if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -204,16 +216,9 @@ func (t *ToolRegistry) DeleteDocument(ctx context.Context, request mcp.ToolReque
 		return nil, fmt.Errorf("doctype and name are required")
 	}
 
-	if !params.Confirm {
-		return &mcp.ToolResponse{
-			ID: request.ID,
-			Content: []mcp.Content{
-				{
-					Type: "text",
-					Text: fmt.Sprintf("Are you sure you want to delete %s document: %s? Set 'confirm' to true to proceed.", params.DocType, params.Name),
-				},
-			},
-		}, nil
+	// never a `confirm` argument again: the caller who asks for the delete cannot be the one who confirms it
+	if err := t.requireConfirmation(ctx, "delete_document", params.DocType, params.Name); err != nil {
+		return nil, err
 	}
 
 	err := t.frappeClient.DeleteDocument(ctx, params.DocType, params.Name)
@@ -232,7 +237,6 @@ func (t *ToolRegistry) DeleteDocument(ctx context.Context, request mcp.ToolReque
 	}, nil
 }
 
-// SearchDocuments performs full-text search across documents
 func (t *ToolRegistry) SearchDocuments(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.SearchRequest
 
@@ -244,10 +248,7 @@ func (t *ToolRegistry) SearchDocuments(ctx context.Context, request mcp.ToolRequ
 		return nil, fmt.Errorf("doctype is required")
 	}
 
-	// Set defaults
-	if params.PageSize == 0 {
-		params.PageSize = 20
-	}
+	params.PageSize = rows(params.PageSize, 20)
 
 	docList, err := t.frappeClient.SearchDocuments(ctx, params)
 	if err != nil {
@@ -279,7 +280,6 @@ func (t *ToolRegistry) SearchDocuments(ctx context.Context, request mcp.ToolRequ
 	}, nil
 }
 
-// GetProjectStatus retrieves comprehensive project status
 func (t *ToolRegistry) GetProjectStatus(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		ProjectName string `json:"project_name"`
@@ -343,7 +343,6 @@ func (t *ToolRegistry) GetProjectStatus(ctx context.Context, request mcp.ToolReq
 	}, nil
 }
 
-// AnalyzeProjectTimeline analyzes project timeline and milestones
 func (t *ToolRegistry) AnalyzeProjectTimeline(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		ProjectName string `json:"project_name"`
@@ -368,8 +367,9 @@ func (t *ToolRegistry) AnalyzeProjectTimeline(ctx context.Context, request mcp.T
 		Filters: map[string]interface{}{
 			"project": params.ProjectName,
 		},
-		Fields:   []string{"name", "subject", "status", "expected_start_date", "expected_end_date", "progress", "priority"},
-		OrderBy:  "expected_start_date",
+		// Task dates are exp_start_date/exp_end_date; the Project fields below are the expected_* ones
+		Fields:   []string{"name", "subject", "status", "exp_start_date", "exp_end_date", "progress", "priority"},
+		OrderBy:  "exp_start_date",
 		PageSize: 100,
 	}
 
@@ -378,17 +378,14 @@ func (t *ToolRegistry) AnalyzeProjectTimeline(ctx context.Context, request mcp.T
 		return nil, fmt.Errorf("failed to get project tasks: %w", err)
 	}
 
-	// Analyze timeline
+	// Every value here is read from the project or counted from its tasks; a field nothing computes is not reported.
 	analysis := map[string]interface{}{
 		"project": project,
 		"timeline_analysis": map[string]interface{}{
-			"total_tasks":         len(tasks.Data),
-			"project_start_date":  project["expected_start_date"],
-			"project_end_date":    project["expected_end_date"],
-			"project_progress":    project["percent_complete"],
-			"critical_path_tasks": []interface{}{}, // TODO: Implement critical path analysis
-			"milestones":          []interface{}{}, // TODO: Get milestones
-			"timeline_health":     "analyzing...",
+			"total_tasks":        len(tasks.Data),
+			"project_start_date": project["expected_start_date"],
+			"project_end_date":   project["expected_end_date"],
+			"project_progress":   project["percent_complete"],
 		},
 		"tasks": tasks.Data,
 	}
@@ -412,68 +409,6 @@ func (t *ToolRegistry) AnalyzeProjectTimeline(ctx context.Context, request mcp.T
 	}, nil
 }
 
-// CalculateProjectMetrics calculates various project metrics
-func (t *ToolRegistry) CalculateProjectMetrics(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
-	var params struct {
-		ProjectName string `json:"project_name"`
-	}
-
-	if err := json.Unmarshal(request.Params, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
-	}
-
-	if params.ProjectName == "" {
-		return nil, fmt.Errorf("project_name is required")
-	}
-
-	// Get project data
-	project, err := t.frappeClient.GetDocument(ctx, "Project", params.ProjectName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get project: %w", err)
-	}
-
-	// Calculate basic metrics (simplified)
-	metrics := types.ProjectMetrics{
-		BurnRate:   0.0,     // TODO: Calculate from timesheets
-		Velocity:   0.0,     // TODO: Calculate from task completion
-		Efficiency: 0.0,     // TODO: Calculate from time vs estimates
-		RiskScore:  0.0,     // TODO: Calculate risk assessment
-		Health:     "Green", // TODO: Determine health based on metrics
-	}
-
-	// Build response
-	response := map[string]interface{}{
-		"project": project,
-		"metrics": metrics,
-		"calculations": map[string]string{
-			"burn_rate":  "Total cost / elapsed time",
-			"velocity":   "Completed tasks / time period",
-			"efficiency": "Actual time / estimated time",
-			"risk_score": "Based on delays, budget variance, and resource allocation",
-			"health":     "Overall project health indicator",
-		},
-	}
-
-	result, err := json.Marshal(response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return &mcp.ToolResponse{
-		Content: []mcp.Content{
-			{
-				Type: "text",
-				Text: fmt.Sprintf("Project Metrics for: %s", params.ProjectName),
-			},
-			{
-				Type: "text",
-				Text: string(result),
-			},
-		},
-	}, nil
-}
-
-// GetResourceAllocation analyzes resource allocation across projects
 func (t *ToolRegistry) GetResourceAllocation(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	// Get all active projects
 	projectReq := types.SearchRequest{
@@ -519,65 +454,6 @@ func (t *ToolRegistry) GetResourceAllocation(ctx context.Context, request mcp.To
 	}, nil
 }
 
-// ProjectRiskAssessment performs risk assessment for a project
-func (t *ToolRegistry) ProjectRiskAssessment(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
-	var params struct {
-		ProjectName string `json:"project_name"`
-	}
-
-	if err := json.Unmarshal(request.Params, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
-	}
-
-	if params.ProjectName == "" {
-		return nil, fmt.Errorf("project_name is required")
-	}
-
-	// Get project data
-	project, err := t.frappeClient.GetDocument(ctx, "Project", params.ProjectName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get project: %w", err)
-	}
-
-	// Simplified risk assessment
-	riskFactors := map[string]interface{}{
-		"schedule_risk": "Low", // TODO: Calculate based on timeline
-		"budget_risk":   "Low", // TODO: Calculate based on budget variance
-		"resource_risk": "Low", // TODO: Calculate based on resource availability
-		"scope_risk":    "Low", // TODO: Calculate based on scope changes
-		"overall_risk":  "Low",
-		"recommendations": []string{
-			"Monitor project timeline closely",
-			"Regular stakeholder communication",
-			"Track budget variance weekly",
-		},
-	}
-
-	response := map[string]interface{}{
-		"project":         project,
-		"risk_assessment": riskFactors,
-	}
-
-	result, err := json.Marshal(response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return &mcp.ToolResponse{
-		Content: []mcp.Content{
-			{
-				Type: "text",
-				Text: fmt.Sprintf("Risk Assessment for Project: %s", params.ProjectName),
-			},
-			{
-				Type: "text",
-				Text: string(result),
-			},
-		},
-	}, nil
-}
-
-// GenerateProjectReport generates a comprehensive project report
 func (t *ToolRegistry) GenerateProjectReport(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		ProjectName string `json:"project_name"`
@@ -661,57 +537,6 @@ func (t *ToolRegistry) GenerateProjectReport(ctx context.Context, request mcp.To
 	}, nil
 }
 
-// PortfolioDashboard provides portfolio-level insights
-func (t *ToolRegistry) PortfolioDashboard(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
-	// Get all projects
-	projectReq := types.SearchRequest{
-		DocType:  "Project",
-		Fields:   []string{"name", "project_name", "status", "percent_complete", "priority"},
-		OrderBy:  "creation desc",
-		PageSize: 50,
-	}
-
-	projects, err := t.frappeClient.GetDocumentList(ctx, projectReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get projects: %w", err)
-	}
-
-	// Calculate portfolio metrics
-	dashboard := map[string]interface{}{
-		"portfolio_overview": map[string]interface{}{
-			"total_projects":     len(projects.Data),
-			"active_projects":    0, // TODO: Count by status
-			"completed_projects": 0,
-			"overdue_projects":   0,
-		},
-		"projects": projects.Data,
-		"kpis": map[string]interface{}{
-			"average_completion": 0.0, // TODO: Calculate
-			"on_time_delivery":   0.0, // TODO: Calculate
-			"budget_utilization": 0.0, // TODO: Calculate
-		},
-	}
-
-	result, err := json.Marshal(dashboard)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return &mcp.ToolResponse{
-		Content: []mcp.Content{
-			{
-				Type: "text",
-				Text: "Portfolio Dashboard",
-			},
-			{
-				Type: "text",
-				Text: string(result),
-			},
-		},
-	}, nil
-}
-
-// ResourceUtilizationAnalysis analyzes resource utilization
 func (t *ToolRegistry) ResourceUtilizationAnalysis(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	// Get all employees
 	empReq := types.SearchRequest{
@@ -753,7 +578,6 @@ func (t *ToolRegistry) ResourceUtilizationAnalysis(ctx context.Context, request 
 	}, nil
 }
 
-// BudgetVarianceAnalysis analyzes budget variance across projects
 func (t *ToolRegistry) BudgetVarianceAnalysis(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	// Get projects with budget information
 	projectReq := types.SearchRequest{
@@ -767,10 +591,7 @@ func (t *ToolRegistry) BudgetVarianceAnalysis(ctx context.Context, request mcp.T
 		return nil, fmt.Errorf("failed to get projects: %w", err)
 	}
 
-	// Compute totals across the returned projects. Frappe returns numeric
-	// fields as float64 via JSON unmarshal; missing or non-numeric values
-	// are skipped so a partial dataset still produces a best-effort sum
-	// rather than failing.
+	// Missing or non-numeric amounts are skipped, so a partial dataset still sums instead of failing.
 	var totalBudget, totalActual float64
 	for _, p := range projects.Data {
 		if v, ok := p["total_budget"].(float64); ok {
@@ -813,8 +634,7 @@ func (t *ToolRegistry) BudgetVarianceAnalysis(ctx context.Context, request mcp.T
 	}, nil
 }
 
-// AnalyzeDocument is a generic document analyzer that works with ANY doctype
-// It fetches the document and optionally related documents, letting AI handle analysis
+// AnalyzeDocument only fetches the document and, with include_related, its linked records; the model analyses them.
 func (t *ToolRegistry) AnalyzeDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
 		DocType        string   `json:"doctype"`
@@ -871,7 +691,6 @@ func (t *ToolRegistry) AnalyzeDocument(ctx context.Context, request mcp.ToolRequ
 	}, nil
 }
 
-// fetchRelatedDocuments generically fetches related documents based on common patterns
 func (t *ToolRegistry) fetchRelatedDocuments(ctx context.Context, doctype string, doc types.Document) map[string]interface{} {
 	related := make(map[string]interface{})
 
@@ -889,7 +708,7 @@ func (t *ToolRegistry) fetchRelatedDocuments(ctx context.Context, doctype string
 	// Extract and fetch linked documents based on common field patterns
 	// This is generic - works for any doctype!
 	linkedFields := []string{"customer", "supplier", "project", "task", "parent_project", "sales_order", "purchase_order"}
-	
+
 	for _, field := range linkedFields {
 		if value, ok := doc[field]; ok {
 			if strValue, ok := value.(string); ok && strValue != "" {
@@ -898,9 +717,12 @@ func (t *ToolRegistry) fetchRelatedDocuments(ctx context.Context, doctype string
 				if linkedDocType != "" {
 					// Fetch the linked document
 					linkedDoc, err := t.frappeClient.GetDocument(ctx, linkedDocType, strValue)
-					if err == nil {
-						related[field] = linkedDoc
+					if err != nil {
+						// a refused or failed lookup is not the same as a field with nothing linked
+						related[field] = map[string]interface{}{"error": err.Error()}
+						continue
 					}
+					related[field] = linkedDoc
 				}
 			}
 		}
@@ -909,7 +731,6 @@ func (t *ToolRegistry) fetchRelatedDocuments(ctx context.Context, doctype string
 	return related
 }
 
-// inferDocTypeFromField infers doctype from field name using generic patterns
 func inferDocTypeFromField(fieldName string) string {
 	// Generic mapping based on common ERPNext naming conventions
 	mapping := map[string]string{
@@ -922,21 +743,20 @@ func inferDocTypeFromField(fieldName string) string {
 		"item":           "Item",
 		"employee":       "Employee",
 	}
-	
+
 	if doctype, ok := mapping[fieldName]; ok {
 		return doctype
 	}
-	
+
 	// Fallback: capitalize field name (often works in ERPNext)
 	// e.g., "warehouse" -> "Warehouse"
 	if len(fieldName) > 0 {
 		return strings.ToUpper(string(fieldName[0])) + fieldName[1:]
 	}
-	
+
 	return ""
 }
 
-// AggregateDocuments performs aggregation queries on ERPNext data
 func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.AggregationRequest
 
@@ -981,6 +801,17 @@ func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolR
 		}, nil
 	}
 
+	switch strings.ToLower(strings.TrimSpace(params.Metric)) {
+	case "count":
+	case "sum", "avg", "min", "max":
+		if params.Field == "" {
+			return nil, fmt.Errorf("metric %q needs a field", params.Metric)
+		}
+	default:
+		return nil, fmt.Errorf("metric must be count, sum, avg, min or max, not %q", params.Metric)
+	}
+	params.Metric = strings.TrimSpace(params.Metric)
+
 	// Execute aggregation query
 	results, err := t.frappeClient.RunAggregationQuery(ctx, params)
 	if err != nil {
@@ -989,12 +820,13 @@ func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolR
 
 	// Build response
 	resultJSON, err := json.Marshal(map[string]interface{}{
-		"doctype":   params.DocType,
-		"group_by":  params.GroupBy,
-		"results":   results,
-		"count":     len(results),
-		"fields":    params.Fields,
-		"filters":   params.Filters,
+		"doctype":  params.DocType,
+		"group_by": params.GroupBy,
+		"results":  results,
+		"count":    len(results),
+		"metric":   params.Metric,
+		"field":    params.Field,
+		"filters":  params.Filters,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal results: %w", err)
@@ -1015,7 +847,6 @@ func (t *ToolRegistry) AggregateDocuments(ctx context.Context, request mcp.ToolR
 	}, nil
 }
 
-// RunReport executes a Frappe report and returns formatted results
 func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.ReportRequest
 
@@ -1033,16 +864,28 @@ func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (
 		return nil, fmt.Errorf("failed to run report: %w", err)
 	}
 
-	// Format the response
+	// A report sends every row it has, and the whole result crosses into the model's context.
+	data, truncated := reportData.Data, false
+	if len(data) > maxRows {
+		data, truncated = data[:maxRows], true
+	}
+
 	resultJSON, err := json.Marshal(map[string]interface{}{
 		"report_name": params.ReportName,
 		"columns":     reportData.Columns,
-		"data":        reportData.Data,
+		"data":        data,
 		"row_count":   len(reportData.Data),
+		"truncated":   truncated,
 		"filters":     params.Filters,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal report data: %w", err)
+	}
+
+	summary := fmt.Sprintf("Report '%s' executed successfully with %d row(s)", params.ReportName, len(reportData.Data))
+	if truncated {
+		summary = fmt.Sprintf("Report '%s' returned %d row(s); the first %d are in this result",
+			params.ReportName, len(reportData.Data), maxRows)
 	}
 
 	return &mcp.ToolResponse{
@@ -1050,7 +893,7 @@ func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (
 		Content: []mcp.Content{
 			{
 				Type: "text",
-				Text: fmt.Sprintf("Report '%s' executed successfully with %d row(s)", params.ReportName, len(reportData.Data)),
+				Text: summary,
 			},
 			{
 				Type: "text",
@@ -1060,12 +903,12 @@ func (t *ToolRegistry) RunReport(ctx context.Context, request mcp.ToolRequest) (
 	}, nil
 }
 
-// GlobalSearch performs a full-text search across all Frappe doctypes.
 // SearchKnowledgeBase searches the documents the user has uploaded to Drive.
 func (t *ToolRegistry) SearchKnowledgeBase(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params struct {
-		Query string `json:"query"`
-		Limit int    `json:"limit,omitempty"`
+		Query   string `json:"query"`
+		Limit   int    `json:"limit,omitempty"`
+		Session string `json:"session,omitempty"`
 	}
 
 	if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -1075,9 +918,12 @@ func (t *ToolRegistry) SearchKnowledgeBase(ctx context.Context, request mcp.Tool
 		return nil, fmt.Errorf("query is required")
 	}
 
-	passages, err := t.frappeClient.SearchKnowledgeBase(ctx, params.Query, params.Limit)
+	passages, err := t.frappeClient.SearchKnowledgeBase(ctx, params.Query, rows(params.Limit, 5), params.Session)
 	if err != nil {
 		return nil, err
+	}
+	if passages == nil {
+		passages = []map[string]interface{}{} // a nil slice marshals to null, which is neither an array nor no passages
 	}
 
 	result, err := json.Marshal(passages)
@@ -1087,6 +933,8 @@ func (t *ToolRegistry) SearchKnowledgeBase(ctx context.Context, request mcp.Tool
 
 	return &mcp.ToolResponse{
 		ID: request.ID,
+		// the same passages twice: as data for a client that reads structuredContent, as text for one that does not
+		Structured: map[string]interface{}{"passages": passages},
 		Content: []mcp.Content{
 			{
 				Type: "text",
@@ -1104,7 +952,7 @@ func (t *ToolRegistry) GlobalSearch(ctx context.Context, request mcp.ToolRequest
 	var params struct {
 		Text    string      `json:"text"`
 		Doctype string      `json:"doctype"`
-		Scope   interface{} `json:"scope"`  // string or []string
+		Scope   interface{} `json:"scope"` // string or []string
 		Limit   int         `json:"limit"`
 		Start   int         `json:"start"`
 	}
@@ -1121,7 +969,7 @@ func (t *ToolRegistry) GlobalSearch(ctx context.Context, request mcp.ToolRequest
 		Text:    params.Text,
 		Doctype: params.Doctype,
 		Scope:   params.Scope,
-		Limit:   params.Limit,
+		Limit:   rows(params.Limit, 20),
 		Start:   params.Start,
 	})
 	if err != nil {

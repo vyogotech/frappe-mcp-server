@@ -18,17 +18,14 @@ import (
 	"frappe-mcp-server/internal/mcp"
 )
 
-// countingFrappe stands in for the two Frappe endpoints that matter when
-// counting: frappe.client.get_list caps a page at 20 rows (Frappe's default
-// limit_page_length) while frappe.client.get_count returns the true total.
+// countingFrappe records the calls of a stub whose get_list caps a page at Frappe's default 20 rows, while get_count
+// returns the true total.
 type countingFrappe struct {
 	total    int
 	hits     []string
 	lastBody map[string]interface{}
 }
 
-// newCountingFrappe returns a client pointed at a stub Frappe holding total
-// documents, plus the recorder for the calls that stub receives.
 func newCountingFrappe(t *testing.T, total int) (*frappe.Client, *countingFrappe) {
 	t.Helper()
 	rec := &countingFrappe{total: total}
@@ -71,7 +68,6 @@ func newCountingFrappe(t *testing.T, total int) (*frappe.Client, *countingFrappe
 	return client, rec
 }
 
-// aggregate runs the tool and returns its JSON content block.
 func aggregate(t *testing.T, reg *ToolRegistry, params string) map[string]interface{} {
 	t.Helper()
 	resp, err := reg.AggregateDocuments(context.Background(), mcp.ToolRequest{

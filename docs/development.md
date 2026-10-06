@@ -6,7 +6,7 @@ Contributing to and extending ERPNext MCP Server.
 
 ### Prerequisites
 
-- **Go 1.24+**
+- **Go 1.25+** — `go.mod` names the toolchain the build uses
 - **Make**
 - **Git**
 - **ERPNext instance** (for testing)
@@ -33,20 +33,21 @@ make coverage
 
 ## Project Structure
 
-```
+```text
 frappe-mcp-server/
 ├── cmd/
-│   ├── mcp-stdio/          # STDIO server for Cursor/Claude
-│   ├── test-client/        # Test client
-│   └── ollama-client/      # Ollama test client
+│   └── mcp-stdio/          # STDIO server for Cursor/Claude
 ├── internal/
+│   ├── auth/               # Authentication strategies and middleware
+│   ├── buildinfo/          # Version, read from the build's VCS stamp
 │   ├── config/             # Configuration management
-│   ├── erpnext/            # ERPNext client
+│   ├── frappe/             # Frappe/ERPNext HTTP client
 │   ├── mcp/                # MCP protocol implementation
 │   ├── server/             # HTTP server & handlers
+│   ├── telemetry/          # OpenTelemetry tracing
+│   ├── testutils/          # Mock Frappe server for the tests
 │   ├── tools/              # MCP tools implementation
-│   ├── types/              # Shared types
-│   └── utils/              # Utilities
+│   └── types/              # Shared types
 ├── docs/                   # Documentation (GitHub Pages)
 ├── configs/                # Configuration examples
 ├── main.go                 # HTTP server entry point
@@ -216,8 +217,8 @@ go test -tags=integration ./...
 
 # Test in another
 curl http://localhost:8080/api/v1/health
-curl -X POST http://localhost:8080/api/v1/chat \
-  -d '{"message": "List all projects"}'
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
+  -d '{"params": {"doctype": "Project"}}'
 ```
 
 ## Debugging
@@ -226,8 +227,8 @@ curl -X POST http://localhost:8080/api/v1/chat \
 
 ```yaml
 # config.yaml
-server:
-  log_level: "debug"
+logging:
+  level: "debug"
 ```
 
 Or:
@@ -311,6 +312,7 @@ git commit -m "feat: add new feature"
 ```
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):
+
 - `feat:` - New feature
 - `fix:` - Bug fix
 - `docs:` - Documentation
@@ -418,6 +420,7 @@ func MyFunction(param1 string) (string, error) {
 ### README Updates
 
 When adding features, update:
+
 - Main `README.md`
 - Relevant docs in `docs/`
 - API reference if adding endpoints
@@ -446,4 +449,3 @@ godoc -http=:6060
 ---
 
 Happy coding! 🚀
-

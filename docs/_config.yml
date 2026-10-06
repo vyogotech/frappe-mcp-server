@@ -15,10 +15,6 @@ nav:
     url: /auth-quickstart
   - title: Configuration
     url: /configuration
-  - title: AI Features
-    url: /ai-features
-  - title: LLM Providers
-    url: /llm-providers
   - title: Docker
     url: /docker
   - title: API Reference

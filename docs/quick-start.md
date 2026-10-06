@@ -5,7 +5,6 @@ Get Frappe MCP Server running in 5 minutes.
 ## Prerequisites
 
 - **Frappe/ERPNext Instance** - Running and accessible with API credentials
-- **Ollama** (optional, for AI features) - [Install](https://ollama.ai)
 - **MCP Client** - Cursor IDE or Claude Desktop
 
 ## Step 1: Install
@@ -18,6 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/in
 ```
 
 This will:
+
 - Detect your platform (Linux/Mac/Windows)
 - Download the latest release
 - Install to `~/.local/bin/frappe-mcp-server-stdio`
@@ -37,7 +37,11 @@ This will:
 ### Option C: Build from Source
 
 ```bash
-# Requires Go 1.24+
+<<<<<<< HEAD
+# Requires Go 1.25+
+=======
+# Requires Go 1.25+; go.mod names the toolchain
+>>>>>>> 475c30e (build(docker): build the server image from the repo itself and state the Go version once, in go.mod)
 git clone https://github.com/vyogotech/frappe-mcp-server
 cd frappe-mcp-server
 
@@ -62,11 +66,6 @@ erpnext:
   api_key: "your_api_key"
   api_secret: "your_api_secret"
   timeout: "30s"
-
-ollama:
-  url: "http://localhost:11434"
-  model: "llama3.2:1b"
-  timeout: "60s"
 ```
 
 ### Get ERPNext API Credentials
@@ -114,16 +113,17 @@ curl http://localhost:8080/api/v1/health
 # List available tools
 curl http://localhost:8080/api/v1/tools
 
-# Natural language query
-curl -X POST http://localhost:8080/api/v1/chat \
+# Call a tool
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
   -H "Content-Type: application/json" \
-  -d '{"message": "List all projects"}'
+  -d '{"params": {"doctype": "Project"}}'
 ```
 
 ### Test in Cursor
 
 Open Cursor and type:
-```
+
+```text
 @erpnext List all ERPNext projects
 ```
 
@@ -135,17 +135,7 @@ The server now supports powerful analytics and reporting:
 
 ```bash
 # Top customers by revenue
-curl -X POST http://localhost:8080/api/v1/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "show me top 5 customers by revenue in table format"}'
-
-# Total sales by item
-curl -X POST http://localhost:8080/api/v1/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "what are total sales by item this month?"}'
-
-# Direct aggregation tool call
-curl -X POST http://localhost:8080/api/v1/tool/aggregate_documents \
+curl -X POST http://localhost:8080/api/v1/tools/aggregate_documents \
   -H "Content-Type: application/json" \
   -d '{
     "doctype": "Sales Invoice",
@@ -159,13 +149,7 @@ curl -X POST http://localhost:8080/api/v1/tool/aggregate_documents \
 ### Run Reports
 
 ```bash
-# Execute ERPNext report via natural language
-curl -X POST http://localhost:8080/api/v1/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "run Sales Analytics report"}'
-
-# Direct report tool call
-curl -X POST http://localhost:8080/api/v1/tool/run_report \
+curl -X POST http://localhost:8080/api/v1/tools/run_report \
   -H "Content-Type: application/json" \
   -d '{
     "report_name": "Sales Analytics",
@@ -173,34 +157,16 @@ curl -X POST http://localhost:8080/api/v1/tool/run_report \
   }'
 ```
 
-## Optional: Setup Ollama (AI Features)
-
-```bash
-# Install Ollama
-curl https://ollama.ai/install.sh | sh
-
-# Pull the model
-ollama pull llama3.2:1b
-
-# Verify
-ollama list
-```
-
-Ollama enables natural language query understanding and intelligent entity extraction.
-
 ## Troubleshooting
 
 ### Connection Refused
+
 - Ensure ERPNext is running and accessible
 - Check `base_url` in `config.yaml`
 - Verify API credentials
 
-### Ollama Not Found
-- AI features require Ollama running locally
-- Install and start Ollama service
-- Verify with `curl http://localhost:11434/api/tags`
-
 ### Cursor Not Detecting Server
+
 - Use absolute paths in `mcp.json`
 - Completely restart Cursor (Cmd+Q)
 - Check Cursor's MCP logs
@@ -208,6 +174,4 @@ Ollama enables natural language query understanding and intelligent entity extra
 ## Next Steps
 
 - [Configuration Guide](configuration.md) - Detailed configuration options
-- [AI Features](ai-features.md) - Learn about natural language queries
 - [API Reference](api-reference.md) - Complete API documentation
-

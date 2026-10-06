@@ -22,12 +22,8 @@ go.work.sum
 # Binary executables (in root and bin/)
 /frappe-mcp-server
 /frappe-mcp-server-*
-/ollama-client
-/test-client
 /mcp-stdio
 bin/frappe-mcp-server*
-bin/ollama-client*
-bin/test-client*
 bin/mcp-stdio*
 
 # Dependency directories

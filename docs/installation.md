@@ -13,6 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/in
 ```
 
 **What it does:**
+
 - Auto-detects your OS and architecture
 - Downloads the latest release binary
 - Installs to `~/.local/bin/frappe-mcp-server-stdio`
@@ -20,6 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/in
 - Creates configuration directory
 
 **Supported platforms:**
+
 - Linux (amd64, arm64)
 - macOS (Intel, Apple Silicon)
 - Windows (amd64)
@@ -31,7 +33,7 @@ Download pre-built binaries from [GitHub Releases](https://github.com/vyogotech/
 #### Available Downloads
 
 | Platform | Architecture | Download |
-|----------|-------------|----------|
+| ---------- | ------------- | ---------- |
 | Linux | Intel/AMD (64-bit) | `frappe-mcp-server-stdio-linux-amd64.tar.gz` |
 | Linux | ARM (64-bit) | `frappe-mcp-server-stdio-linux-arm64.tar.gz` |
 | macOS | Intel | `frappe-mcp-server-stdio-darwin-amd64.tar.gz` |
@@ -41,6 +43,7 @@ Download pre-built binaries from [GitHub Releases](https://github.com/vyogotech/
 #### Manual Installation Steps
 
 **Linux/macOS:**
+
 ```bash
 # Download (replace with your platform)
 wget https://github.com/vyogotech/frappe-mcp-server/releases/latest/download/frappe-mcp-server-stdio-darwin-arm64.tar.gz
@@ -59,6 +62,7 @@ frappe-mcp-server-stdio --help
 ```
 
 **Windows:**
+
 ```powershell
 # Download from releases page
 # Extract the .zip file
@@ -71,7 +75,15 @@ frappe-mcp-server-stdio --help
 For developers or if you want the latest unreleased version:
 
 #### Prerequisites
-- **Go 1.24+** - [Download](https://go.dev/dl/)
+
+<<<<<<< HEAD
+
+- **Go 1.25+** - [Download](https://go.dev/dl/)
+=======
+- **Go 1.25+** — `go.mod` names the toolchain the build uses - [Download](https://go.dev/dl/)
+
+>>>>>>> 475c30e (build(docker): build the server image from the repo itself and state the Go version once, in go.mod)
+
 - **Git**
 - **Make** (optional, but recommended)
 
@@ -139,10 +151,7 @@ Add to your MCP client configuration (`~/.cursor/mcp.json` or Claude Desktop con
       "env": {
         "FRAPPE_BASE_URL": "https://your-frappe-instance.com",
         "FRAPPE_API_KEY": "your_api_key",
-        "FRAPPE_API_SECRET": "your_api_secret",
-        "LLM_PROVIDER_TYPE": "openai-compatible",
-        "LLM_BASE_URL": "http://localhost:11434/v1",
-        "LLM_MODEL": "llama3.2:1b"
+        "FRAPPE_API_SECRET": "your_api_secret"
       }
     }
   }
@@ -159,12 +168,6 @@ erpnext:
   api_key: "your_api_key"
   api_secret: "your_api_secret"
   timeout: "30s"
-
-llm:
-  provider_type: "openai-compatible"
-  base_url: "http://localhost:11434/v1"
-  model: "llama3.2:1b"
-  api_key: ""
 ```
 
 Then reference it in MCP config:
@@ -190,6 +193,7 @@ Then reference it in MCP config:
 4. Restart Cursor
 
 Example `~/.cursor/mcp.json`:
+
 ```json
 {
   "mcpServers": {
@@ -218,6 +222,7 @@ Example `~/.cursor/mcp.json`:
 If you get "command not found":
 
 **Option 1:** Add to PATH
+
 ```bash
 # Add to ~/.bashrc or ~/.zshrc
 export PATH="$PATH:$HOME/.local/bin"
@@ -227,6 +232,7 @@ source ~/.bashrc  # or source ~/.zshrc
 ```
 
 **Option 2:** Use absolute path in MCP config
+
 ```json
 {
   "command": "/full/path/to/frappe-mcp-server-stdio"
@@ -245,12 +251,6 @@ chmod +x /path/to/frappe-mcp-server-stdio
 - Verify your Frappe instance is accessible
 - Check API credentials are correct
 - Test manually: `curl https://your-frappe-instance.com/api/method/ping`
-
-### LLM/AI features not working
-
-- Ensure Ollama is running: `ollama list`
-- Check LLM configuration in config.yaml
-- Verify the model is pulled: `ollama pull llama3.2:1b`
 
 ## Updating
 
@@ -283,6 +283,4 @@ rm -rf ~/.config/frappe-mcp-server
 
 - [Quick Start Guide](quick-start.md) - Get started quickly
 - [Configuration Guide](configuration.md) - Detailed configuration options
-- [LLM Providers](llm-providers.md) - Setup different AI providers
 - [API Reference](api-reference.md) - Explore available tools
-

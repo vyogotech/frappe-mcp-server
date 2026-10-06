@@ -10,7 +10,10 @@ The server reads from `config.yaml` by default. You can specify a different path
 server:
   host: "0.0.0.0"          # Server bind address
   port: 8080               # HTTP server port
-  log_level: "info"        # Logging level: debug, info, warn, error
+  timeout: "30s"           # Read and write timeout for one request
+
+logging:
+  level: "info"            # debug, info, warn, error
 
 erpnext:
   base_url: "http://localhost:8000"  # ERPNext instance URL
@@ -28,11 +31,6 @@ erpnext:
   rate_limit:
     requests_per_second: 10          # Max requests per second
     burst: 20                        # Burst capacity
-
-ollama:
-  url: "http://localhost:11434"      # Ollama API endpoint
-  model: "llama3.2:1b"               # Model to use for AI features
-  timeout: "60s"                     # LLM request timeout
 ```
 
 ## Environment Variables
@@ -40,14 +38,24 @@ ollama:
 Configuration can be overridden using environment variables:
 
 | Variable | Description | Example |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `CONFIG_FILE` | Path to config file | `/etc/erpnext-mcp/config.yaml` |
 | `FRAPPE_BASE_URL` | Frappe URL | `https://erp.company.com` |
 | `FRAPPE_API_KEY` | API key | `abc123...` |
 | `FRAPPE_API_SECRET` | API secret | `xyz789...` |
-| `OLLAMA_URL` | Ollama endpoint | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Ollama model name | `llama3.2:1b` |
+| `SERVER_HOST` | Bind address | `0.0.0.0` |
 | `SERVER_PORT` | HTTP port | `8080` |
+| `LOG_LEVEL` | Logging level | `debug` |
+| `AUTH_ENABLED` | Turn authentication on or off | `true` |
+| `AUTH_REQUIRE_AUTH` | Refuse an unauthenticated request | `true` |
+| `OAUTH_TOKEN_INFO_URL` | Bearer token introspection endpoint | `https://erp.company.com/api/method/frappe.integrations.oauth2.openid_profile` |
+| `OAUTH_TIMEOUT` | Timeout for token validation | `30s` |
+| `CACHE_TTL` | How long a validated token is cached | `5m` |
+| `TOOLS_KNOWLEDGE_BASE` | Offer `search_knowledge_base` | `true` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP collector; tracing is off when unset | `http://otel-collector:4318` |
+
+A numeric or boolean variable whose value cannot be parsed stops the server at startup and names the variable;
+booleans take the spellings `strconv.ParseBool` accepts (`true`, `True`, `1`, `t`, `false`, `0`, ...).
 
 Environment variables take precedence over config file values.
 
@@ -56,6 +64,7 @@ Environment variables take precedence over config file values.
 ### 1. Create API Credentials
 
 In ERPNext:
+
 1. Go to **User** list
 2. Select your user
 3. Scroll to **API Access** section
@@ -65,6 +74,7 @@ In ERPNext:
 ### 2. Set Permissions
 
 Ensure the user has appropriate roles:
+
 - **System Manager** (for full access)
 - Or specific DocType permissions for limited access
 
@@ -77,44 +87,6 @@ If ERPNext is on a different domain, add CORS headers in `site_config.json`:
   "allow_cors": "*",
   "cors_allowed_origins": ["http://localhost:8080"]
 }
-```
-
-## Ollama Setup
-
-### Installation
-
-```bash
-# macOS/Linux
-curl https://ollama.ai/install.sh | sh
-
-# Windows - download from https://ollama.ai
-```
-
-### Pull Models
-
-```bash
-# Recommended: Fast and efficient (1.2B parameters)
-ollama pull llama3.2:1b
-
-# Alternative: More capable (8B parameters, slower)
-ollama pull llama3.1
-
-# List downloaded models
-ollama list
-```
-
-### Model Selection
-
-| Model | Size | Speed | Accuracy | Use Case |
-|-------|------|-------|----------|----------|
-| `llama3.2:1b` | 1.3GB | ⚡ Fast | Good | Quick queries, entity extraction |
-| `llama3.1` | 4.9GB | 🐢 Slower | Better | Complex analysis, detailed queries |
-
-Configure in `config.yaml`:
-
-```yaml
-ollama:
-  model: "llama3.2:1b"  # or "llama3.1"
 ```
 
 ## Performance Tuning
@@ -149,9 +121,6 @@ Adjust for slow networks or large data:
 ```yaml
 erpnext:
   timeout: "60s"             # Longer timeout for large queries
-
-ollama:
-  timeout: "120s"            # Longer for complex AI processing
 ```
 
 ## Security Best Practices
@@ -185,19 +154,15 @@ server:
   host: "127.0.0.1"  # Only accessible locally
 ```
 
-### 4. Network Isolation
-
-Run Ollama on the same machine to avoid sending queries over network.
-
 ## Multiple Environments
 
 ### Development
 
 ```yaml
 # config.dev.yaml
-server:
-  log_level: "debug"
-  
+logging:
+  level: "debug"
+
 erpnext:
   base_url: "http://localhost:8000"
 ```
@@ -207,8 +172,10 @@ erpnext:
 ```yaml
 # config.prod.yaml
 server:
-  log_level: "warn"
   host: "127.0.0.1"
+
+logging:
+  level: "warn"
 
 erpnext:
   base_url: "https://erp.company.com"
@@ -228,11 +195,14 @@ CONFIG_FILE=config.prod.yaml ./bin/frappe-mcp-server
 Set log level:
 
 ```yaml
-server:
-  log_level: "debug"  # debug, info, warn, error
+logging:
+  level: "debug"  # debug, info, warn, error
 ```
 
+Or set `LOG_LEVEL` in the environment.
+
 Logs are written to:
+
 - **STDOUT** for HTTP server
 - **STDERR** for STDIO server (to not interfere with MCP protocol)
 
@@ -247,8 +217,6 @@ Test your configuration:
 # Should see:
 # INFO Starting ERPNext MCP Server on 0.0.0.0:8080
 # INFO Connected to ERPNext at http://localhost:8000
-# INFO Ollama available at http://localhost:11434 with model llama3.2:1b
 ```
 
-Next: [AI Features](ai-features.md)
-
+Next: [Analytics & Reporting](analytics-features.md)

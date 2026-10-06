@@ -1,46 +1,60 @@
+// Package frappe is a client for the generic Frappe REST API, so any Frappe app works, not only ERPNext.
 package frappe
-
-// Package frappe provides a client for the Frappe Framework REST API.
-// This client works with ANY Frappe-based application including ERPNext,
-// Frappe HR, Healthcare, Education, and custom Frappe apps.
-// The API endpoints used are generic Frappe Framework endpoints:
-//   - /api/resource/{doctype}           - CRUD operations
-//   - /api/method/frappe.desk.search.*  - Search operations
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	// the only use is retry backoff jitter, not a secret; gosec carries the same reasoning at its call site
+	"math/rand/v2" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used
+	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
+	"github.com/patrickmn/go-cache"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"frappe-mcp-server/internal/auth"
 	"frappe-mcp-server/internal/config"
+	"frappe-mcp-server/internal/telemetry"
 	"frappe-mcp-server/internal/types"
 )
 
-// Client represents a Frappe Framework API client.
-// Works with ERPNext and all other Frappe-based applications.
 type Client struct {
 	baseURL     string
 	apiKey      string
 	apiSecret   string
 	httpClient  *http.Client
-	rateLimiter *rate.Limiter
+	rateLimit   config.RateLimitConfig
+	limiters    *cache.Cache
+	limitersMu  sync.Mutex
 	retryConfig config.RetryConfig
-	cache       sync.Map // Simple in-memory cache
+	csrfTokens  *cache.Cache
 }
 
-// NewClient creates a new Frappe client (works with any Frappe-based application)
+// limiterTTL drops the bucket of a caller that has stopped calling; an idle bucket is a full bucket anyway.
+const limiterTTL = 10 * time.Minute
+
+// maxResponseBody bounds what one Frappe answer may cost this process: an unbounded read is a memory risk, and a
+// result this large is past anything a model can read anyway.
+const maxResponseBody = 8 << 20
+
+// csrfTokenTTL bounds how long a session's scraped token is reused; Frappe issues a new one with a new sid,
+// so the key already changes when the session does.
+const csrfTokenTTL = 5 * time.Minute
+
+// csrfTokenPattern reads a session's CSRF token out of the desk page: frappe.sessions.get_csrf_token is not whitelisted.
+var csrfTokenPattern = regexp.MustCompile(`csrf_token\s*=\s*"([a-f0-9]{20,64})"`)
+
+// NewClient takes the API key and secret both or neither; without them, a call needs a user in its context.
 func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("base URL is required")
@@ -53,11 +67,8 @@ func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 		return nil, fmt.Errorf("API key provided without API secret")
 	}
 
-	// Create HTTP client with connection pooling, instrumented with OpenTelemetry.
-	// otelhttp.NewTransport wraps the underlying transport and creates child
-	// spans for every outbound request. When telemetry is disabled (no global
-	// provider), the wrapper is a no-op.
 	transport := &http.Transport{
+		Proxy:               http.ProxyFromEnvironment,
 		MaxIdleConns:        100,
 		IdleConnTimeout:     90 * time.Second,
 		DisableCompression:  false,
@@ -69,33 +80,19 @@ func NewClient(cfg config.ERPNextConfig) (*Client, error) {
 		Timeout:   cfg.Timeout,
 	}
 
-	// Create rate limiter
-	rateLimiter := rate.NewLimiter(
-		rate.Limit(cfg.RateLimit.RequestsPerSecond),
-		cfg.RateLimit.Burst,
-	)
-
 	return &Client{
 		baseURL:     strings.TrimSuffix(cfg.BaseURL, "/"),
 		apiKey:      cfg.APIKey,
 		apiSecret:   cfg.APISecret,
 		httpClient:  httpClient,
-		rateLimiter: rateLimiter,
+		rateLimit:   cfg.RateLimit,
+		limiters:    cache.New(limiterTTL, 2*limiterTTL),
 		retryConfig: cfg.Retry,
+		csrfTokens:  cache.New(csrfTokenTTL, 2*csrfTokenTTL),
 	}, nil
 }
 
-// GetDocument retrieves a single document by doctype and name
 func (c *Client) GetDocument(ctx context.Context, docType, name string) (types.Document, error) {
-	// Check cache first
-	cacheKey := fmt.Sprintf("doc:%s:%s", docType, name)
-	if cached, ok := c.cache.Load(cacheKey); ok {
-		if doc, ok := cached.(types.Document); ok {
-			slog.Debug("Document retrieved from cache", "doctype", docType, "name", name)
-			return doc, nil
-		}
-	}
-
 	endpoint := fmt.Sprintf("/api/resource/%s/%s", url.PathEscape(docType), url.PathEscape(name))
 
 	var response struct {
@@ -106,14 +103,10 @@ func (c *Client) GetDocument(ctx context.Context, docType, name string) (types.D
 		return nil, fmt.Errorf("failed to get document %s/%s: %w", docType, name, err)
 	}
 
-	// Cache the result
-	c.cache.Store(cacheKey, response.Data)
-
 	slog.Info("Document retrieved successfully", "doctype", docType, "name", name)
 	return response.Data, nil
 }
 
-// GetDocumentList retrieves a list of documents with pagination
 func (c *Client) GetDocumentList(ctx context.Context, req types.SearchRequest) (*types.DocumentList, error) {
 	endpoint := fmt.Sprintf("/api/resource/%s", url.PathEscape(req.DocType))
 
@@ -164,7 +157,6 @@ func (c *Client) GetDocumentList(ctx context.Context, req types.SearchRequest) (
 	return result, nil
 }
 
-// CreateDocument creates a new document
 func (c *Client) CreateDocument(ctx context.Context, req types.CreateDocumentRequest) (types.Document, error) {
 	endpoint := fmt.Sprintf("/api/resource/%s", url.PathEscape(req.DocType))
 
@@ -176,14 +168,10 @@ func (c *Client) CreateDocument(ctx context.Context, req types.CreateDocumentReq
 		return nil, fmt.Errorf("failed to create document %s: %w", req.DocType, err)
 	}
 
-	// Invalidate cache for this doctype
-	c.invalidateCache(req.DocType)
-
 	slog.Info("Document created successfully", "doctype", req.DocType)
 	return response.Data, nil
 }
 
-// UpdateDocument updates an existing document
 func (c *Client) UpdateDocument(ctx context.Context, req types.UpdateDocumentRequest) (types.Document, error) {
 	endpoint := fmt.Sprintf("/api/resource/%s/%s",
 		url.PathEscape(req.DocType),
@@ -197,15 +185,10 @@ func (c *Client) UpdateDocument(ctx context.Context, req types.UpdateDocumentReq
 		return nil, fmt.Errorf("failed to update document %s/%s: %w", req.DocType, req.Name, err)
 	}
 
-	// Invalidate cache for this specific document
-	cacheKey := fmt.Sprintf("doc:%s:%s", req.DocType, req.Name)
-	c.cache.Delete(cacheKey)
-
 	slog.Info("Document updated successfully", "doctype", req.DocType, "name", req.Name)
 	return response.Data, nil
 }
 
-// DeleteDocument deletes a document
 func (c *Client) DeleteDocument(ctx context.Context, docType, name string) error {
 	endpoint := fmt.Sprintf("/api/resource/%s/%s",
 		url.PathEscape(docType),
@@ -215,15 +198,11 @@ func (c *Client) DeleteDocument(ctx context.Context, docType, name string) error
 		return fmt.Errorf("failed to delete document %s/%s: %w", docType, name, err)
 	}
 
-	// Invalidate cache
-	cacheKey := fmt.Sprintf("doc:%s:%s", docType, name)
-	c.cache.Delete(cacheKey)
-
 	slog.Info("Document deleted successfully", "doctype", docType, "name", name)
 	return nil
 }
 
-// SearchDocuments performs full-text search across documents
+// SearchDocuments lists req.DocType, or calls search_link when req.Search is set.
 func (c *Client) SearchDocuments(ctx context.Context, req types.SearchRequest) (*types.DocumentList, error) {
 	endpoint := fmt.Sprintf("/api/resource/%s", url.PathEscape(req.DocType))
 
@@ -303,7 +282,6 @@ func (c *Client) SearchDocuments(ctx context.Context, req types.SearchRequest) (
 	return result, nil
 }
 
-// GlobalSearchResult is a single result from the Frappe global search.
 type GlobalSearchResult struct {
 	Name    string `json:"name"`
 	DocType string `json:"doctype"`
@@ -311,20 +289,16 @@ type GlobalSearchResult struct {
 	Route   string `json:"route"`
 }
 
-// GlobalSearchRequest holds the parameters for a global search call.
 type GlobalSearchRequest struct {
 	Text    string      `json:"text"`
-	Doctype string      `json:"doctype,omitempty"`  // restrict to one doctype
-	Scope   interface{} `json:"scope,omitempty"`    // one doctype or []string
+	Doctype string      `json:"doctype,omitempty"` // restrict to one doctype
+	Scope   interface{} `json:"scope,omitempty"`   // one doctype or []string
 	Limit   int         `json:"limit,omitempty"`
 	Start   int         `json:"start,omitempty"`
 }
 
-// GlobalSearch performs a full-text search across all indexed doctypes using
-// the Frappe global search endpoint (/api/method/frappe.utils.global_search.search).
-// SearchKnowledgeBase asks the rag app for the passages closest to a question. The app owns
-// the vector search and the per-user permission filter; this only carries the call.
-func (c *Client) SearchKnowledgeBase(ctx context.Context, query string, limit int) ([]map[string]interface{}, error) {
+// SearchKnowledgeBase only carries the call: the rag app owns the vector search and the per-user permission filter.
+func (c *Client) SearchKnowledgeBase(ctx context.Context, query string, limit int, session string) ([]map[string]interface{}, error) {
 	if query == "" {
 		return nil, fmt.Errorf("query is required for a knowledge base search")
 	}
@@ -332,21 +306,50 @@ func (c *Client) SearchKnowledgeBase(ctx context.Context, query string, limit in
 		limit = 5
 	}
 
-	params := url.Values{}
-	params.Set("query", query)
-	params.Set("limit", fmt.Sprintf("%d", limit))
+	// the question travels in the body, never the query string: nginx logs every URL it serves and
+	// rag.search.search is POST-only since ADR-037, so a GET is refused outright
+	body := map[string]any{"query": query, "limit": limit}
+	// the chat the question comes from: the app also searches the files attached to it
+	if session != "" {
+		body["session"] = session
+	}
 
 	var response struct {
 		Message []map[string]interface{} `json:"message"`
 	}
-	endpoint := "/api/method/rag.search.search?" + params.Encode()
-	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
+	if err := c.makeRequest(ctx, "POST", "/api/method/rag.search.search", body, &response); err != nil {
 		return nil, fmt.Errorf("knowledge base search failed: %w", err)
 	}
 
 	return response.Message, nil
 }
 
+// RedeemConfirmation spends the one-time token the user's click minted, as the user. The token is in the body and
+// nowhere else: not in the error this returns, not in a log line, not in the tool result the model reads.
+func (c *Client) RedeemConfirmation(ctx context.Context, method, token, tool, doctype, name string) error {
+	if method == "" {
+		return fmt.Errorf("no confirmation redeem method is configured")
+	}
+	if token == "" {
+		return fmt.Errorf("no confirmation token")
+	}
+
+	var response struct {
+		Message struct {
+			OK bool `json:"ok"`
+		} `json:"message"`
+	}
+	body := map[string]interface{}{"token": token, "tool": tool, "doctype": doctype, "name": name}
+	if err := c.makeRequest(ctx, "POST", "/api/method/"+method, body, &response); err != nil {
+		return fmt.Errorf("confirmation redeem failed: %w", err)
+	}
+	if !response.Message.OK {
+		return fmt.Errorf("confirmation was not redeemed")
+	}
+	return nil
+}
+
+// GlobalSearch calls Frappe's global search, frappe.utils.global_search.search.
 func (c *Client) GlobalSearch(ctx context.Context, req GlobalSearchRequest) ([]GlobalSearchResult, error) {
 	if req.Text == "" {
 		return nil, fmt.Errorf("text is required for global search")
@@ -377,48 +380,42 @@ func (c *Client) GlobalSearch(ctx context.Context, req GlobalSearchRequest) ([]G
 	return response.Message, nil
 }
 
-// makeRequest makes an HTTP request to Frappe API with retry logic
+// makeRequest rate-limits every call and retries only a GET.
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
-	// Apply rate limiting
-	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return fmt.Errorf("rate limit error: %w", err)
+	attempts := 1
+	if method == http.MethodGet { // a write retried after a timeout can run twice (RFC 9110 9.2.2)
+		attempts = max(1, c.retryConfig.MaxAttempts)
 	}
-
-	var attempt int
-	for attempt = 0; attempt < c.retryConfig.MaxAttempts; attempt++ {
-		if attempt > 0 {
-			// Calculate delay for retry with exponential backoff
-			delay := time.Duration(attempt) * c.retryConfig.InitialDelay
-			if delay > c.retryConfig.MaxDelay {
-				delay = c.retryConfig.MaxDelay
-			}
-
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-			}
-
-			slog.Debug("Retrying request", "attempt", attempt+1, "delay", delay)
+	for attempt := 1; ; attempt++ {
+		if err := c.limiter(ctx).Wait(ctx); err != nil {
+			return fmt.Errorf("rate limit error: %w", err)
 		}
-
 		err := c.doRequest(ctx, method, endpoint, body, result)
-		if err == nil {
-			return nil
-		}
-
-		// Check if error is retryable
-		if !isRetryableError(err) {
+		if err == nil || attempt == attempts || !isRetryableError(ctx, err) {
 			return err
 		}
-
-		slog.Warn("Request failed, will retry", "error", err, "attempt", attempt+1)
+		// full jitter up to an exponential bound, so the retries of many calls do not arrive together
+		bound := min(c.retryConfig.MaxDelay, c.retryConfig.InitialDelay<<min(attempt-1, 30))
+		// #nosec G404 -- backoff jitter is not a secret, so CWE-338 does not apply. gosec only reads a
+		// directive that leads its comment, and golangci-lint only reads nolint, so both must be here.
+		delay := rand.N(bound + 1) //nolint:gosec
+		slog.Debug("Retrying request", "attempt", attempt+1, "delay", delay, "error", err)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
 	}
-
-	return fmt.Errorf("request failed after %d attempts", attempt)
 }
 
-// doRequest performs the actual HTTP request
+// setRequestID names the answer that caused this call on the record Frappe writes for it. frappe.monitor
+// adopts this header and no other (frappe/monitor.py:79), and only where frappe.conf.monitor is set.
+func setRequestID(ctx context.Context, req *http.Request) {
+	if id := telemetry.RequestIDFromContext(ctx); id != "" {
+		req.Header.Set(telemetry.FrappeRequestIDHeader, id)
+	}
+}
+
 func (c *Client) doRequest(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
 	fullURL := c.baseURL + endpoint
 
@@ -439,56 +436,10 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	
-	// Authentication priority:
-	// 1. sid cookie (user session) - best, user-level permissions
-	// 2. OAuth2 Bearer token - good, can be user or system level
-	// 3. API key/secret - fallback, system-level permissions
-	
-	user := auth.UserFromContext(ctx)
-	
-	if user != nil && user.SessionID != "" {
-		// Priority 1: Use Frappe session cookie (user-level permissions)
-		cookie := &http.Cookie{
-			Name:     "sid",
-			Value:    user.SessionID,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		}
-		// Only set Secure flag if we're using HTTPS
-		if strings.HasPrefix(c.baseURL, "https://") {
-			cookie.Secure = true
-		}
-		req.AddCookie(cookie)
-		slog.Debug("Using sid cookie for outbound request", "user", user.Email, "method", method, "csrf_token_len", len(user.CSRFToken))
-		// Frappe enforces CSRF on POST/PUT/DELETE under sid auth whenever the
-		// session has a csrf_token populated (which happens the first time the
-		// sid loads any /app/* page — i.e. always, for browser-driven users).
-		// The token is fetched in validateSessionCookie by scraping /app HTML.
-		if (method == "POST" || method == "PUT" || method == "DELETE") && user.CSRFToken != "" {
-			req.Header.Set("X-Frappe-CSRF-Token", user.CSRFToken)
-			slog.Debug("Set X-Frappe-CSRF-Token header", "user", user.Email, "method", method, "token_len", len(user.CSRFToken))
-		}
-	} else if user != nil && user.Token != "" {
-		// Priority 2: Use user's OAuth2 token for user-level permissions in Frappe
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", user.Token))
-		slog.Debug("Using user OAuth2 token", "user", user.Email)
-	} else if c.apiKey != "" && c.apiSecret != "" {
-		// Priority 3: Fall back to API key/secret if no user token
-		req.Header.Set("Authorization", fmt.Sprintf("token %s:%s", c.apiKey, c.apiSecret))
-		
-		// For API key auth, bypass CSRF by setting headers
-		// Frappe recognizes api/method endpoints and API key auth should bypass CSRF
-		req.Header.Set("X-Frappe-CSRF-Token", "bypass")
-		
-		// Warn if using placeholder credentials
-		if c.apiKey == "your_api_key_here" || c.apiSecret == "your_api_secret_here" {
-			slog.Warn("Using placeholder API credentials - authentication will fail",
-				"endpoint", endpoint)
-		}
-		slog.Debug("Using API key/secret authentication")
-	} else {
-		return fmt.Errorf("no authentication credentials available (no session, token, or API key)")
+	setRequestID(ctx, req)
+
+	if err := c.setCredentials(ctx, req, method, endpoint); err != nil {
+		return err
 	}
 
 	// Log request details (without sensitive data)
@@ -503,9 +454,13 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	responseBody, err := io.ReadAll(resp.Body)
+	// one byte past the ceiling, so an answer that reaches it is refused rather than parsed half-read
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody+1))
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
+	}
+	if len(responseBody) > maxResponseBody {
+		return fmt.Errorf("response from frappe is too large: over %d bytes", maxResponseBody)
 	}
 
 	// Log response details
@@ -513,41 +468,8 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 		"status", resp.StatusCode,
 		"body_size", len(responseBody))
 
-	// Check for HTTP errors
 	if resp.StatusCode >= 400 {
-		var erpError types.ERPNextError
-		if err := json.Unmarshal(responseBody, &erpError); err != nil {
-			// If we can't parse the error, create a generic one
-			erpError = types.ERPNextError{
-				Message:    string(responseBody),
-				StatusCode: resp.StatusCode,
-			}
-		}
-		erpError.StatusCode = resp.StatusCode
-		
-		// If message is empty, provide a more helpful error based on status code
-		if erpError.Message == "" {
-			switch resp.StatusCode {
-			case 401:
-				erpError.Message = fmt.Sprintf("Authentication failed (HTTP %d). Please check your API credentials or OAuth2 token. Raw response: %s", resp.StatusCode, string(responseBody))
-			case 403:
-				erpError.Message = fmt.Sprintf("Permission denied (HTTP %d). The current user/API key does not have permission for this operation. Raw response: %s", resp.StatusCode, string(responseBody))
-			case 404:
-				erpError.Message = fmt.Sprintf("Resource not found (HTTP %d). Endpoint: %s. Raw response: %s", resp.StatusCode, endpoint, string(responseBody))
-			case 500:
-				erpError.Message = fmt.Sprintf("Internal server error (HTTP %d). Raw response: %s", resp.StatusCode, string(responseBody))
-			default:
-				erpError.Message = fmt.Sprintf("HTTP error %d. Raw response: %s", resp.StatusCode, string(responseBody))
-			}
-		}
-		
-		slog.Error("Frappe API error",
-			"status_code", resp.StatusCode,
-			"endpoint", endpoint,
-			"message", erpError.Message,
-			"response_body", string(responseBody))
-		
-		return &erpError
+		return frappeError(resp.StatusCode, responseBody, endpoint)
 	}
 
 	// Parse successful response if result pointer is provided
@@ -560,88 +482,169 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	return nil
 }
 
-// isRetryableError determines if an error is retryable
-func isRetryableError(err error) bool {
-	if erpErr, ok := err.(*types.ERPNextError); ok {
-		// Retry on server errors but not client errors
-		return erpErr.StatusCode >= 500
-	}
-	// Retry on network errors
-	return true
-}
+// setCredentials puts the caller's own credential on the outbound request, in this order: the sid and the user's
+// token carry the user's permissions, the configured API key is system-level.
+func (c *Client) setCredentials(ctx context.Context, req *http.Request, method, endpoint string) error {
+	user := auth.UserFromContext(ctx)
 
-// invalidateCache removes all cache entries for a given doctype
-func (c *Client) invalidateCache(docType string) {
-	prefix := fmt.Sprintf("doc:%s:", docType)
-	c.cache.Range(func(key, value interface{}) bool {
-		if keyStr, ok := key.(string); ok && strings.HasPrefix(keyStr, prefix) {
-			c.cache.Delete(key)
+	switch {
+	case user != nil && user.SessionID != "":
+		// a request carries a cookie as name=value only: Secure, HttpOnly and SameSite belong to Set-Cookie
+		req.Header.Set("Cookie", "sid="+user.SessionID)
+		slog.Debug("Using sid cookie for outbound request", "user", user.Email, "method", method)
+		// Frappe rejects sid-auth writes without the session's CSRF token, and only these methods are writes.
+		if method == "POST" || method == "PUT" || method == "DELETE" {
+			if token := c.csrfToken(ctx, user); token != "" {
+				req.Header.Set("X-Frappe-CSRF-Token", token)
+			}
 		}
-		return true
-	})
+	case user != nil && user.Token != "":
+		req.Header.Set("Authorization", "Bearer "+user.Token)
+		slog.Debug("Using user OAuth2 token", "user", user.Email)
+	case c.apiKey != "" && c.apiSecret != "":
+		req.Header.Set("Authorization", fmt.Sprintf("token %s:%s", c.apiKey, c.apiSecret))
+		// Frappe exempts API-key auth from CSRF, and reads this header as the opt out
+		req.Header.Set("X-Frappe-CSRF-Token", "bypass")
+		if c.apiKey == "your_api_key_here" || c.apiSecret == "your_api_secret_here" {
+			slog.Warn("Using placeholder API credentials - authentication will fail", "endpoint", endpoint)
+		}
+		slog.Debug("Using API key/secret authentication")
+	default:
+		return fmt.Errorf("no authentication credentials available (no session, token, or API key)")
+	}
+	return nil
 }
 
-// ClearCache clears all cached data
-func (c *Client) ClearCache() {
-	c.cache.Range(func(key, value interface{}) bool {
-		c.cache.Delete(key)
-		return true
-	})
+// frappeError turns a 4xx or 5xx answer into the error a tool hands the model.
+func frappeError(statusCode int, responseBody []byte, endpoint string) error {
+	// the message carries Frappe's one-line exception, never the raw body (a traceback, sometimes document text) or
+	// the endpoint (whose query string holds rag.search's question): callers log it and pass it to the model
+	var erpError types.ERPNextError
+	_ = json.Unmarshal(responseBody, &erpError)
+	erpError.StatusCode = statusCode
+	detail := erpError.Exception
+	if detail == "" {
+		detail = erpError.ExcType
+	}
+
+	// a session that ended is not a permission problem, and the model repeats this text to the user
+	switch {
+	case erpError.SessionExpired != 0:
+		erpError.Message = types.SessionExpiredMessage
+	case erpError.Message == "":
+		erpError.Message = statusMessage(statusCode, detail)
+	}
+
+	// the query string holds rag.search's question and the body can hold document text
+	slog.Error("Frappe API error",
+		"status_code", statusCode,
+		"path", strings.SplitN(endpoint, "?", 2)[0],
+		"exc_type", erpError.ExcType,
+		"session_expired", erpError.SessionExpired != 0)
+
+	return &erpError
+}
+
+// statusMessage is what a tool says when Frappe answered an error with no message of its own.
+func statusMessage(statusCode int, detail string) string {
+	switch statusCode {
+	case 401:
+		return fmt.Sprintf("Authentication failed (HTTP %d). Please check your API credentials or OAuth2 token. %s", statusCode, detail)
+	case 403:
+		return fmt.Sprintf("Permission denied (HTTP %d). The current user/API key does not have permission for this operation. %s", statusCode, detail)
+	case 404:
+		return fmt.Sprintf("Resource not found (HTTP %d). %s", statusCode, detail)
+	case 500:
+		return fmt.Sprintf("Internal server error (HTTP %d). %s", statusCode, detail)
+	default:
+		return fmt.Sprintf("HTTP error %d. %s", statusCode, detail)
+	}
+}
+
+// isRetryableError accepts a network failure or a gateway error, never a 500, a 4xx or a cancelled call.
+func isRetryableError(ctx context.Context, err error) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	var erpErr *types.ERPNextError
+	if errors.As(err, &erpErr) {
+		return erpErr.StatusCode == http.StatusBadGateway || erpErr.StatusCode == http.StatusServiceUnavailable ||
+			erpErr.StatusCode == http.StatusGatewayTimeout
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr)
 }
 
 // RunAggregationQuery executes an aggregation query using frappe.client.get_list
 func (c *Client) RunAggregationQuery(ctx context.Context, req types.AggregationRequest) ([]types.Document, error) {
 	endpoint := "/api/method/frappe.client.get_list"
-	
-	// Build request body
+
+	// Frappe v16's get_list refuses "SUM(x)" strings; an aggregate is a {"SUM": field} dict
+	arg := req.Field
+	if strings.EqualFold(req.Metric, "count") {
+		arg = "name"
+	}
+	fields := []interface{}{map[string]string{strings.ToUpper(req.Metric): arg, "as": "value"}}
+	if req.GroupBy != "" {
+		fields = append([]interface{}{req.GroupBy}, fields...)
+	}
 	requestBody := map[string]interface{}{
-		"doctype": req.DocType,
+		"doctype":           req.DocType,
+		"fields":            fields,
+		"limit_page_length": req.TopN, // 0 is every group, not Frappe's default page of 20
 	}
-	
-	// Add fields (for aggregation like SUM, COUNT, etc.)
-	if len(req.Fields) > 0 {
-		requestBody["fields"] = req.Fields
-	}
-	
-	// Add filters
 	if len(req.Filters) > 0 {
 		requestBody["filters"] = req.Filters
 	}
-	
-	// Add group by
 	if req.GroupBy != "" {
 		requestBody["group_by"] = req.GroupBy
 	}
-	
-	// Add order by
-	if req.OrderBy != "" {
-		requestBody["order_by"] = req.OrderBy
+	if req.TopN > 0 {
+		requestBody["order_by"] = "value desc"
 	}
-	
-	// Add limit
-	if req.Limit > 0 {
-		requestBody["limit_page_length"] = req.Limit
-	}
-	
+
 	var response struct {
 		Message []types.Document `json:"message"`
 	}
-	
+
 	if err := c.makeRequest(ctx, "POST", endpoint, requestBody, &response); err != nil {
 		return nil, fmt.Errorf("aggregation query failed for %s: %w", req.DocType, err)
 	}
-	
+
 	slog.Info("Aggregation query executed successfully",
 		"doctype", req.DocType,
 		"group_by", req.GroupBy,
 		"result_count", len(response.Message))
-	
+
 	return response.Message, nil
 }
 
-// GetCount returns the total number of docType documents matching filters.
-// get_list is paginated, so only get_count yields a true total. Permissions are
-// identical: both run the same DatabaseQuery with ignore_permissions unset.
+// reportRows gives every row as an object, since a prepared report cached before v16 returns arrays in column order.
+func reportRows(columns []types.ReportColumn, result []json.RawMessage) ([]map[string]interface{}, error) {
+	rows := make([]map[string]interface{}, 0, len(result))
+	for i, raw := range result {
+		row := map[string]interface{}{}
+		if err := json.Unmarshal(raw, &row); err == nil {
+			rows = append(rows, row)
+			continue
+		}
+		var cells []interface{}
+		if err := json.Unmarshal(raw, &cells); err != nil {
+			return nil, fmt.Errorf("row %d is neither an object nor an array", i)
+		}
+		for j, cell := range cells {
+			if j < len(columns) && columns[j].FieldName != "" {
+				row[columns[j].FieldName] = cell
+			} else {
+				row[fmt.Sprintf("column_%d", j)] = cell
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
+
+// GetCount returns the true total of matching documents, which paginated get_list cannot, under the same permissions.
 func (c *Client) GetCount(ctx context.Context, docType string, filters map[string]interface{}) (int64, error) {
 	// get_count reads the whole body via form_dict; a stray "limit" caps the count.
 	requestBody := map[string]interface{}{"doctype": docType}
@@ -662,88 +665,14 @@ func (c *Client) GetCount(ctx context.Context, docType string, filters map[strin
 	return response.Message, nil
 }
 
-// GetReportFilters fetches the filter metadata for a report
-func (c *Client) GetReportFilters(ctx context.Context, reportName string) ([]types.ReportFilter, error) {
-	// Check cache first
-	cacheKey := fmt.Sprintf("report_filters:%s", reportName)
-	if cached, ok := c.cache.Load(cacheKey); ok {
-		if filters, ok := cached.([]types.ReportFilter); ok {
-			slog.Debug("Report filters retrieved from cache", "report_name", reportName)
-			return filters, nil
-		}
-	}
-
-	// Use Frappe's desk.query_report.get_report_doc method to get report metadata
-	endpoint := "/api/method/frappe.desk.query_report.get_report_doc"
-	
-	// Build query parameters
-	queryParams := url.Values{}
-	queryParams.Set("report_name", reportName)
-	endpoint = endpoint + "?" + queryParams.Encode()
-	
-	var response struct {
-		Message struct {
-			Filters interface{} `json:"filters"` // Can be string (JSON) or array
-		} `json:"message"`
-	}
-	
-	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
-		return nil, fmt.Errorf("failed to get report metadata for %s: %w", reportName, err)
-	}
-	
-	// Parse the filters - they might be a JSON string or already an array
-	var filters []types.ReportFilter
-	
-	switch v := response.Message.Filters.(type) {
-	case string:
-		// Filters are JSON string, need to unmarshal
-		if v != "" {
-			if err := json.Unmarshal([]byte(v), &filters); err != nil {
-				slog.Warn("Failed to parse report filters from JSON string", "report_name", reportName, "error", err)
-				return []types.ReportFilter{}, nil
-			}
-		}
-	case []interface{}:
-		// Filters are already an array, convert each element
-		for _, item := range v {
-			if filterMap, ok := item.(map[string]interface{}); ok {
-				filter := types.ReportFilter{}
-				if fieldname, ok := filterMap["fieldname"].(string); ok {
-					filter.FieldName = fieldname
-				}
-				if label, ok := filterMap["label"].(string); ok {
-					filter.Label = label
-				}
-				if fieldtype, ok := filterMap["fieldtype"].(string); ok {
-					filter.FieldType = fieldtype
-				}
-				if mandatory, ok := filterMap["mandatory"].(float64); ok {
-					filter.Mandatory = int(mandatory)
-				} else if mandatory, ok := filterMap["mandatory"].(int); ok {
-					filter.Mandatory = mandatory
-				}
-				filter.Default = filterMap["default"]
-				filters = append(filters, filter)
-			}
-		}
-	}
-	
-	// Cache the result for 5 minutes
-	c.cache.Store(cacheKey, filters)
-	
-	slog.Info("Report filters retrieved successfully", "report_name", reportName, "filter_count", len(filters))
-	return filters, nil
-}
-
-// RunReport executes a Frappe report and returns the results
 func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types.ReportResponse, error) {
 	// Use GET request with query parameters to avoid CSRF issues with API key auth
 	endpoint := "/api/method/frappe.desk.query_report.run"
-	
+
 	// Build query parameters
 	queryParams := url.Values{}
 	queryParams.Set("report_name", req.ReportName)
-	
+
 	// Add filters if provided - need to JSON encode them
 	if len(req.Filters) > 0 {
 		filtersJSON, err := json.Marshal(req.Filters)
@@ -752,38 +681,42 @@ func (c *Client) RunReport(ctx context.Context, req types.ReportRequest) (*types
 		}
 		queryParams.Set("filters", string(filtersJSON))
 	}
-	
+
 	// Add user context if provided
 	if req.User != "" {
 		queryParams.Set("user", req.User)
 	}
-	
+
 	// Append query parameters to endpoint
 	if len(queryParams) > 0 {
 		endpoint = endpoint + "?" + queryParams.Encode()
 	}
-	
+
 	var response struct {
 		Message struct {
 			Columns []types.ReportColumn `json:"columns"`
-			Result  [][]interface{}      `json:"result"`
+			Result  []json.RawMessage    `json:"result"`
 		} `json:"message"`
 	}
-	
+
 	// Use GET request instead of POST to avoid CSRF token issues
 	if err := c.makeRequest(ctx, "GET", endpoint, nil, &response); err != nil {
 		return nil, fmt.Errorf("report query failed for %s: %w", req.ReportName, err)
 	}
-	
+
+	rows, err := reportRows(response.Message.Columns, response.Message.Result)
+	if err != nil {
+		return nil, fmt.Errorf("report %s: %w", req.ReportName, err)
+	}
 	result := &types.ReportResponse{
 		Columns: response.Message.Columns,
-		Data:    response.Message.Result,
+		Data:    rows,
 	}
-	
+
 	slog.Info("Report executed successfully",
 		"report_name", req.ReportName,
 		"columns", len(result.Columns),
 		"rows", len(result.Data))
-	
+
 	return result, nil
 }

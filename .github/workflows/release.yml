@@ -5,157 +5,93 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-and-release:
+  release:
     name: Build and Release
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
-    
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          # the tag itself, so `go build` stamps it into the binary (Go 1.24+ reads the VCS tag)
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.25'
-          cache: true
+          go-version-file: go.mod
+          cache: false
 
-      - name: Get version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Generate SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          upload-artifact: false
+          upload-release-assets: false
 
-      - name: Build STDIO binary
+      - name: Build every platform
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
           mkdir -p dist
-          BINARY_NAME="frappe-mcp-server-stdio-${{ matrix.goos }}-${{ matrix.goarch }}"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            BINARY_NAME="${BINARY_NAME}.exe"
-          fi
-          
-          go build -v \
-            -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" \
-            -o "dist/${BINARY_NAME}" \
-            ./cmd/mcp-stdio/main.go
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            ext=""
+            [ "$os" = windows ] && ext=".exe"
+            for name in frappe-mcp-server frappe-mcp-server-stdio; do
+              pkg="."
+              [ "$name" = frappe-mcp-server-stdio ] && pkg="./cmd/mcp-stdio"
+              dir="dist/${name}-${os}-${arch}"
+              mkdir -p "$dir"
+              GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags="-s -w" -o "${dir}/${name}-${os}-${arch}${ext}" "$pkg"
+              cp env.example README.md LICENSE THIRD_PARTY_NOTICES "$dir/"
+            done
+          done
 
-      - name: Create package
+      - name: Package and checksum
         run: |
+          cp sbom.cyclonedx.json dist/
           cd dist
-          BINARY_NAME=$(ls frappe-mcp-server-stdio-*)
-          PACKAGE_NAME="${BINARY_NAME%.*}"
-          
-          # Create directory structure
-          mkdir -p "${PACKAGE_NAME}"
-          mv "${BINARY_NAME}" "${PACKAGE_NAME}/"
-          
-          # Copy configuration template
-          cp ../env.example "${PACKAGE_NAME}/"
-          
-          # Create README for the package
-          cat > "${PACKAGE_NAME}/README.md" << 'EOF'
-          # Frappe MCP Server
-          
-          AI-powered Model Context Protocol server for Frappe/ERPNext.
-          
-          ## Quick Start
-          
-          1. Copy `env.example` to `.env` and configure your Frappe credentials
-          2. Add to your MCP client configuration (Cursor or Claude Desktop)
-          3. Start using natural language queries!
-          
-          See full documentation at: https://github.com/vyogotech/frappe-mcp-server
-          EOF
-          
-          # Create archive
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            zip -r "${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"
-            echo "ASSET_PATH=dist/${PACKAGE_NAME}.zip" >> $GITHUB_ENV
-            echo "ASSET_NAME=${PACKAGE_NAME}.zip" >> $GITHUB_ENV
-          else
-            tar czf "${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
-            echo "ASSET_PATH=dist/${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
-            echo "ASSET_NAME=${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
-          fi
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: ${{ env.ASSET_PATH }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  create-checksums:
-    name: Create Checksums
-    needs: build-and-release
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Download all release assets
-        uses: robinraju/release-downloader@v1.13
-        with:
-          tag: ${{ github.ref_name }}
-          fileName: "*"
-          out-file-path: "downloads"
-
-      - name: Generate checksums
-        run: |
-          cd downloads
-          sha256sum * > SHA256SUMS
+          for dir in */; do
+            name="${dir%/}"
+            case "$name" in
+              *-windows-*) zip -qr "${name}.zip" "$name" ;;
+              *) tar czf "${name}.tar.gz" "$name" ;;
+            esac
+            rm -rf "$name"
+          done
+          sha256sum -- * > SHA256SUMS
           cat SHA256SUMS
 
-      - name: Upload checksums
-        uses: softprops/action-gh-release@v3
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
-          files: downloads/SHA256SUMS
+          subject-checksums: dist/SHA256SUMS
+
+      - name: Upload to release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  update-install-script:
-    name: Update Install Script
-    needs: create-checksums
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Update version in install.sh
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        # create refuses a tag that already has a published release, so a re-run uploads instead
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          sed -i "s/VERSION=\".*\"/VERSION=\"${VERSION}\"/" install.sh
-          echo "Updated version to ${VERSION}"
-
-      - name: Commit and push if changed
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add install.sh
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update install.sh to version ${GITHUB_REF#refs/tags/v}" && git push)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" --generate-notes --title "$TAG" dist/*
+          fi

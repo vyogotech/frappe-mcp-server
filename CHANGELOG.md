@@ -33,15 +33,24 @@ All notable changes to ERPNext MCP Server.
   - Server wraps `gosdk.Server`; all tool handlers use the SDK's `ToolRequest`/`ToolResponse` types
 
 ### Fixed
-- **gosec G204** — `cmd/ollama-client`: subprocess path resolved via `filepath.Abs(filepath.Clean(...))` + `os.Stat` validation before `exec.Command`
+- **The documentation describes the schema the code reads** — `logging.level` instead of the `server.log_level` that never existed, `SERVER_HOST`, `LOG_LEVEL`, `AUTH_ENABLED`, `AUTH_REQUIRE_AUTH`, `OAUTH_TOKEN_INFO_URL`, `OAUTH_TIMEOUT`, `CACHE_TTL`, `TOOLS_KNOWLEDGE_BASE` and `OTEL_EXPORTER_OTLP_ENDPOINT` listed in `docs/configuration.md`, `ENABLE_METRICS` (read nowhere) dropped from `docs/docker.md`, and fifteen broken relative links in the docs repaired.
+- **Environment variables are parsed, not guessed** — `AUTH_ENABLED` and `AUTH_REQUIRE_AUTH` go through `strconv.ParseBool`, and `SERVER_PORT`, `OAUTH_TIMEOUT` and `CACHE_TTL` return their parse errors. `AUTH_ENABLED=True`, `=1` or `=yes` used to read as false and switch authentication off on a server whose configuration file had enabled it; the first two now mean true and the third stops startup.
 - **Auth gap on Streamable HTTP** — `POST /mcp` placed on main mux instead of a separate port, ensuring OAuth2/SID/API-key middleware is always applied
 
 ### Changed
+- **OpenTelemetry bumped to v1.46.0** (contrib otelhttp v0.71.0), which requires `google.golang.org/grpc` v1.83.1 and so clears GO-2026-6348 and GO-2026-6061. `govulncheck ./...` now reports no reachable vulnerability at all.
 - Go toolchain bumped to **1.25** (required by OTEL v1.43.0 indirect dependency)
 - `Dockerfile` base image updated to `golang:1.25-alpine`
 
 ### Removed
 - Deleted unused `create_oauth_client.py` and `create_oauth_client_fixed.py`
+- **Neo4j configuration** — the `neo4j:` block and `NEO4J_BOLT_URL` / `NEO4J_USERNAME` / `NEO4J_PASSWORD` are gone; nothing has read them since the FrappeForge graph tools left. Config files are read strictly, so a leftover `neo4j:` block now stops the server at startup: delete it.
+- **Demo CLIs `cmd/ollama-client` and `cmd/test-client`**, `Dockerfile.ollama-client`, their `make build-ollama-client` / `build-test-client` / `build-clients` targets, the `tests/*.sh` scripts that drove `ollama-client`, and `internal/utils`, which `cmd/ollama-client` alone imported. Neither shipped binary linked them, and `github.com/ollama/ollama` leaves `go.mod` with them: 9 of the module's 11 reachable advisories go with it.
+- **`mcp.Server.RegisterResource`** and the resource URIs it tracked; its only caller left in 474d594 and the server has published no resources since.
+- **The server's own chat pipeline** — `POST /api/v1/chat`, `GET /api/v1/openapi.json`, `internal/llm`, `internal/server/sse.go`, `formatter.go`, `report_schema.go` and `open_webui_functions/`. It was a second AI assistant beside frappe-ai-agent, and no consumer called it; the `llm:` configuration section, the `LLM_*` environment variables and the LLM documents go with it. Config files are read strictly, so a leftover `llm:` block now stops the server at startup: delete it. `/mcp` and the REST tool routes are unchanged. See `docs/adr/ADR-012-the-mcp-server-does-not-answer-questions-itself.md`.
+- **The `ollama` and `open-webui` services in `compose.yml`**, with `OLLAMA_*`, `WEBUI_*` and `ENABLE_SIGNUP` in `env.example`. They existed to drive the removed chat endpoint, and the MCP server waited on Ollama's healthcheck to start although it never called it.
+- **Configuration nothing read** — `server.max_connections`, `logging.format`, the whole `cache:` and `performance:` sections and `auth.token_cache.cleanup_interval`, with the `CACHE_CLEANUP_INTERVAL` environment variable and their keys in `config.yaml.example` and the docs. Config files are read strictly, so any of these left in a file now stops the server at startup: delete them. `logging.level` and `auth.token_cache.ttl` are read and stay.
+- **Exported functions with no caller** — `auth.GetUserFromContext` (use `auth.UserFromContext`, which the rest of the module already uses; a nil result means no user), `strategies.OAuth2Strategy.ClearCache`, `mcp.Server.SDKServer`, `mcp.Server.ToolMetadata`, and the `testutils` `CreateTest*` and `Assert*` helpers, which duplicated testify.
 
 ## [Unreleased] - 2025-11-13
 

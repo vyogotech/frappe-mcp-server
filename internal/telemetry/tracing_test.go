@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -49,9 +50,14 @@ func TestInit_ShutdownTimeout(t *testing.T) {
 	shutdown, err := Init(context.Background())
 	require.NoError(t, err)
 
-	// Cancelled context: shutdown must return without panic even when the
-	// context is already done.
+	// Shutdown gives itself 5 seconds, but the caller's cancelled context has to win: a process on its way out
+	// must not wait on an exporter that will never answer.
 	shutdownCtx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_ = shutdown(shutdownCtx)
+
+	start := time.Now()
+	err = shutdown(shutdownCtx)
+
+	assert.True(t, errors.Is(err, context.Canceled), "shutdown returned %v, want context.Canceled", err)
+	assert.Less(t, time.Since(start), time.Second, "shutdown outlived the cancelled context")
 }

@@ -12,16 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockOAuthEndpoint is the loopback base URL used by the in-process httptest
-// servers in this file. Extracting it to a non-credential-looking constant
-// stops gosec G101 from misclassifying TokenInfoURL string literals as
-// hardcoded credentials.
+// mockOAuthEndpoint is a constant because gosec G101 flags TokenInfoURL string literals as hardcoded credentials.
 const mockOAuthEndpoint = "http://localhost:8000"
 
 func TestNewOAuth2Strategy(t *testing.T) {
 	config := OAuth2StrategyConfig{
 		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
-		IssuerURL:      mockOAuthEndpoint,
+		BaseURL:        mockOAuthEndpoint,
 		TrustedClients: []string{"client1", "client2"},
 		Timeout:        10 * time.Second,
 		CacheTTL:       5 * time.Minute,
@@ -32,7 +29,7 @@ func TestNewOAuth2Strategy(t *testing.T) {
 
 	assert.NotNil(t, strategy)
 	assert.Equal(t, "http://localhost:8000/userinfo", strategy.tokenInfoURL)
-	assert.Equal(t, "http://localhost:8000", strategy.issuerURL)
+	assert.Equal(t, "http://localhost:8000", strategy.baseURL)
 	assert.True(t, strategy.isTrustedClient("client1"))
 	assert.True(t, strategy.isTrustedClient("client2"))
 	assert.False(t, strategy.isTrustedClient("client3"))
@@ -42,9 +39,9 @@ func TestNewOAuth2Strategy(t *testing.T) {
 
 func TestExtractBearerToken(t *testing.T) {
 	tests := []struct {
-		name           string
-		authHeader     string
-		expectedToken  string
+		name          string
+		authHeader    string
+		expectedToken string
 	}{
 		{
 			name:          "Valid Bearer token",
@@ -278,43 +275,7 @@ func TestAuthenticate_SkipRemoteValidation(t *testing.T) {
 	assert.Equal(t, "anonymous@example.com", user.Email)
 }
 
-func TestClearCache(t *testing.T) {
-	strategy := NewOAuth2Strategy(OAuth2StrategyConfig{
-		TokenInfoURL:   mockOAuthEndpoint + "/userinfo",
-		ValidateRemote: false,
-		Timeout:        5 * time.Second,
-		CacheTTL:       1 * time.Minute,
-	})
-
-	// Add something to cache by authenticating
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer test-token")
-	ctx := context.Background()
-
-	user1, err1 := strategy.Authenticate(ctx, req)
-	require.NoError(t, err1)
-	require.NotNil(t, user1)
-
-	// Verify cache is working
-	user2, err2 := strategy.Authenticate(ctx, req)
-	require.NoError(t, err2)
-	require.NotNil(t, user2)
-
-	// Clear cache
-	strategy.ClearCache()
-
-	// After clearing, should still work (but won't be from cache in this case
-	// since we're not hitting a real server)
-	user3, err3 := strategy.Authenticate(ctx, req)
-	require.NoError(t, err3)
-	require.NotNil(t, user3)
-}
-
-// TestTokenCacheKey_DistinguishesImpersonationHeaders is a regression test
-// for the trusted-client cache-collision impersonation bug. Two requests
-// carrying the same bearer token but different X-MCP-User-* headers MUST
-// produce distinct cache keys, otherwise a trusted backend client can
-// retrieve another user's cached identity by reusing the same token.
+// One token under two X-MCP-User-* identities must give two cache keys, or the second user gets the first's identity.
 func TestTokenCacheKey_DistinguishesImpersonationHeaders(t *testing.T) {
 	token := "shared-bearer-token"
 
@@ -363,4 +324,3 @@ func TestTokenCacheKey_DifferentTokensDifferentKeys(t *testing.T) {
 	assert.NotEqual(t, tokenCacheKey("token-a", req), tokenCacheKey("token-b", req),
 		"different tokens must produce different cache keys")
 }
-

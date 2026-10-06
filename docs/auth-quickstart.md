@@ -17,10 +17,10 @@ No OAuth2 setup needed. Uses the user's existing Frappe login session.
 ```bash
 export SID='paste-your-sid-here'
 
-curl -X POST http://localhost:8080/api/v1/chat \
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
   -b "sid=$SID" \
   -H "Content-Type: application/json" \
-  -d '{"message": "show me top 5 customers"}'
+  -d '{"params": {"doctype": "Customer", "limit": 5}}'
 ```
 
 ### Step 3: Configure MCP Server
@@ -31,13 +31,12 @@ auth:
   enabled: true
   require_auth: false   # Set true in production
   oauth2:
-    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo"
+    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid_profile"
     issuer_url: "http://localhost:8000"
     validate_remote: true
     timeout: "30s"
   token_cache:
     ttl: "5m"
-    cleanup_interval: "10m"
 ```
 
 That's it — the MCP server validates the sid with Frappe and forwards it to all ERPNext API calls.
@@ -65,7 +64,7 @@ auth:
   enabled: true
   require_auth: false
   oauth2:
-    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid.userinfo"
+    token_info_url: "http://localhost:8000/api/method/frappe.integrations.oauth2.openid_profile"
     issuer_url: "http://localhost:8000"
     trusted_clients:
       - "YOUR_CLIENT_ID"
@@ -73,7 +72,6 @@ auth:
     timeout: "30s"
   token_cache:
     ttl: "5m"
-    cleanup_interval: "10m"
 ```
 
 ### Step 3: Get a Token and Test
@@ -87,10 +85,10 @@ TOKEN=$(curl -s -X POST http://localhost:8000/api/method/frappe.integrations.oau
   | jq -r '.access_token')
 
 # Test
-curl -X POST http://localhost:8080/api/v1/chat \
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "show me all customers"}'
+  -d '{"params": {"doctype": "Customer"}}'
 ```
 
 For user-level OAuth2 (Authorization Code flow):
@@ -138,5 +136,4 @@ go test ./internal/auth/... -v
 
 ## More
 
-See [Authentication](authentication) for the full reference including CSRF handling, token caching, and troubleshooting.
-
+See [Authentication](authentication.md) for the full reference including CSRF handling, token caching, and troubleshooting.

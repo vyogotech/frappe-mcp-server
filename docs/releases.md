@@ -56,32 +56,31 @@ git push origin v1.0.0
 Once the tag is pushed, GitHub Actions automatically:
 
 1. **Runs CI tests** - Ensures code quality
-2. **Builds binaries** for all platforms:
-   - `frappe-mcp-server-stdio-linux-amd64.tar.gz`
-   - `frappe-mcp-server-stdio-linux-arm64.tar.gz`
-   - `frappe-mcp-server-stdio-darwin-amd64.tar.gz`
-   - `frappe-mcp-server-stdio-darwin-arm64.tar.gz`
-   - `frappe-mcp-server-stdio-windows-amd64.zip`
+2. **Builds both binaries** for all platforms, the HTTP server and the STDIO server:
+   - `frappe-mcp-server-{linux,darwin}-{amd64,arm64}.tar.gz`, `frappe-mcp-server-windows-amd64.zip`
+   - `frappe-mcp-server-stdio-{linux,darwin}-{amd64,arm64}.tar.gz`, `frappe-mcp-server-stdio-windows-amd64.zip`
 3. **Creates packages** with:
    - Binary
-   - README
+   - README.md
    - Configuration template
-4. **Generates checksums** (SHA256SUMS)
+4. **Generates checksums** (SHA256SUMS), a CycloneDX SBOM and a build-provenance attestation
 5. **Creates GitHub Release** with:
    - All platform binaries
-   - Checksums file
+   - Checksums file, SBOM and attestation
    - Auto-generated release notes
-6. **Updates install.sh** with the new version
 
 ### 4. Verify the Release
 
 1. Go to [Releases](https://github.com/vyogotech/frappe-mcp-server/releases)
 2. Check that all binaries are attached
 3. Test the install script:
+
    ```bash
    curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/install.sh | bash
    ```
+
 4. Verify binary works:
+
    ```bash
    frappe-mcp-server-stdio --version
    ```
@@ -225,16 +224,19 @@ curl -fsSL https://raw.githubusercontent.com/vyogotech/frappe-mcp-server/main/in
 Each release includes:
 
 ### Binaries
+
 - Cross-compiled for 5 platforms
 - Statically linked (no dependencies)
 - Optimized with `-ldflags "-s -w"`
 
 ### Archives
+
 - `.tar.gz` for Linux/macOS
 - `.zip` for Windows
 - Includes binary + README + config template
 
 ### Checksums
+
 - `SHA256SUMS` file
 - Verifiable with: `shasum -a 256 -c SHA256SUMS`
 
@@ -257,11 +259,10 @@ Each release includes:
 ### Install Script Issues
 
 1. Test install script locally
-2. Update VERSION in install.sh manually if auto-update fails
+2. `install.sh` resolves the latest tag itself; it has no version to update
 3. Check download URLs are correct
 
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/vyogotech/frappe-mcp-server/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/vyogotech/frappe-mcp-server/discussions)
-

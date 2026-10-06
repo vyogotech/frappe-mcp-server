@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,42 +8,9 @@ import (
 
 	"frappe-mcp-server/internal/auth"
 	authstrategies "frappe-mcp-server/internal/auth/strategies"
-	"frappe-mcp-server/internal/llm"
 )
 
-// stubLLMClient is a minimal llm.Client used to verify the legacy-fallback
-// path of generateWithLLM. Returns a known string from Generate; never
-// recurses back into MCPServer.
-type stubLLMClient struct{}
-
-func (stubLLMClient) Generate(ctx context.Context, prompt string) (string, error) {
-	return "stub-response", nil
-}
-func (stubLLMClient) Provider() string { return "stub" }
-
-// TestGenerateWithLLM_LegacyClientFallback verifies that when llmManager is
-// nil but llmClient is set, generateWithLLM delegates to the legacy client
-// and does NOT recurse. Without the fix, this test stack-overflows.
-func TestGenerateWithLLM_LegacyClientFallback(t *testing.T) {
-	s := &MCPServer{
-		llmClient:  stubLLMClient{},
-		llmManager: nil,
-	}
-	got, err := s.generateWithLLM(context.Background(), "hello")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != "stub-response" {
-		t.Fatalf("got %q, want %q", got, "stub-response")
-	}
-}
-
-var _ llm.Client = stubLLMClient{} // compile-time check
-
-// TestWithMiddleware_PublicPathsBypassAuth verifies that /health,
-// /api/v1/health, and /metrics return 200 even when auth is required and no
-// Bearer token is supplied. Other paths must still get 401. This is what
-// makes the docker HEALTHCHECK actually work.
+// The docker HEALTHCHECK sends no token, so /health and /api/v1/health must skip auth and nothing else may.
 func TestWithMiddleware_PublicPathsBypassAuth(t *testing.T) {
 	// A bare OAuth2Strategy with no token in the request returns
 	// "missing or invalid Bearer token" — exactly the failure mode the
@@ -67,8 +33,7 @@ func TestWithMiddleware_PublicPathsBypassAuth(t *testing.T) {
 	}{
 		{"/health", http.StatusOK},
 		{"/api/v1/health", http.StatusOK},
-		{"/metrics", http.StatusOK},
-		{"/api/v1/chat", http.StatusUnauthorized},
+		{"/metrics", http.StatusUnauthorized},
 		{"/mcp", http.StatusUnauthorized},
 		{"/api/v1/tools", http.StatusUnauthorized},
 	}
@@ -82,14 +47,10 @@ func TestWithMiddleware_PublicPathsBypassAuth(t *testing.T) {
 	}
 }
 
-// mockOAuthEndpointTest is the loopback base URL referenced from the auth
-// middleware test. Extracted to a constant to dodge gosec G101.
+// mockOAuthEndpointTest is a constant because gosec G101 flags TokenInfoURL string literals as hardcoded credentials.
 const mockOAuthEndpointTest = "http://localhost:8000"
 
-// TestExecuteTool_FabricatedPMToolsHidden verifies that the three fabricated
-// PM tools are NOT dispatchable through executeTool. They remain as exported
-// methods on ToolRegistry but are unwired from MCP, REST, intent routing,
-// and dispatch. Phase 2 will reimplement their bodies and re-wire them.
+// These three tools return placeholder numbers, so the REST dispatcher must not find them.
 func TestExecuteTool_FabricatedPMToolsHidden(t *testing.T) {
 	s := &MCPServer{}
 	for _, name := range []string{
@@ -97,13 +58,14 @@ func TestExecuteTool_FabricatedPMToolsHidden(t *testing.T) {
 		"project_risk_assessment",
 		"portfolio_dashboard",
 	} {
-		_, err := s.executeTool(context.Background(), name, []byte(`{}`))
-		if err == nil {
-			t.Errorf("executeTool(%q) returned nil error; want 'tool not found'", name)
-			continue
+		if _, ok := s.tool(name); ok {
+			t.Errorf("tool(%q) was found; want not found", name)
 		}
-		if !strings.Contains(err.Error(), "tool not found") {
-			t.Errorf("executeTool(%q) error = %v; want contains 'tool not found'", name, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/tools/"+name, strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		s.handleToolCall(w, req)
+		if w.Code != http.StatusNotFound {
+			t.Errorf("POST /api/v1/tools/%s: got status %d, want %d", name, w.Code, http.StatusNotFound)
 		}
 	}
 }

@@ -15,6 +15,7 @@ nano .env
 ```
 
 Required variables in `.env`:
+
 ```bash
 FRAPPE_BASE_URL=http://your-frappe-instance:8000
 FRAPPE_API_KEY=your_api_key
@@ -23,18 +24,17 @@ FRAPPE_API_SECRET=your_api_secret
 
 ### 2. Start Services
 
-**Option A: MCP Server + Ollama + Open WebUI** (Recommended)
+#### Option A: MCP server only (recommended)
 
 ```bash
 docker compose up -d
 ```
 
 This starts:
-- ERPNext MCP Server (port 8080)
-- Ollama (port 11434)
-- Open WebUI (port 3000)
 
-**Option B: Full Stack (includes local ERPNext)**
+- ERPNext MCP Server (port 8080)
+
+#### Option B: full stack, including a local ERPNext
 
 ```bash
 docker compose --profile full-stack up -d
@@ -42,40 +42,23 @@ docker compose --profile full-stack up -d
 
 This starts everything including a local ERPNext instance.
 
-### 3. Initialize Ollama
+### 3. Access Services
 
-After first start, pull the AI model:
-
-```bash
-# Pull the default model
-docker compose exec ollama ollama pull llama3.2:1b
-
-# Verify
-docker compose exec ollama ollama list
-```
-
-### 4. Access Services
-
-- **ERPNext MCP API**: http://localhost:8080
-- **Open WebUI**: http://localhost:3000
-- **Ollama API**: http://localhost:11434
-- **ERPNext** (if full-stack): http://localhost:8000
+- **ERPNext MCP API**: <http://localhost:8080>
+- **ERPNext** (if full-stack): <http://localhost:8000>
 
 ## Configuration
 
 ### Environment Variables
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `FRAPPE_BASE_URL` | `http://localhost:8000` | Frappe instance URL |
 | `FRAPPE_API_KEY` | - | Frappe API key (required) |
 | `FRAPPE_API_SECRET` | - | Frappe API secret (required) |
-| `OLLAMA_URL` | `http://ollama:11434` | Ollama service URL |
-| `OLLAMA_MODEL` | `llama3.2:1b` | AI model to use |
-| `MCP_PORT` | `8080` | MCP server port |
-| `OLLAMA_PORT` | `11434` | Ollama port |
-| `WEBUI_PORT` | `3000` | Open WebUI port |
+| `MCP_PORT` | `8080` | Host port the MCP server is published on (read by `compose.yml`, not by the server) |
 | `LOG_LEVEL` | `info` | Logging level |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OTLP/HTTP collector; tracing stays off while it is unset |
 
 ### Custom Configuration
 
@@ -99,17 +82,11 @@ curl http://localhost:8080/api/v1/health
 # List available tools
 curl http://localhost:8080/api/v1/tools
 
-# Natural language query
-curl -X POST http://localhost:8080/api/v1/chat \
+# Call a tool
+curl -X POST http://localhost:8080/api/v1/tools/list_documents \
   -H "Content-Type: application/json" \
-  -d '{"message": "List all projects"}'
+  -d '{"params": {"doctype": "Project"}}'
 ```
-
-### Using Open WebUI
-
-1. Open http://localhost:3000
-2. Sign up / Login
-3. Start chatting with your ERPNext data!
 
 ### Accessing Logs
 
@@ -121,7 +98,7 @@ docker compose logs -f frappe-mcp-server
 docker compose logs -f
 
 # View specific service
-docker compose logs -f ollama
+docker compose logs -f erpnext
 ```
 
 ## Management
@@ -168,15 +145,21 @@ Data is stored in Docker volumes:
 docker volume ls | grep erpnext-mcp
 
 # Backup a volume
-docker run --rm -v frappe-mcp-server_ollama_data:/data \
+docker run --rm -v frappe-mcp-server_mcp_logs:/data \
   -v $(pwd)/backups:/backup \
-  alpine tar czf /backup/ollama-data.tar.gz -C /data .
+  alpine tar czf /backup/mcp-logs.tar.gz -C /data .
 ```
 
 Volumes:
+<<<<<<< HEAD
+
+- `mcp_logs` - MCP server logs
+=======
 - `ollama_data` - AI models
 - `open_webui_data` - Open WebUI data
-- `mcp_logs` - MCP server logs
+
+>>>>>>> 475c30e (build(docker): build the server image from the repo itself and state the Go version once, in go.mod)
+
 - `erpnext_data` - ERPNext files (full-stack only)
 
 ## Troubleshooting
@@ -187,20 +170,6 @@ If ports are already in use, change them in `.env`:
 
 ```bash
 MCP_PORT=8081
-WEBUI_PORT=3001
-```
-
-### Ollama Not Working
-
-```bash
-# Check Ollama is healthy
-docker compose ps ollama
-
-# Test Ollama directly
-curl http://localhost:11434/api/tags
-
-# Pull model manually
-docker compose exec ollama ollama pull llama3.2:1b
 ```
 
 ### ERPNext Connection Failed
@@ -211,14 +180,6 @@ Check your ERPNext credentials:
 # Test ERPNext API
 curl http://your-erpnext:8000/api/method/frappe.auth.get_logged_user \
   -H "Authorization: token api_key:api_secret"
-```
-
-### Out of Memory
-
-Increase Docker memory limits or use a smaller model:
-
-```bash
-OLLAMA_MODEL=llama3.2:1b  # Smaller model (1.2GB)
 ```
 
 ### View Container Health
@@ -238,7 +199,7 @@ services:
     restart: always
     environment:
       LOG_LEVEL: warn
-      ENABLE_METRICS: true
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     deploy:
       resources:
         limits:
@@ -254,26 +215,17 @@ docker compose -f compose.yml -f compose.prod.yml up -d
 
 ### Security Best Practices
 
-1. **Use strong secrets**:
-```bash
-WEBUI_SECRET_KEY=$(openssl rand -hex 32)
-```
+1. **Use HTTPS** with reverse proxy (nginx/caddy)
 
-2. **Disable signup** in production:
-```bash
-ENABLE_SIGNUP=false
-```
+2. **Restrict network access**:
 
-3. **Use HTTPS** with reverse proxy (nginx/caddy)
-
-4. **Restrict network access**:
 ```yaml
 services:
-  ollama:
+  erpnext:
     ports: []  # Don't expose to host
 ```
 
-5. **Regular backups** of volumes
+1. **Regular backups** of volumes
 
 ## Advanced Configuration
 
@@ -283,14 +235,6 @@ Remove the `erpnext` service and set:
 
 ```bash
 FRAPPE_BASE_URL=https://your-frappe.com
-```
-
-### Using External Ollama
-
-Remove the `ollama` service and set:
-
-```bash
-OLLAMA_URL=http://your-ollama-server:11434
 ```
 
 ### Resource Limits
@@ -333,4 +277,3 @@ docker compose down --rmi all
 ---
 
 Back to [Documentation Home](index.md)
-
