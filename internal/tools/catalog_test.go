@@ -34,3 +34,18 @@ func TestCatalogDropsTheKnowledgeBaseWhenItIsOff(t *testing.T) {
 		}
 	}
 }
+
+// A count decoded into a Go int must be declared "integer": clients that follow the schema send a "number" as
+// 3.0 (OpenHands does), and encoding/json refuses 3.0 for an int field, so the call fails before it runs.
+func TestCountArgumentsAreDeclaredIntegers(t *testing.T) {
+	counts := map[string]bool{"page_length": true, "limit": true, "start": true, "top_n": true}
+	for _, tool := range NewRegistry(nil).Catalog(true) {
+		props, _ := tool.InputSchema["properties"].(map[string]interface{})
+		for name, raw := range props {
+			prop, _ := raw.(map[string]interface{})
+			if counts[name] && prop["type"] != "integer" {
+				t.Errorf("%s.%s is %v; declare it integer", tool.Name, name, prop["type"])
+			}
+		}
+	}
+}

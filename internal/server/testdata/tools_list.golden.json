@@ -246,7 +246,7 @@
           "default": 20,
           "description": "Maximum results to return (default 20, capped at 100)",
           "maximum": 100,
-          "type": "number"
+          "type": "integer"
         }
       },
       "required": [
@@ -307,7 +307,7 @@
           "default": 20,
           "description": "Maximum results to return (default 20, capped at 100)",
           "maximum": 100,
-          "type": "number"
+          "type": "integer"
         },
         "search": {
           "description": "Search query string",

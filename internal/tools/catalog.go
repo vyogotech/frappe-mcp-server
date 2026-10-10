@@ -47,7 +47,7 @@ func (t *ToolRegistry) Catalog(knowledgeBase bool) []Tool {
 			Description: "Fetch document rows to read their contents. Returns at most page_length rows (default 20), so it CANNOT be used to count records - use aggregate_documents for counts.",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype":     strProp("ERPNext document type"),
-				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return (default 20, capped at 100)", "default": 20, "maximum": maxRows},
+				"page_length": map[string]interface{}{"type": "integer", "description": "Maximum results to return (default 20, capped at 100)", "default": 20, "maximum": maxRows},
 				"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
 				"fields":      map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Fields to return"},
 				"order_by":    strProp("Sort order (e.g., 'creation desc')"),
@@ -84,7 +84,7 @@ func (t *ToolRegistry) Catalog(knowledgeBase bool) []Tool {
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype":     strProp("Document type to search"),
 				"search":      strProp("Search query string"),
-				"page_length": map[string]interface{}{"type": "number", "description": "Maximum results to return (default 20, capped at 100)", "default": 20, "maximum": maxRows},
+				"page_length": map[string]interface{}{"type": "integer", "description": "Maximum results to return (default 20, capped at 100)", "default": 20, "maximum": maxRows},
 				"filters":     map[string]interface{}{"type": "object", "description": "Optional field-value filters"},
 			}, "doctype"),
 		}},
