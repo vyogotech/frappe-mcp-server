@@ -71,7 +71,6 @@ func serveWithBench(s *MCPServer, site, benchURL, sid string) *httptest.Response
 func TestMultiTenantRequestRoutingAndHeaders(t *testing.T) {
 	bench1 := newFakeBench(t, "user1@tenant1.local", "1")
 	bench2 := newFakeBench(t, "user2@tenant2.local", "2")
-	benchDynamic := newFakeBench(t, "user3@dynamic.local", "3")
 
 	tmpDir := t.TempDir()
 	routesFile := filepath.Join(tmpDir, "routes.yaml")
@@ -118,6 +117,47 @@ func TestMultiTenantRequestRoutingAndHeaders(t *testing.T) {
 		}
 	})
 
+	for name, site := range map[string]string{
+		"a site absent from the routes file": "unregistered.local",
+		"no site at all, with a routes file": "",
+	} {
+		t.Run(name+" is refused with 400", func(t *testing.T) {
+			if w := serveAs(s, site, "sess-006"); w.Code != http.StatusBadRequest {
+				t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestMultiTenantDynamicBenchRouting(t *testing.T) {
+	bench1 := newFakeBench(t, "user1@tenant1.local", "1")
+	benchDynamic := newFakeBench(t, "user3@dynamic.local", "3")
+
+	tmpDir := t.TempDir()
+	routesFile := filepath.Join(tmpDir, "routes.yaml")
+	routesYAML := "routes:\n  tenant1.local: " + bench1.URL + "\n"
+	if err := os.WriteFile(routesFile, []byte(routesYAML), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg := &config.Config{}
+	cfg.Server.Host = "127.0.0.1"
+	cfg.ERPNext.BaseURL = bench1.URL
+	cfg.ERPNext.SiteRoutesFile = routesFile
+	cfg.Auth.Enabled = true
+	cfg.Auth.RequireAuth = true
+	cfg.Auth.OAuth2.ValidateRemote = true
+
+	client, err := frappe.NewClient(cfg.ERPNext)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	s, err := NewMCPServer(cfg, client)
+	if err != nil {
+		t.Fatalf("NewMCPServer: %v", err)
+	}
+
 	t.Run("dynamic bench URL routes directly even when absent from routes file", func(t *testing.T) {
 		w := serveWithBench(s, "dynamic.local", benchDynamic.URL, "sess-003")
 		if w.Code != http.StatusOK {
@@ -145,15 +185,4 @@ func TestMultiTenantRequestRoutingAndHeaders(t *testing.T) {
 			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
 		}
 	})
-
-	for name, site := range map[string]string{
-		"a site absent from the routes file": "unregistered.local",
-		"no site at all, with a routes file": "",
-	} {
-		t.Run(name+" is refused with 400", func(t *testing.T) {
-			if w := serveAs(s, site, "sess-006"); w.Code != http.StatusBadRequest {
-				t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
-			}
-		})
-	}
 }
