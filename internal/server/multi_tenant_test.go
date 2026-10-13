@@ -53,9 +53,25 @@ func serveAs(s *MCPServer, site, sid string) *httptest.ResponseRecorder {
 	return w
 }
 
+// serveWithBench sends one tools request as a session on a site with an explicit bench URL header.
+func serveWithBench(s *MCPServer, site, benchURL, sid string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tools", nil)
+	req.Header.Set("Cookie", "sid="+sid)
+	if site != "" {
+		req.Header.Set("X-Frappe-Site-Name", site)
+	}
+	if benchURL != "" {
+		req.Header.Set("X-Frappe-Bench-URL", benchURL)
+	}
+	w := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(w, req)
+	return w
+}
+
 func TestMultiTenantRequestRoutingAndHeaders(t *testing.T) {
 	bench1 := newFakeBench(t, "user1@tenant1.local", "1")
 	bench2 := newFakeBench(t, "user2@tenant2.local", "2")
+	benchDynamic := newFakeBench(t, "user3@dynamic.local", "3")
 
 	tmpDir := t.TempDir()
 	routesFile := filepath.Join(tmpDir, "routes.yaml")
@@ -102,12 +118,40 @@ func TestMultiTenantRequestRoutingAndHeaders(t *testing.T) {
 		}
 	})
 
+	t.Run("dynamic bench URL routes directly even when absent from routes file", func(t *testing.T) {
+		w := serveWithBench(s, "dynamic.local", benchDynamic.URL, "sess-003")
+		if w.Code != http.StatusOK {
+			t.Errorf("status %d, body %s", w.Code, w.Body.String())
+		}
+		if benchDynamic.calls.Load() == 0 || benchDynamic.lastSite != "dynamic.local" {
+			t.Errorf("benchDynamic calls=%d site header=%q", benchDynamic.calls.Load(), benchDynamic.lastSite)
+		}
+	})
+
+	t.Run("dynamic bench URL overrides routes file mapping", func(t *testing.T) {
+		callsBefore := benchDynamic.calls.Load()
+		w := serveWithBench(s, "tenant1.local", benchDynamic.URL, "sess-004")
+		if w.Code != http.StatusOK {
+			t.Errorf("status %d, body %s", w.Code, w.Body.String())
+		}
+		if benchDynamic.calls.Load() <= callsBefore {
+			t.Errorf("expected benchDynamic to receive call, calls=%d", benchDynamic.calls.Load())
+		}
+	})
+
+	t.Run("invalid X-Frappe-Bench-URL header is rejected with 400", func(t *testing.T) {
+		w := serveWithBench(s, "tenant1.local", "not-a-valid-url", "sess-005")
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
 	for name, site := range map[string]string{
 		"a site absent from the routes file": "unregistered.local",
 		"no site at all, with a routes file": "",
 	} {
 		t.Run(name+" is refused with 400", func(t *testing.T) {
-			if w := serveAs(s, site, "sess-003"); w.Code != http.StatusBadRequest {
+			if w := serveAs(s, site, "sess-006"); w.Code != http.StatusBadRequest {
 				t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
 			}
 		})

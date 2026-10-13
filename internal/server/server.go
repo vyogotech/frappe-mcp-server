@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -199,13 +200,29 @@ func (s *MCPServer) withMiddleware(handler http.Handler) http.Handler {
 		})
 	}
 
-	// Apply site middleware before auth, so authentication and downstream tool calls have site and resolved bench URL
-	if s.siteResolver != nil {
-		next := h
-		h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			site := strings.TrimSpace(r.Header.Get("X-Frappe-Site-Name"))
-			ctx := r.Context()
-			baseURL, err := s.siteResolver.Resolve(site)
+	// Apply site & bench URL middleware before auth, so authentication and downstream tool calls have site and resolved bench URL
+	next := h
+	h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		site := strings.TrimSpace(r.Header.Get("X-Frappe-Site-Name"))
+		benchURL := strings.TrimSpace(r.Header.Get("X-Frappe-Bench-URL"))
+		ctx := r.Context()
+
+		var baseURL string
+		if benchURL != "" {
+			u, err := url.ParseRequestURI(benchURL)
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error":   "Bad Request",
+					"message": "invalid X-Frappe-Bench-URL header: must be a valid http or https URL",
+				})
+				return
+			}
+			baseURL = strings.TrimSuffix(benchURL, "/")
+		} else if s.siteResolver != nil {
+			var err error
+			baseURL, err = s.siteResolver.Resolve(site)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
@@ -215,15 +232,16 @@ func (s *MCPServer) withMiddleware(handler http.Handler) http.Handler {
 				})
 				return
 			}
-			if site != "" {
-				ctx = types.WithSite(ctx, site)
-			}
-			if baseURL != "" {
-				ctx = types.WithBaseURL(ctx, baseURL)
-			}
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
+		}
+
+		if site != "" {
+			ctx = types.WithSite(ctx, site)
+		}
+		if baseURL != "" {
+			ctx = types.WithBaseURL(ctx, baseURL)
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 
 	// Apply cross-origin protection and logging (these always run, including for public paths). A browser page on
 	// another origin gets 403, as the MCP specification requires; server-to-server calls carry no Origin and pass.

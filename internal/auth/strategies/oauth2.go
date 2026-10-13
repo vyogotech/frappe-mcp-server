@@ -233,6 +233,9 @@ func (s *OAuth2Strategy) isTrustedClient(clientID string) bool {
 
 func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *http.Cookie) (*types.User, error) {
 	site := types.SiteFromContext(ctx)
+	if site == "" {
+		site = types.BaseURLFromContext(ctx)
+	}
 	cacheKey := types.SidCacheKey(site, sidCookie.Value)
 	if cached, found := s.cache.Get(cacheKey); found {
 		if user, ok := cached.(*types.User); ok {
