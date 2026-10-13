@@ -20,6 +20,7 @@ jobs:
       contents: write
       id-token: write
       attestations: write
+      packages: write
 
     steps:
       - name: Checkout code
@@ -95,3 +96,15 @@ jobs:
           else
             gh release create "$TAG" --generate-notes --title "$TAG" dist/*
           fi
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push container image
+        run: |
+          make docker-build VERSION=${{ github.ref_name }}
+          make docker-push VERSION=${{ github.ref_name }}
