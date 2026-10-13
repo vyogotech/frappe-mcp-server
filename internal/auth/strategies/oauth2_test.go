@@ -341,26 +341,34 @@ func TestTokenCacheKey_BoundToSite(t *testing.T) {
 		"tokenCacheKey reads the site the middleware bound to the request")
 }
 
+// Constants, as mockOAuthEndpoint is: gosec G101 reads a TokenInfoURL string literal as a credential.
+const (
+	defaultBench    = "http://bench-default:8000"
+	routedBench     = "http://bench-02:8000"
+	userinfoPath    = "/api/method/frappe.integrations.oauth2.openid_profile"
+	externalIdPInfo = "http://idp.example/userinfo"
+)
+
 func TestTokenInfoURLFollowsTheRoutedBench(t *testing.T) {
 	onBase := NewOAuth2Strategy(OAuth2StrategyConfig{
-		BaseURL:      "http://bench-default:8000",
-		TokenInfoURL: "http://bench-default:8000/api/method/frappe.integrations.oauth2.openid_profile",
+		BaseURL:      defaultBench,
+		TokenInfoURL: defaultBench + userinfoPath,
 	})
-	routed := types.WithBaseURL(context.Background(), "http://bench-02:8000/")
+	routed := types.WithBaseURL(context.Background(), routedBench+"/")
 
-	assert.Equal(t, "http://bench-02:8000/api/method/frappe.integrations.oauth2.openid_profile",
+	assert.Equal(t, routedBench+userinfoPath,
 		onBase.tokenInfoURLFor(routed), "an endpoint on the Frappe base URL follows the tenant's bench")
 	assert.Equal(t, onBase.tokenInfoURL, onBase.tokenInfoURLFor(context.Background()),
 		"no routed bench in the context means the configured endpoint")
 	assert.Equal(t, onBase.tokenInfoURL,
-		onBase.tokenInfoURLFor(types.WithBaseURL(context.Background(), "http://bench-default:8000")),
+		onBase.tokenInfoURLFor(types.WithBaseURL(context.Background(), defaultBench)),
 		"the configured bench itself is not rewritten")
 
 	elsewhere := NewOAuth2Strategy(OAuth2StrategyConfig{
-		BaseURL:      "http://bench-default:8000",
-		TokenInfoURL: "http://idp.example/userinfo",
+		BaseURL:      defaultBench,
+		TokenInfoURL: externalIdPInfo,
 	})
-	assert.Equal(t, "http://idp.example/userinfo", elsewhere.tokenInfoURLFor(routed),
+	assert.Equal(t, externalIdPInfo, elsewhere.tokenInfoURLFor(routed),
 		"a separate identity provider is the same for every tenant")
 }
 

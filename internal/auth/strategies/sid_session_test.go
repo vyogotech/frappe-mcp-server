@@ -2,7 +2,7 @@ package strategies
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -59,7 +59,7 @@ func newFrappeDesk(t *testing.T) *frappeDesk {
 			if site := r.Header.Get("X-Frappe-Site-Name"); site != "" {
 				user = site + "@example.com"
 			}
-			_, _ = io.WriteString(w, fmt.Sprintf(`{"message":%q}`, user))
+			_ = json.NewEncoder(w).Encode(map[string]string{"message": user})
 		case "/app":
 			if d.deskStatus != http.StatusOK {
 				w.WriteHeader(d.deskStatus)

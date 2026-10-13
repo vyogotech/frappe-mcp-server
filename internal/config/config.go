@@ -115,6 +115,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid config file path: %s", configFile)
 	}
 
+	// #nosec G703 -- the operator names this file (CONFIG_FILE, or the default beside the binary); reading it is the point
 	data, err := os.ReadFile(configFile)
 	if errors.Is(err, fs.ErrNotExist) && os.Getenv("CONFIG_FILE") == "" {
 		data, err = nil, nil // no file asked for and none there: the environment carries the settings
@@ -244,20 +245,27 @@ func (c *Config) loadFromEnv() error {
 	return nil
 }
 
-func (c *Config) validate() error {
-	if c.ERPNext.BaseURL == "" {
-		return fmt.Errorf("frappe instance base URL is required")
-	}
-
+// validateSiteRouting checks the optional multi-tenant routing settings: a routes file must exist, a template must
+// have somewhere to put the site. Either may be absent; a single-site server configures neither.
+func (c *Config) validateSiteRouting() error {
 	if c.ERPNext.SiteRoutesFile != "" {
 		if _, err := os.Stat(c.ERPNext.SiteRoutesFile); err != nil {
 			return fmt.Errorf("invalid erpnext.site_routes_file: %w", err)
 		}
 	}
-	if c.ERPNext.SiteURLTemplate != "" {
-		if !strings.Contains(c.ERPNext.SiteURLTemplate, "{site}") {
-			return fmt.Errorf("invalid erpnext.site_url_template: must contain '{site}' placeholder")
-		}
+	if c.ERPNext.SiteURLTemplate != "" && !strings.Contains(c.ERPNext.SiteURLTemplate, "{site}") {
+		return fmt.Errorf("invalid erpnext.site_url_template: must contain '{site}' placeholder")
+	}
+	return nil
+}
+
+func (c *Config) validate() error {
+	if c.ERPNext.BaseURL == "" {
+		return fmt.Errorf("frappe instance base URL is required")
+	}
+
+	if err := c.validateSiteRouting(); err != nil {
+		return err
 	}
 
 	// API key and secret are optional if OAuth2 is enabled and required

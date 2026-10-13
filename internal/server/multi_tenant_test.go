@@ -14,37 +14,48 @@ import (
 	"frappe-mcp-server/internal/frappe"
 )
 
+// fakeBench answers as one tenant's Frappe would: get_logged_user names the user, /app carries a CSRF token, and
+// every call is counted with the site header it arrived with, which is what the routing assertions read.
+type fakeBench struct {
+	*httptest.Server
+	calls    atomic.Int64
+	lastSite string
+}
+
+func newFakeBench(t *testing.T, user, csrfDigit string) *fakeBench {
+	t.Helper()
+	b := &fakeBench{}
+	b.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b.calls.Add(1)
+		b.lastSite = r.Header.Get("X-Frappe-Site-Name")
+		switch r.URL.Path {
+		case "/api/method/frappe.auth.get_logged_user":
+			_ = json.NewEncoder(w).Encode(map[string]string{"message": user})
+		case "/app":
+			_, _ = w.Write([]byte(`<script>frappe.csrf_token = "` + strings.Repeat(csrfDigit, 32) + `";</script>`))
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	t.Cleanup(b.Close)
+	return b
+}
+
+// serveAs sends one tools request as a session on a site; an empty site sends no site header.
+func serveAs(s *MCPServer, site, sid string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tools", nil)
+	req.Header.Set("Cookie", "sid="+sid)
+	if site != "" {
+		req.Header.Set("X-Frappe-Site-Name", site)
+	}
+	w := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(w, req)
+	return w
+}
+
 func TestMultiTenantRequestRoutingAndHeaders(t *testing.T) {
-	var bench1Calls, bench2Calls atomic.Int64
-	var lastSiteHeader1, lastSiteHeader2 string
-
-	bench1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bench1Calls.Add(1)
-		lastSiteHeader1 = r.Header.Get("X-Frappe-Site-Name")
-		switch r.URL.Path {
-		case "/api/method/frappe.auth.get_logged_user":
-			_ = json.NewEncoder(w).Encode(map[string]string{"message": "user1@tenant1.local"})
-		case "/app":
-			_, _ = w.Write([]byte(`<script>frappe.csrf_token = "` + strings.Repeat("1", 32) + `";</script>`))
-		default:
-			w.WriteHeader(http.StatusOK)
-		}
-	}))
-	defer bench1.Close()
-
-	bench2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bench2Calls.Add(1)
-		lastSiteHeader2 = r.Header.Get("X-Frappe-Site-Name")
-		switch r.URL.Path {
-		case "/api/method/frappe.auth.get_logged_user":
-			_ = json.NewEncoder(w).Encode(map[string]string{"message": "user2@tenant2.local"})
-		case "/app":
-			_, _ = w.Write([]byte(`<script>frappe.csrf_token = "` + strings.Repeat("2", 32) + `";</script>`))
-		default:
-			w.WriteHeader(http.StatusOK)
-		}
-	}))
-	defer bench2.Close()
+	bench1 := newFakeBench(t, "user1@tenant1.local", "1")
+	bench2 := newFakeBench(t, "user2@tenant2.local", "2")
 
 	tmpDir := t.TempDir()
 	routesFile := filepath.Join(tmpDir, "routes.yaml")
@@ -71,58 +82,34 @@ func TestMultiTenantRequestRoutingAndHeaders(t *testing.T) {
 		t.Fatalf("NewMCPServer: %v", err)
 	}
 
-	// 1. Request for tenant1.local
-	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/tools", nil)
-	req1.Header.Set("Cookie", "sid=sess-001")
-	req1.Header.Set("X-Frappe-Site-Name", "tenant1.local")
-	w1 := httptest.NewRecorder()
-	s.httpServer.Handler.ServeHTTP(w1, req1)
+	t.Run("tenant1 is served by bench1 with its site named", func(t *testing.T) {
+		w := serveAs(s, "tenant1.local", "sess-001")
+		if w.Code != http.StatusOK {
+			t.Errorf("status %d, body %s", w.Code, w.Body.String())
+		}
+		if bench1.calls.Load() == 0 || bench1.lastSite != "tenant1.local" {
+			t.Errorf("bench1 calls=%d site header=%q", bench1.calls.Load(), bench1.lastSite)
+		}
+	})
 
-	if w1.Code != http.StatusOK {
-		t.Errorf("tenant1 request failed: status %d, body %s", w1.Code, w1.Body.String())
-	}
-	if bench1Calls.Load() == 0 {
-		t.Errorf("bench1 was not called for tenant1.local")
-	}
-	if lastSiteHeader1 != "tenant1.local" {
-		t.Errorf("bench1 expected X-Frappe-Site-Name=tenant1.local, got %q", lastSiteHeader1)
-	}
+	t.Run("tenant2 is served by bench2 with its site named", func(t *testing.T) {
+		w := serveAs(s, "tenant2.local", "sess-002")
+		if w.Code != http.StatusOK {
+			t.Errorf("status %d, body %s", w.Code, w.Body.String())
+		}
+		if bench2.calls.Load() == 0 || bench2.lastSite != "tenant2.local" {
+			t.Errorf("bench2 calls=%d site header=%q", bench2.calls.Load(), bench2.lastSite)
+		}
+	})
 
-	// 2. Request for tenant2.local
-	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/tools", nil)
-	req2.Header.Set("Cookie", "sid=sess-002")
-	req2.Header.Set("X-Frappe-Site-Name", "tenant2.local")
-	w2 := httptest.NewRecorder()
-	s.httpServer.Handler.ServeHTTP(w2, req2)
-
-	if w2.Code != http.StatusOK {
-		t.Errorf("tenant2 request failed: status %d, body %s", w2.Code, w2.Body.String())
-	}
-	if bench2Calls.Load() == 0 {
-		t.Errorf("bench2 was not called for tenant2.local")
-	}
-	if lastSiteHeader2 != "tenant2.local" {
-		t.Errorf("bench2 expected X-Frappe-Site-Name=tenant2.local, got %q", lastSiteHeader2)
-	}
-
-	// 3. Request for unknown site returns 400
-	req3 := httptest.NewRequest(http.MethodGet, "/api/v1/tools", nil)
-	req3.Header.Set("Cookie", "sid=sess-003")
-	req3.Header.Set("X-Frappe-Site-Name", "unregistered.local")
-	w3 := httptest.NewRecorder()
-	s.httpServer.Handler.ServeHTTP(w3, req3)
-
-	if w3.Code != http.StatusBadRequest {
-		t.Errorf("unknown site expected 400 Bad Request, got %d: %s", w3.Code, w3.Body.String())
-	}
-
-	// 4. Request with missing site when routes file configured returns 400
-	req4 := httptest.NewRequest(http.MethodGet, "/api/v1/tools", nil)
-	req4.Header.Set("Cookie", "sid=sess-004")
-	w4 := httptest.NewRecorder()
-	s.httpServer.Handler.ServeHTTP(w4, req4)
-
-	if w4.Code != http.StatusBadRequest {
-		t.Errorf("missing site header with routes file expected 400 Bad Request, got %d: %s", w4.Code, w4.Body.String())
+	for name, site := range map[string]string{
+		"a site absent from the routes file": "unregistered.local",
+		"no site at all, with a routes file": "",
+	} {
+		t.Run(name+" is refused with 400", func(t *testing.T) {
+			if w := serveAs(s, site, "sess-003"); w.Code != http.StatusBadRequest {
+				t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+		})
 	}
 }

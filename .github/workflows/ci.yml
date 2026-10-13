@@ -76,7 +76,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
-          version: v2.13.2
+          version: v2.14.0
           args: --timeout=3m
 
       - name: Check third-party notices are current
@@ -113,7 +113,7 @@ jobs:
       - name: Complexity and duplication budget
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
-          version: v2.13.2
+          version: v2.14.0
           args: --default=none --enable=gocyclo,dupl --timeout=3m
 
   docs:
