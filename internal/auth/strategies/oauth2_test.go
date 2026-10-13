@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"frappe-mcp-server/internal/types"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -323,4 +325,50 @@ func TestTokenCacheKey_DifferentTokensDifferentKeys(t *testing.T) {
 
 	assert.NotEqual(t, tokenCacheKey("token-a", req), tokenCacheKey("token-b", req),
 		"different tokens must produce different cache keys")
+}
+
+func TestTokenCacheKey_BoundToSite(t *testing.T) {
+	req := httptest.NewRequest("GET", "/test", nil)
+
+	assert.NotEqual(t, tokenCacheKeyForSite("tok", "site-a.local", req), tokenCacheKeyForSite("tok", "site-b.local", req),
+		"one token introspected on two sites must be two cache entries")
+	assert.Equal(t, tokenCacheKeyForSite("tok", "site-a.local", req), tokenCacheKeyForSite("tok", "site-a.local", req),
+		"the same site and token must yield a stable key")
+	assert.Equal(t, tokenCacheKey("tok", req), tokenCacheKeyForSite("tok", "", req),
+		"a request naming no site keys as the legacy single-site path")
+	assert.Equal(t, tokenCacheKey("tok", req.WithContext(types.WithSite(context.Background(), "site-a.local"))),
+		tokenCacheKeyForSite("tok", "site-a.local", req),
+		"tokenCacheKey reads the site the middleware bound to the request")
+}
+
+func TestTokenInfoURLFollowsTheRoutedBench(t *testing.T) {
+	onBase := NewOAuth2Strategy(OAuth2StrategyConfig{
+		BaseURL:      "http://bench-default:8000",
+		TokenInfoURL: "http://bench-default:8000/api/method/frappe.integrations.oauth2.openid_profile",
+	})
+	routed := types.WithBaseURL(context.Background(), "http://bench-02:8000/")
+
+	assert.Equal(t, "http://bench-02:8000/api/method/frappe.integrations.oauth2.openid_profile",
+		onBase.tokenInfoURLFor(routed), "an endpoint on the Frappe base URL follows the tenant's bench")
+	assert.Equal(t, onBase.tokenInfoURL, onBase.tokenInfoURLFor(context.Background()),
+		"no routed bench in the context means the configured endpoint")
+	assert.Equal(t, onBase.tokenInfoURL,
+		onBase.tokenInfoURLFor(types.WithBaseURL(context.Background(), "http://bench-default:8000")),
+		"the configured bench itself is not rewritten")
+
+	elsewhere := NewOAuth2Strategy(OAuth2StrategyConfig{
+		BaseURL:      "http://bench-default:8000",
+		TokenInfoURL: "http://idp.example/userinfo",
+	})
+	assert.Equal(t, "http://idp.example/userinfo", elsewhere.tokenInfoURLFor(routed),
+		"a separate identity provider is the same for every tenant")
+}
+
+func TestSidCacheKeyHoldsNoSid(t *testing.T) {
+	key := types.SidCacheKey("site-a.local", "the-live-session-id")
+	assert.NotContains(t, key, "the-live-session-id", "the cache key must not carry the credential")
+	assert.NotEqual(t, key, types.SidCacheKey("site-b.local", "the-live-session-id"),
+		"one sid on two sites is two entries")
+	assert.NotEqual(t, types.SidCacheKey("", "a"), types.SidCacheKey("", "b"))
+	assert.Equal(t, types.SidCacheKey("", "a"), types.SidCacheKey("", "a"))
 }

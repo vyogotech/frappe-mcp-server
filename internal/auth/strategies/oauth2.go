@@ -70,17 +70,8 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 	// Strategy 1: Try sid cookie first (Frappe session - user-level permissions)
 	var sidErr error
 	if sidCookie, err := r.Cookie("sid"); err == nil && sidCookie.Value != "" {
-		// Check cache first
-		cacheKey := "sid:" + sidCookie.Value
-		if cached, found := s.cache.Get(cacheKey); found {
-			if user, ok := cached.(*types.User); ok {
-				return user, nil
-			}
-		}
-
 		user, err := s.validateSessionCookie(ctx, sidCookie)
 		if err == nil {
-			s.cache.Set(cacheKey, user, cache.DefaultExpiration)
 			return user, nil
 		}
 		// If sid validation fails, continue to try Bearer token
@@ -100,7 +91,7 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 	// Cache key binds the token AND the X-MCP-User-* impersonation headers so a
 	// trusted backend client cannot retrieve a different user's cached identity
 	// by reusing the same token. See tokenCacheKey.
-	cacheKey := tokenCacheKey(token, r)
+	cacheKey := tokenCacheKeyForSite(token, types.SiteFromContext(ctx), r)
 
 	// Check cache first
 	if cached, found := s.cache.Get(cacheKey); found {
@@ -139,7 +130,14 @@ func extractBearerToken(r *http.Request) string {
 // tokenCacheKey must hash the X-MCP-User-* headers with the token: a trusted client reusing one token for two users
 // would otherwise get the first user's cached identity.
 func tokenCacheKey(token string, r *http.Request) string {
+	return tokenCacheKeyForSite(token, types.SiteFromContext(r.Context()), r)
+}
+
+// tokenCacheKeyForSite also binds the tenant site: a token introspected on one bench must not answer for another.
+func tokenCacheKeyForSite(token, site string, r *http.Request) string {
 	h := sha256.New()
+	h.Write([]byte(site))
+	h.Write([]byte{0})
 	h.Write([]byte(token))
 	h.Write([]byte{0})
 	h.Write([]byte(r.Header.Get("X-MCP-User-ID")))
@@ -160,12 +158,15 @@ func (s *OAuth2Strategy) validateToken(ctx context.Context, token string) (*type
 		}, "", nil
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", s.tokenInfoURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", s.tokenInfoURLFor(ctx), nil)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
+	if site := types.SiteFromContext(ctx); site != "" {
+		req.Header.Set("X-Frappe-Site-Name", site)
+	}
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -201,6 +202,21 @@ func (s *OAuth2Strategy) validateToken(ctx context.Context, token string) (*type
 	return user, tokenInfo.ClientID, nil
 }
 
+// tokenInfoURLFor is the introspection endpoint for this request's tenant. An endpoint on the configured Frappe base
+// URL follows the tenant's routed bench, so a token is judged by the site that issued it; an endpoint elsewhere (a
+// separate identity provider) is the same for every tenant and is used as configured.
+func (s *OAuth2Strategy) tokenInfoURLFor(ctx context.Context) string {
+	routed := strings.TrimSuffix(types.BaseURLFromContext(ctx), "/")
+	configured := strings.TrimSuffix(s.baseURL, "/")
+	if routed == "" || configured == "" || routed == configured {
+		return s.tokenInfoURL
+	}
+	if path, onBase := strings.CutPrefix(s.tokenInfoURL, configured); onBase && strings.HasPrefix(path, "/") {
+		return routed + path
+	}
+	return s.tokenInfoURL
+}
+
 func (s *OAuth2Strategy) extractUserFromHeaders(r *http.Request) *types.User {
 	return &types.User{
 		ID:       r.Header.Get("X-MCP-User-ID"),
@@ -215,10 +231,9 @@ func (s *OAuth2Strategy) isTrustedClient(clientID string) bool {
 	return s.trustedClients[clientID]
 }
 
-// validateSessionCookie accepts any sid as an anonymous user unless validate_remote is on.
 func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *http.Cookie) (*types.User, error) {
-	// Check cache first
-	cacheKey := "sid:" + sidCookie.Value
+	site := types.SiteFromContext(ctx)
+	cacheKey := types.SidCacheKey(site, sidCookie.Value)
 	if cached, found := s.cache.Get(cacheKey); found {
 		if user, ok := cached.(*types.User); ok {
 			return user, nil
@@ -227,22 +242,32 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 
 	if !s.validateRemote {
 		// Skip remote validation (for development)
-		return &types.User{
+		user := &types.User{
 			ID:        "anonymous",
 			Email:     "anonymous@example.com",
 			SessionID: sidCookie.Value,
-		}, nil
+		}
+		s.cache.Set(cacheKey, user, cache.DefaultExpiration)
+		return user, nil
+	}
+
+	baseURL := s.baseURL
+	if u := types.BaseURLFromContext(ctx); u != "" {
+		baseURL = u
 	}
 
 	// Validate session with Frappe by calling /api/method/frappe.auth.get_logged_user
 	req, err := http.NewRequestWithContext(ctx, "GET",
-		s.baseURL+"/api/method/frappe.auth.get_logged_user", nil)
+		strings.TrimSuffix(baseURL, "/")+"/api/method/frappe.auth.get_logged_user", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session validation request: %w", err)
 	}
 
 	// Add the sid cookie to the request
 	req.AddCookie(sidCookie)
+	if site != "" {
+		req.Header.Set("X-Frappe-Site-Name", site)
+	}
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -265,13 +290,13 @@ func (s *OAuth2Strategy) validateSessionCookie(ctx context.Context, sidCookie *h
 		return nil, fmt.Errorf("failed to decode session info: %w", err)
 	}
 
-	// The session's CSRF token is fetched by the Frappe client before a write, not here: it costs a
-	// full desk render and no read needs it.
-	return &types.User{
+	user := &types.User{
 		ID:        result.Message,
 		Email:     result.Message,
 		SessionID: sidCookie.Value, // Store for pass-through to Frappe API calls
-	}, nil
+	}
+	s.cache.Set(cacheKey, user, cache.DefaultExpiration)
+	return user, nil
 }
 
 func (s *OAuth2Strategy) ClearCache() {

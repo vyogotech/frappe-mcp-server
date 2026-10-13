@@ -2,6 +2,7 @@ package strategies
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"frappe-mcp-server/internal/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,7 +55,11 @@ func newFrappeDesk(t *testing.T) *frappeDesk {
 		case "/api/method/frappe.auth.get_logged_user":
 			d.loggedUser++
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"message":"alice@example.com"}`)
+			user := "alice@example.com"
+			if site := r.Header.Get("X-Frappe-Site-Name"); site != "" {
+				user = site + "@example.com"
+			}
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"message":%q}`, user))
 		case "/app":
 			if d.deskStatus != http.StatusOK {
 				w.WriteHeader(d.deskStatus)
@@ -120,4 +127,44 @@ func TestAValidatedSidIsCached(t *testing.T) {
 
 	validations, _ := desk.calls()
 	assert.Equal(t, 1, validations, "a validated session is validated once, not on every request")
+}
+
+func TestSidCacheIsolationAcrossSites(t *testing.T) {
+	desk := newFrappeDesk(t)
+	strategy := sidStrategy(desk)
+
+	// 1. Authenticate with "shared-session" on site-a.local
+	reqA := sidRequest("shared-session")
+	ctxA := types.WithSite(context.Background(), "site-a.local")
+
+	userA, err := strategy.Authenticate(ctxA, reqA)
+	require.NoError(t, err)
+	require.Equal(t, "site-a.local@example.com", userA.Email)
+
+	validations, _ := desk.calls()
+	assert.Equal(t, 1, validations, "site-a must validate remotely on first call")
+
+	// 2. Authenticate with identical "shared-session" on site-b.local
+	// If the cache was not site-isolated, this would return site-a's cached user.
+	reqB := sidRequest("shared-session")
+	ctxB := types.WithSite(context.Background(), "site-b.local")
+
+	userB, err := strategy.Authenticate(ctxB, reqB)
+	require.NoError(t, err)
+	require.Equal(t, "site-b.local@example.com", userB.Email, "site-b must get its own user, never site-a's cached identity")
+
+	validations, _ = desk.calls()
+	assert.Equal(t, 2, validations, "site-b must validate remotely, not hit site-a cache")
+
+	// 3. Repeat calls on both sites hit their respective cache entries without remote validation
+	userA2, err := strategy.Authenticate(ctxA, reqA)
+	require.NoError(t, err)
+	require.Equal(t, "site-a.local@example.com", userA2.Email)
+
+	userB2, err := strategy.Authenticate(ctxB, reqB)
+	require.NoError(t, err)
+	require.Equal(t, "site-b.local@example.com", userB2.Email)
+
+	validations, _ = desk.calls()
+	assert.Equal(t, 2, validations, "subsequent calls for each site must be served from their isolated caches")
 }

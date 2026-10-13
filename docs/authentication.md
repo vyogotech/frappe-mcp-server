@@ -48,6 +48,8 @@ Tool Handler
 ERPNext (validates sid per request, enforces user permissions)
 ```
 
+On a multi-tenant deployment the request also carries `X-Frappe-Site-Name`. The sid is then validated against that site, on the bench the server has mapped for it, and the site name travels on every call the tool handler makes. See [Multi-tenant Routing](configuration.md#multi-tenant-routing).
+
 ## Configuration
 
 ### `config.yaml`

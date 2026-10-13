@@ -43,6 +43,8 @@ Configuration can be overridden using environment variables:
 | `FRAPPE_BASE_URL` | Frappe URL | `https://erp.company.com` |
 | `FRAPPE_API_KEY` | API key | `abc123...` |
 | `FRAPPE_API_SECRET` | API secret | `xyz789...` |
+| `FRAPPE_SITE_ROUTES_FILE` | Site-to-bench routes file for multi-tenant deployments | `/etc/frappe/site_routes.yaml` |
+| `FRAPPE_SITE_URL_TEMPLATE` | Bench URL pattern with a `{site}` placeholder | `http://{site}.bench.local:8000` |
 | `SERVER_HOST` | Bind address | `0.0.0.0` |
 | `SERVER_PORT` | HTTP port | `8080` |
 | `LOG_LEVEL` | Logging level | `debug` |
@@ -58,6 +60,30 @@ A numeric or boolean variable whose value cannot be parsed stops the server at s
 booleans take the spellings `strconv.ParseBool` accepts (`true`, `True`, `1`, `t`, `false`, `0`, ...).
 
 Environment variables take precedence over config file values.
+
+## Multi-tenant Routing
+
+One server can front many Frappe sites, on one bench or on several. With nothing configured here it behaves as a single-site server against `erpnext.base_url`.
+
+A request names its site in the `X-Frappe-Site-Name` header. The server validates the caller's session against that site, and sends the same site name on every Frappe call it makes for the request, so a bench hosting several sites answers for the right one. Sessions, CSRF tokens and rate limits are kept per site, and session ids are never held in clear.
+
+Where a site's bench lives is read from the server's own configuration, never from the request:
+
+```yaml
+erpnext:
+  base_url: "http://localhost:8000"                    # the default, and the only URL a single-site install needs
+  site_routes_file: "/etc/frappe/site_routes.yaml"    # explicit site → bench map; re-read when the file changes
+  site_url_template: "http://{site}.bench.local:8000"  # or a pattern, when bench addresses follow one
+```
+
+```yaml
+# site_routes.yaml
+routes:
+  tenant-a.example.com: http://bench-01:8000
+  tenant-b.example.com: http://bench-02:8000
+```
+
+The routes file wins over the template, and the template over `base_url`. When a routes file is configured, a request naming an unlisted site, or no site at all, is refused with `400` before anything reaches Frappe. Bearer tokens are introspected on the site's own bench whenever the introspection endpoint lives on `base_url`; a separate identity provider is used as configured for every site.
 
 ## ERPNext Setup
 

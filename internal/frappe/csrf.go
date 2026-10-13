@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/patrickmn/go-cache"
 
@@ -19,7 +20,8 @@ func (c *Client) csrfToken(ctx context.Context, user *types.User) string {
 	if user.CSRFToken != "" {
 		return user.CSRFToken
 	}
-	if cached, found := c.csrfTokens.Get(user.SessionID); found {
+	cacheKey := types.SidCacheKey(types.SiteFromContext(ctx), user.SessionID)
+	if cached, found := c.csrfTokens.Get(cacheKey); found {
 		if token, ok := cached.(string); ok {
 			return token
 		}
@@ -31,17 +33,24 @@ func (c *Client) csrfToken(ctx context.Context, user *types.User) string {
 		slog.Warn("Failed to read the session's CSRF token; this write will be refused", "user", user.Email, "error", err)
 		return ""
 	}
-	c.csrfTokens.Set(user.SessionID, token, cache.DefaultExpiration)
+	c.csrfTokens.Set(cacheKey, token, cache.DefaultExpiration)
 	return token
 }
 
 func (c *Client) fetchCSRFToken(ctx context.Context, sid string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/app", nil)
+	baseURL := c.baseURL
+	if u := types.BaseURLFromContext(ctx); u != "" {
+		baseURL = strings.TrimSuffix(u, "/")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/app", nil)
 	if err != nil {
 		return "", fmt.Errorf("build desk request: %w", err)
 	}
 	// a request carries a cookie as name=value only: Secure, HttpOnly and SameSite belong to Set-Cookie
 	req.Header.Set("Cookie", "sid="+sid)
+	if site := types.SiteFromContext(ctx); site != "" {
+		req.Header.Set("X-Frappe-Site-Name", site)
+	}
 	setRequestID(ctx, req)
 
 	resp, err := c.httpClient.Do(req)

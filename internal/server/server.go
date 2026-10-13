@@ -20,6 +20,7 @@ import (
 	"frappe-mcp-server/internal/mcp"
 	"frappe-mcp-server/internal/telemetry"
 	"frappe-mcp-server/internal/tools"
+	"frappe-mcp-server/internal/types"
 )
 
 type MCPServer struct {
@@ -29,6 +30,7 @@ type MCPServer struct {
 	httpServer     *http.Server
 	catalog        []tools.Tool
 	authMiddleware *auth.Middleware
+	siteResolver   *frappe.SiteResolver
 }
 
 // tool finds the tool this server offers under name; registration, the listings and both dispatch paths read the one
@@ -53,11 +55,21 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	toolRegistry := tools.NewRegistry(frappeClient)
 	toolRegistry.ConfirmationRedeemMethod = cfg.Tools.ConfirmationRedeemMethod
 
+	var siteResolver *frappe.SiteResolver
+	if cfg != nil {
+		var err error
+		siteResolver, err = frappe.NewSiteResolver(cfg.ERPNext.BaseURL, cfg.ERPNext.SiteRoutesFile, cfg.ERPNext.SiteURLTemplate)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create site resolver: %w", err)
+		}
+	}
+
 	mcpServer := &MCPServer{
 		config:       cfg,
 		frappeClient: frappeClient,
 		server:       server,
 		catalog:      toolRegistry.Catalog(cfg.Tools.KnowledgeBase),
+		siteResolver: siteResolver,
 	}
 
 	// Setup authentication if enabled
@@ -184,6 +196,32 @@ func (s *MCPServer) withMiddleware(handler http.Handler) http.Handler {
 				return
 			}
 			authed.ServeHTTP(w, r)
+		})
+	}
+
+	// Apply site middleware before auth, so authentication and downstream tool calls have site and resolved bench URL
+	if s.siteResolver != nil {
+		next := h
+		h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			site := strings.TrimSpace(r.Header.Get("X-Frappe-Site-Name"))
+			ctx := r.Context()
+			baseURL, err := s.siteResolver.Resolve(site)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error":   "Bad Request",
+					"message": err.Error(),
+				})
+				return
+			}
+			if site != "" {
+				ctx = types.WithSite(ctx, site)
+			}
+			if baseURL != "" {
+				ctx = types.WithBaseURL(ctx, baseURL)
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 

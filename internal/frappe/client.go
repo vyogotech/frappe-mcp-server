@@ -417,7 +417,11 @@ func setRequestID(ctx context.Context, req *http.Request) {
 }
 
 func (c *Client) doRequest(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
-	fullURL := c.baseURL + endpoint
+	baseURL := c.baseURL
+	if u := types.BaseURLFromContext(ctx); u != "" {
+		baseURL = strings.TrimSuffix(u, "/")
+	}
+	fullURL := baseURL + endpoint
 
 	var bodyReader io.Reader
 	if body != nil {
@@ -436,6 +440,9 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	if site := types.SiteFromContext(ctx); site != "" {
+		req.Header.Set("X-Frappe-Site-Name", site)
+	}
 	setRequestID(ctx, req)
 
 	if err := c.setCredentials(ctx, req, method, endpoint); err != nil {

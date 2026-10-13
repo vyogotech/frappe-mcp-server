@@ -7,6 +7,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"frappe-mcp-server/internal/auth"
+	"frappe-mcp-server/internal/types"
 )
 
 // limiter returns the caller's own bucket, keyed by the identity the auth middleware put in the context. One bucket
@@ -16,6 +17,9 @@ func (c *Client) limiter(ctx context.Context) *rate.Limiter {
 	key := ""
 	if user := auth.UserFromContext(ctx); user != nil && user.Email != "" {
 		key = user.Email
+	}
+	if site := types.SiteFromContext(ctx); site != "" {
+		key = site + ":" + key
 	}
 
 	c.limitersMu.Lock()

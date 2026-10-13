@@ -1,6 +1,11 @@
 package types
 
-import "time"
+import (
+	"context"
+	"crypto/sha256"
+	"fmt"
+	"time"
+)
 
 // SessionExpiredMessage is what a user is told when Frappe reports their session ended, on every channel.
 const SessionExpiredMessage = "Session expired. Please sign in again."
@@ -150,4 +155,47 @@ type ReportColumn struct {
 	FieldName string `json:"fieldname"`
 	FieldType string `json:"fieldtype"`
 	Width     int    `json:"width,omitempty"`
+}
+
+type contextKey string
+
+const (
+	siteContextKey    contextKey = "frappe_site"
+	baseURLContextKey contextKey = "frappe_base_url"
+)
+
+// WithSite binds the multi-tenant site name into the context.
+func WithSite(ctx context.Context, site string) context.Context {
+	return context.WithValue(ctx, siteContextKey, site)
+}
+
+// SiteFromContext returns the bound site name, or empty string if unset.
+func SiteFromContext(ctx context.Context) string {
+	if site, ok := ctx.Value(siteContextKey).(string); ok {
+		return site
+	}
+	return ""
+}
+
+// WithBaseURL binds the resolved Frappe bench base URL into the context.
+func WithBaseURL(ctx context.Context, baseURL string) context.Context {
+	return context.WithValue(ctx, baseURLContextKey, baseURL)
+}
+
+// BaseURLFromContext returns the resolved Frappe bench base URL, or empty string if unset.
+func BaseURLFromContext(ctx context.Context) string {
+	if u, ok := ctx.Value(baseURLContextKey).(string); ok {
+		return u
+	}
+	return ""
+}
+
+// SidCacheKey names a session's cache entry without holding the sid itself: the site namespaces it, so one sid
+// value on two sites is two entries, and the SHA-256 keeps the live credential out of every map and heap dump.
+func SidCacheKey(site, sid string) string {
+	h := sha256.Sum256([]byte(sid))
+	if site == "" {
+		return fmt.Sprintf("sid:%x", h)
+	}
+	return fmt.Sprintf("%s:sid:%x", site, h)
 }

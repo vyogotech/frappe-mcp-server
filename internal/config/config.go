@@ -46,12 +46,14 @@ type ServerConfig struct {
 }
 
 type ERPNextConfig struct {
-	BaseURL   string          `yaml:"base_url"`
-	APIKey    string          `yaml:"api_key"`
-	APISecret string          `yaml:"api_secret"`
-	Timeout   time.Duration   `yaml:"timeout"`
-	RateLimit RateLimitConfig `yaml:"rate_limit"`
-	Retry     RetryConfig     `yaml:"retry"`
+	BaseURL         string          `yaml:"base_url"`
+	SiteRoutesFile  string          `yaml:"site_routes_file"`
+	SiteURLTemplate string          `yaml:"site_url_template"`
+	APIKey          string          `yaml:"api_key"`
+	APISecret       string          `yaml:"api_secret"`
+	Timeout         time.Duration   `yaml:"timeout"`
+	RateLimit       RateLimitConfig `yaml:"rate_limit"`
+	Retry           RetryConfig     `yaml:"retry"`
 }
 
 type RateLimitConfig struct {
@@ -217,6 +219,8 @@ func (c *Config) loadFromEnv() error {
 	envRenamed("FRAPPE_BASE_URL", "ERPNEXT_BASE_URL", &c.ERPNext.BaseURL)
 	envRenamed("FRAPPE_API_KEY", "ERPNEXT_API_KEY", &c.ERPNext.APIKey)
 	envRenamed("FRAPPE_API_SECRET", "ERPNEXT_API_SECRET", &c.ERPNext.APISecret)
+	envString("FRAPPE_SITE_ROUTES_FILE", &c.ERPNext.SiteRoutesFile)
+	envString("FRAPPE_SITE_URL_TEMPLATE", &c.ERPNext.SiteURLTemplate)
 
 	envString("SERVER_HOST", &c.Server.Host)
 	envString("LOG_LEVEL", &c.Logging.Level)
@@ -243,6 +247,17 @@ func (c *Config) loadFromEnv() error {
 func (c *Config) validate() error {
 	if c.ERPNext.BaseURL == "" {
 		return fmt.Errorf("frappe instance base URL is required")
+	}
+
+	if c.ERPNext.SiteRoutesFile != "" {
+		if _, err := os.Stat(c.ERPNext.SiteRoutesFile); err != nil {
+			return fmt.Errorf("invalid erpnext.site_routes_file: %w", err)
+		}
+	}
+	if c.ERPNext.SiteURLTemplate != "" {
+		if !strings.Contains(c.ERPNext.SiteURLTemplate, "{site}") {
+			return fmt.Errorf("invalid erpnext.site_url_template: must contain '{site}' placeholder")
+		}
 	}
 
 	// API key and secret are optional if OAuth2 is enabled and required

@@ -6,6 +6,9 @@ server:
 
 erpnext:  # Frappe instance configuration (works with ERPNext, Frappe HR, Healthcare, etc.)
   base_url: "http://localhost:8000"
+  # Multi-tenant routing (optional):
+  # site_routes_file: "/etc/frappe/site_routes.yaml"
+  # site_url_template: "http://{site}.local:8000"
   # API key and secret are OPTIONAL when OAuth2 is enabled (auth.enabled: true and auth.require_auth: true)
   # If not provided, the server will pass through user OAuth2 tokens for user-level permissions
   # If provided, they will be used as fallback when no user token is available
