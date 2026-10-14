@@ -39,6 +39,12 @@ type CreateDocumentRequest struct {
 	Data    Document `json:"data" validate:"required"`
 }
 
+// CreateDocumentsRequest is one batch of new records of one doctype, inserted in one request.
+type CreateDocumentsRequest struct {
+	DocType string     `json:"doctype" validate:"required"`
+	Rows    []Document `json:"rows" validate:"required"`
+}
+
 type UpdateDocumentRequest struct {
 	DocType string   `json:"doctype" validate:"required"`
 	Name    string   `json:"name" validate:"required"`

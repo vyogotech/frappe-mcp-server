@@ -55,11 +55,25 @@ func (t *ToolRegistry) Catalog(knowledgeBase bool) []Tool {
 		}},
 		{Name: "create_document", Handler: t.CreateDocument, ToolMeta: mcp.ToolMeta{
 			ReadOnly:    readOnly(false),
-			Description: "Create a new ERPNext document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args).",
+			Description: "Create one new Frappe document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args). For more than one new document of the same doctype, use create_documents instead.",
 			InputSchema: objSchema(map[string]interface{}{
 				"doctype": strProp("ERPNext document type (e.g., Customer, Sales Order)"),
 				"data":    map[string]interface{}{"type": "object", "description": "Field values for the new document, as an object of fieldname→value"},
 			}, "doctype", "data"),
+		}},
+		{Name: "create_documents", Handler: t.CreateDocuments, ToolMeta: mcp.ToolMeta{
+			ReadOnly:    readOnly(false),
+			Description: "Create several Frappe documents of one doctype in one call, all or nothing (up to 100 rows). Use it instead of create_document for more than one record. `rows` is a list of flat fieldname→value objects.",
+			InputSchema: objSchema(map[string]interface{}{
+				"doctype": strProp("Frappe document type, the same for every row"),
+				"rows": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]interface{}{"type": "object"},
+					"minItems":    1,
+					"maxItems":    maxRows,
+					"description": "The new documents, each an object of fieldname→value",
+				},
+			}, "doctype", "rows"),
 		}},
 		{Name: "update_document", Handler: t.UpdateDocument, ToolMeta: mcp.ToolMeta{
 			ReadOnly:    readOnly(false),

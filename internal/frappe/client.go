@@ -172,6 +172,31 @@ func (c *Client) CreateDocument(ctx context.Context, req types.CreateDocumentReq
 	return response.Data, nil
 }
 
+// CreateDocuments inserts a batch through frappe.client.insert_many, which runs every insert in the one request:
+// a row that fails rolls the whole batch back, so a batch is all or nothing. It answers the new names in order.
+func (c *Client) CreateDocuments(ctx context.Context, req types.CreateDocumentsRequest) ([]string, error) {
+	docs := make([]types.Document, 0, len(req.Rows))
+	for _, row := range req.Rows {
+		doc := types.Document{}
+		for k, v := range row {
+			doc[k] = v
+		}
+		doc["doctype"] = req.DocType // one doctype per batch, whatever a row says
+		docs = append(docs, doc)
+	}
+
+	var response struct {
+		Message []string `json:"message"`
+	}
+	body := map[string]interface{}{"docs": docs}
+	if err := c.makeRequest(ctx, "POST", "/api/method/frappe.client.insert_many", body, &response); err != nil {
+		return nil, fmt.Errorf("failed to create %d %s documents: %w", len(docs), req.DocType, err)
+	}
+
+	slog.Info("Documents created successfully", "doctype", req.DocType, "count", len(response.Message))
+	return response.Message, nil
+}
+
 func (c *Client) UpdateDocument(ctx context.Context, req types.UpdateDocumentRequest) (types.Document, error) {
 	endpoint := fmt.Sprintf("/api/resource/%s/%s",
 		url.PathEscape(req.DocType),

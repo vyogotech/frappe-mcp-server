@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -29,6 +30,8 @@ func MockERPNextServer(t testing.TB) *httptest.Server {
 		switch r.URL.Path {
 		case "/api/method/" + ConfirmRedeemMethod:
 			handleConfirmRedeem(w, r)
+		case "/api/method/frappe.client.insert_many":
+			handleInsertMany(w, r)
 		case "/api/resource/Project/TEST-PROJ-001":
 			handleGetProject(w, r)
 		case "/api/resource/Project":
@@ -366,4 +369,26 @@ func handleGlobalSearch(w http.ResponseWriter, r *http.Request) {
 		"message": results,
 	}
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+// handleInsertMany answers as frappe.client.insert_many does: the new names in order, at most 200 per request.
+func handleInsertMany(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Docs []map[string]interface{} `json:"docs"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.Docs) == 0 {
+		frappeError(w, http.StatusBadRequest, "ValidationError", "docs are required")
+		return
+	}
+	if len(body.Docs) > 200 {
+		frappeError(w, http.StatusExpectationFailed, "ValidationError", "Only 200 inserts allowed in one request")
+		return
+	}
+	names := make([]string, 0, len(body.Docs))
+	for i, doc := range body.Docs {
+		doctype, _ := doc["doctype"].(string)
+		names = append(names, strings.ToUpper(doctype)+"-"+strconv.Itoa(i+1))
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": names})
 }

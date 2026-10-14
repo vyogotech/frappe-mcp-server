@@ -162,6 +162,55 @@ func (t *ToolRegistry) CreateDocument(ctx context.Context, request mcp.ToolReque
 	}, nil
 }
 
+// BatchConfirmationName is what a batch's one-time token is minted and redeemed for in place of a record name: the
+// user allowed this many rows of this doctype, so the token cannot be spent on a batch of another size.
+func BatchConfirmationName(rows int) string {
+	return fmt.Sprintf("%d rows", rows)
+}
+
+func (t *ToolRegistry) CreateDocuments(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
+	var params types.CreateDocumentsRequest
+
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters: %w", err)
+	}
+	if params.DocType == "" || len(params.Rows) == 0 {
+		return nil, fmt.Errorf("doctype and at least one row are required")
+	}
+	if len(params.Rows) > maxRows {
+		return nil, fmt.Errorf("at most %d rows can be created in one call (got %d): split the batch", maxRows, len(params.Rows))
+	}
+	for i, row := range params.Rows {
+		if len(row) == 0 {
+			return nil, fmt.Errorf("row %d has no fields", i+1)
+		}
+	}
+
+	if err := t.requireConfirmation(ctx, "create_documents", params.DocType, BatchConfirmationName(len(params.Rows))); err != nil {
+		return nil, err
+	}
+
+	names, err := t.frappeClient.CreateDocuments(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create documents: %w", err)
+	}
+
+	listed, err := json.Marshal(names)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+	return &mcp.ToolResponse{
+		ID: request.ID,
+		Content: []mcp.Content{
+			{
+				Type: "text",
+				Text: fmt.Sprintf("Successfully created %d %s documents: %s", len(names), params.DocType, strings.Join(names, ", ")),
+			},
+			{Type: "text", Text: string(listed)},
+		},
+	}, nil
+}
+
 func (t *ToolRegistry) UpdateDocument(ctx context.Context, request mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	var params types.UpdateDocumentRequest
 

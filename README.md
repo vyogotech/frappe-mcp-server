@@ -136,7 +136,8 @@ below and the catalogue drift apart, and prints the table to paste back in.
 | --- | --- |
 | `get_document` | Retrieve a single ERPNext document by doctype and name |
 | `list_documents` | Fetch document rows to read their contents. Returns at most page_length rows (default 20), so it CANNOT be used to count records - use aggregate_documents for counts. |
-| `create_document` | Create a new ERPNext document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args). |
+| `create_document` | Create one new Frappe document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args). For more than one new document of the same doctype, use create_documents instead. |
+| `create_documents` | Create several Frappe documents of one doctype in one call, all or nothing (up to 100 rows). Use it instead of create_document for more than one record. `rows` is a list of flat fieldname→value objects. |
 | `update_document` | Update an existing ERPNext document. `data` is a flat object of fieldname→value pairs for fields to change. |
 | `delete_document` | Delete an ERPNext document |
 | `search_documents` | Search ERPNext documents of a given doctype using full-text search |

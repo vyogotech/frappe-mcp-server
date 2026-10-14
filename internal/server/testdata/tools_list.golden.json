@@ -88,7 +88,7 @@
   },
   {
     "annotations": {},
-    "description": "Create a new ERPNext document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args).",
+    "description": "Create one new Frappe document. `data` is a flat object of fieldname→value pairs (NOT spread into top-level args). For more than one new document of the same doctype, use create_documents instead.",
     "inputSchema": {
       "properties": {
         "data": {
@@ -107,6 +107,33 @@
       "type": "object"
     },
     "name": "create_document"
+  },
+  {
+    "annotations": {},
+    "description": "Create several Frappe documents of one doctype in one call, all or nothing (up to 100 rows). Use it instead of create_document for more than one record. `rows` is a list of flat fieldname→value objects.",
+    "inputSchema": {
+      "properties": {
+        "doctype": {
+          "description": "Frappe document type, the same for every row",
+          "type": "string"
+        },
+        "rows": {
+          "description": "The new documents, each an object of fieldname→value",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "doctype",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "name": "create_documents"
   },
   {
     "annotations": {},

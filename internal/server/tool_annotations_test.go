@@ -16,7 +16,7 @@ import (
 
 // writeTools is what the gate covers today. A tool added to the catalogue with ReadOnly false and left out of here
 // fails TestEveryWriteToolIsAccountedFor, which is how a new write tool reaches whoever has to wire it.
-var writeTools = []string{"create_document", "update_document", "delete_document"}
+var writeTools = []string{"create_document", "create_documents", "update_document", "delete_document"}
 
 func newAnnotationsServer(t *testing.T) *MCPServer {
 	t.Helper()

@@ -21,8 +21,10 @@ const testRedeemMethod = "frappe_ai.api.confirm.redeem"
 // the catalogue with no entry here fails the test, which is how the gate reaches a tool added later.
 var writeCall = map[string]struct{ args, doctype, name string }{
 	"create_document": {`{"doctype":"ToDo","data":{"description":"a thing"}}`, "ToDo", ""},
-	"update_document": {`{"doctype":"ToDo","name":"TODO-0001","data":{"status":"Closed"}}`, "ToDo", "TODO-0001"},
-	"delete_document": {`{"doctype":"ToDo","name":"TODO-0001"}`, "ToDo", "TODO-0001"},
+	// a batch's token is bound to its size, so it cannot be spent on a batch of another size
+	"create_documents": {`{"doctype":"ToDo","rows":[{"description":"one"},{"description":"two"}]}`, "ToDo", "2 rows"},
+	"update_document":  {`{"doctype":"ToDo","name":"TODO-0001","data":{"status":"Closed"}}`, "ToDo", "TODO-0001"},
+	"delete_document":  {`{"doctype":"ToDo","name":"TODO-0001"}`, "ToDo", "TODO-0001"},
 }
 
 type redeemRequest struct {
@@ -58,6 +60,10 @@ func newFakeSite(t *testing.T) *fakeSite {
 		site.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/method/frappe.client.insert_many" {
+			_, _ = w.Write([]byte(`{"message":["TODO-0001","TODO-0002"]}`))
+			return
+		}
 		if r.URL.Path != "/api/method/"+testRedeemMethod {
 			_, _ = w.Write([]byte(`{"data":{"name":"TODO-0001"}}`))
 			return
@@ -100,7 +106,8 @@ func (f *fakeSite) writes() []recordedRequest {
 	defer f.mu.Unlock()
 	var out []recordedRequest
 	for _, r := range f.requests {
-		if strings.HasPrefix(r.path, "/api/resource/") {
+		// a document write, or a batch of them through frappe.client.insert_many
+		if strings.HasPrefix(r.path, "/api/resource/") || r.path == "/api/method/frappe.client.insert_many" {
 			out = append(out, r)
 		}
 	}
