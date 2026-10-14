@@ -182,19 +182,22 @@ func (c *Config) applyDefaults() {
 	if c.Tools.ConfirmationRedeemMethod == "" {
 		c.Tools.ConfirmationRedeemMethod = DefaultConfirmationRedeemMethod
 	}
-	// if cert or key file is set, default TLS to enabled unless explicitly disabled
+	c.applyTLSDefaults()
+	// one site URL has to point the whole server at a site: Frappe serves its own OAuth2 introspection
+	if c.Auth.OAuth2.TokenInfoURL == "" && c.ERPNext.BaseURL != "" {
+		c.Auth.OAuth2.TokenInfoURL = strings.TrimSuffix(c.ERPNext.BaseURL, "/") + frappeUserinfoPath
+	}
+}
+
+// applyTLSDefaults resolves implicit TLS settings when cert/key files are supplied.
+func (c *Config) applyTLSDefaults() {
 	if (c.Server.TLS.CertFile != "" || c.Server.TLS.KeyFile != "") && !c.Server.TLS.Enabled {
 		if os.Getenv("SERVER_TLS_ENABLED") == "" && os.Getenv("TLS_ENABLED") == "" {
 			c.Server.TLS.Enabled = true
 		}
 	}
-	// if TLS is enabled but no cert/key files are provided, default to auto-generating ephemeral cert
 	if c.Server.TLS.Enabled && c.Server.TLS.CertFile == "" && c.Server.TLS.KeyFile == "" {
 		c.Server.TLS.AutoGenerate = true
-	}
-	// one site URL has to point the whole server at a site: Frappe serves its own OAuth2 introspection
-	if c.Auth.OAuth2.TokenInfoURL == "" && c.ERPNext.BaseURL != "" {
-		c.Auth.OAuth2.TokenInfoURL = strings.TrimSuffix(c.ERPNext.BaseURL, "/") + frappeUserinfoPath
 	}
 }
 
@@ -275,6 +278,29 @@ func (c *Config) loadFromEnv() error {
 
 // validateSiteRouting checks the optional multi-tenant routing settings: a routes file must exist, a template must
 // have somewhere to put the site. Either may be absent; a single-site server configures neither.
+func (c *Config) validateTLS() error {
+	if !c.Server.TLS.Enabled {
+		return nil
+	}
+	if c.Server.TLS.CertFile != "" || c.Server.TLS.KeyFile != "" {
+		if c.Server.TLS.CertFile == "" {
+			return fmt.Errorf("server.tls.cert_file is required when key_file is specified")
+		}
+		if c.Server.TLS.KeyFile == "" {
+			return fmt.Errorf("server.tls.key_file is required when cert_file is specified")
+		}
+		c.Server.TLS.CertFile = filepath.Clean(c.Server.TLS.CertFile)
+		c.Server.TLS.KeyFile = filepath.Clean(c.Server.TLS.KeyFile)
+		if _, err := os.Stat(c.Server.TLS.CertFile); err != nil {
+			return fmt.Errorf("server.tls.cert_file: %w", err)
+		}
+		if _, err := os.Stat(c.Server.TLS.KeyFile); err != nil {
+			return fmt.Errorf("server.tls.key_file: %w", err)
+		}
+	}
+	return nil
+}
+
 func (c *Config) validateSiteRouting() error {
 	if c.ERPNext.SiteRoutesFile != "" {
 		if _, err := os.Stat(c.ERPNext.SiteRoutesFile); err != nil {
@@ -283,6 +309,25 @@ func (c *Config) validateSiteRouting() error {
 	}
 	if c.ERPNext.SiteURLTemplate != "" && !strings.Contains(c.ERPNext.SiteURLTemplate, "{site}") {
 		return fmt.Errorf("invalid erpnext.site_url_template: must contain '{site}' placeholder")
+	}
+	return nil
+}
+
+func (c *Config) validateAuth() error {
+	if !c.Auth.Enabled || !c.Auth.RequireAuth {
+		if c.ERPNext.APIKey == "" {
+			return fmt.Errorf("frappe API key is required when auth is disabled")
+		}
+		if c.ERPNext.APISecret == "" {
+			return fmt.Errorf("frappe API secret is required when auth is disabled")
+		}
+	} else if c.ERPNext.APIKey == "" || c.ERPNext.APISecret == "" {
+		slog.Info("API key/secret not provided; tool calls use each user's own session or OAuth2 token")
+	}
+
+	if c.Auth.Enabled && c.Auth.OAuth2.IssuerURL != "" && c.Auth.OAuth2.IssuerURL != c.ERPNext.BaseURL {
+		slog.Warn("auth.oauth2.issuer_url is ignored; sessions are validated against erpnext.base_url",
+			"issuer_url", c.Auth.OAuth2.IssuerURL, "base_url", c.ERPNext.BaseURL)
 	}
 	return nil
 }
@@ -296,50 +341,16 @@ func (c *Config) validate() error {
 		return err
 	}
 
-	// API key and secret are optional if OAuth2 is enabled and required
-	// In that case, we'll use user OAuth2 tokens for authentication
-	if !c.Auth.Enabled || !c.Auth.RequireAuth {
-		// If auth is not enabled or not required, we need API key/secret
-		if c.ERPNext.APIKey == "" {
-			return fmt.Errorf("frappe API key is required when auth is disabled")
-		}
-		if c.ERPNext.APISecret == "" {
-			return fmt.Errorf("frappe API secret is required when auth is disabled")
-		}
-	} else {
-		// Auth is enabled and required - API key/secret is optional but warn if missing
-		if c.ERPNext.APIKey == "" || c.ERPNext.APISecret == "" {
-			// through slog, not stdout: stdio's stdout is the JSON-RPC channel, and the HTTP server's log is JSON
-			slog.Info("API key/secret not provided; tool calls use each user's own session or OAuth2 token")
-		}
+	if err := c.validateTLS(); err != nil {
+		return err
+	}
+
+	if err := c.validateAuth(); err != nil {
+		return err
 	}
 
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
-	}
-
-	if c.Auth.Enabled && c.Auth.OAuth2.IssuerURL != "" && c.Auth.OAuth2.IssuerURL != c.ERPNext.BaseURL {
-		slog.Warn("auth.oauth2.issuer_url is ignored; sessions are validated against erpnext.base_url",
-			"issuer_url", c.Auth.OAuth2.IssuerURL, "base_url", c.ERPNext.BaseURL)
-	}
-
-	if c.Server.TLS.Enabled {
-		if c.Server.TLS.CertFile != "" || c.Server.TLS.KeyFile != "" {
-			if c.Server.TLS.CertFile == "" {
-				return fmt.Errorf("server.tls.cert_file is required when key_file is specified")
-			}
-			if c.Server.TLS.KeyFile == "" {
-				return fmt.Errorf("server.tls.key_file is required when cert_file is specified")
-			}
-			c.Server.TLS.CertFile = filepath.Clean(c.Server.TLS.CertFile)
-			c.Server.TLS.KeyFile = filepath.Clean(c.Server.TLS.KeyFile)
-			if _, err := os.Stat(c.Server.TLS.CertFile); err != nil {
-				return fmt.Errorf("server.tls.cert_file: %w", err)
-			}
-			if _, err := os.Stat(c.Server.TLS.KeyFile); err != nil {
-				return fmt.Errorf("server.tls.key_file: %w", err)
-			}
-		}
 	}
 
 	return nil
