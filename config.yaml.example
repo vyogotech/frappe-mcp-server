@@ -3,6 +3,12 @@ server:
   host: "0.0.0.0"
   port: 8080
   timeout: "30s"
+  # Native TLS / HTTPS (optional):
+  # tls:
+  #   enabled: true
+  #   cert_file: "/etc/frappe-mcp-tls/tls.crt"
+  #   key_file: "/etc/frappe-mcp-tls/tls.key"
+  #   auto_generate: true # If enabled and cert/key not provided, an ephemeral self-signed cert is used
 
 erpnext:  # Frappe instance configuration (works with ERPNext, Frappe HR, Healthcare, etc.)
   base_url: "http://localhost:8000"

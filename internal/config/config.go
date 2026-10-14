@@ -39,10 +39,18 @@ type ToolsConfig struct {
 	ConfirmationRedeemMethod string `yaml:"confirmation_redeem_method"`
 }
 
+type TLSConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	CertFile     string `yaml:"cert_file"`
+	KeyFile      string `yaml:"key_file"`
+	AutoGenerate bool   `yaml:"auto_generate"`
+}
+
 type ServerConfig struct {
 	Host    string        `yaml:"host"`
 	Port    int           `yaml:"port"`
 	Timeout time.Duration `yaml:"timeout"`
+	TLS     TLSConfig     `yaml:"tls"`
 }
 
 type ERPNextConfig struct {
@@ -174,6 +182,16 @@ func (c *Config) applyDefaults() {
 	if c.Tools.ConfirmationRedeemMethod == "" {
 		c.Tools.ConfirmationRedeemMethod = DefaultConfirmationRedeemMethod
 	}
+	// if cert or key file is set, default TLS to enabled unless explicitly disabled
+	if (c.Server.TLS.CertFile != "" || c.Server.TLS.KeyFile != "") && !c.Server.TLS.Enabled {
+		if os.Getenv("SERVER_TLS_ENABLED") == "" && os.Getenv("TLS_ENABLED") == "" {
+			c.Server.TLS.Enabled = true
+		}
+	}
+	// if TLS is enabled but no cert/key files are provided, default to auto-generating ephemeral cert
+	if c.Server.TLS.Enabled && c.Server.TLS.CertFile == "" && c.Server.TLS.KeyFile == "" {
+		c.Server.TLS.AutoGenerate = true
+	}
 	// one site URL has to point the whole server at a site: Frappe serves its own OAuth2 introspection
 	if c.Auth.OAuth2.TokenInfoURL == "" && c.ERPNext.BaseURL != "" {
 		c.Auth.OAuth2.TokenInfoURL = strings.TrimSuffix(c.ERPNext.BaseURL, "/") + frappeUserinfoPath
@@ -228,10 +246,15 @@ func (c *Config) loadFromEnv() error {
 	envString("OAUTH_TOKEN_INFO_URL", &c.Auth.OAuth2.TokenInfoURL)
 	envString("OAUTH_ISSUER_URL", &c.Auth.OAuth2.IssuerURL)
 
+	envRenamed("SERVER_TLS_CERT_FILE", "TLS_CERT_FILE", &c.Server.TLS.CertFile)
+	envRenamed("SERVER_TLS_KEY_FILE", "TLS_KEY_FILE", &c.Server.TLS.KeyFile)
+
 	// TOOLS_KNOWLEDGE_BASE: a deployment whose site has no rag turns the knowledge base off without a
 	// config file of its own. The first rejection wins, in the order written here.
 	for _, err := range []error{
 		envParsed("SERVER_PORT", &c.Server.Port, strconv.Atoi),
+		envParsed("SERVER_TLS_ENABLED", &c.Server.TLS.Enabled, strconv.ParseBool),
+		envParsed("SERVER_TLS_AUTO_GENERATE", &c.Server.TLS.AutoGenerate, strconv.ParseBool),
 		envParsed("TOOLS_KNOWLEDGE_BASE", &c.Tools.KnowledgeBase, strconv.ParseBool),
 		envParsed("AUTH_ENABLED", &c.Auth.Enabled, strconv.ParseBool),
 		envParsed("AUTH_REQUIRE_AUTH", &c.Auth.RequireAuth, strconv.ParseBool),
@@ -239,6 +262,11 @@ func (c *Config) loadFromEnv() error {
 		envParsed("CACHE_TTL", &c.Auth.TokenCache.TTL, time.ParseDuration),
 	} {
 		if err != nil {
+			return err
+		}
+	}
+	if os.Getenv("SERVER_TLS_ENABLED") == "" && os.Getenv("TLS_ENABLED") != "" {
+		if err := envParsed("TLS_ENABLED", &c.Server.TLS.Enabled, strconv.ParseBool); err != nil {
 			return err
 		}
 	}
@@ -293,6 +321,25 @@ func (c *Config) validate() error {
 	if c.Auth.Enabled && c.Auth.OAuth2.IssuerURL != "" && c.Auth.OAuth2.IssuerURL != c.ERPNext.BaseURL {
 		slog.Warn("auth.oauth2.issuer_url is ignored; sessions are validated against erpnext.base_url",
 			"issuer_url", c.Auth.OAuth2.IssuerURL, "base_url", c.ERPNext.BaseURL)
+	}
+
+	if c.Server.TLS.Enabled {
+		if c.Server.TLS.CertFile != "" || c.Server.TLS.KeyFile != "" {
+			if c.Server.TLS.CertFile == "" {
+				return fmt.Errorf("server.tls.cert_file is required when key_file is specified")
+			}
+			if c.Server.TLS.KeyFile == "" {
+				return fmt.Errorf("server.tls.key_file is required when cert_file is specified")
+			}
+			c.Server.TLS.CertFile = filepath.Clean(c.Server.TLS.CertFile)
+			c.Server.TLS.KeyFile = filepath.Clean(c.Server.TLS.KeyFile)
+			if _, err := os.Stat(c.Server.TLS.CertFile); err != nil {
+				return fmt.Errorf("server.tls.cert_file: %w", err)
+			}
+			if _, err := os.Stat(c.Server.TLS.KeyFile); err != nil {
+				return fmt.Errorf("server.tls.key_file: %w", err)
+			}
+		}
 	}
 
 	return nil

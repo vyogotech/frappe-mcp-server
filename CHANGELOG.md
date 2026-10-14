@@ -5,6 +5,7 @@ All notable changes to ERPNext MCP Server.
 ## [Unreleased] - 2026-04-12
 
 ### Added
+- **Native TLS / HTTPS Support** — `server.tls` in `config.yaml` and `SERVER_TLS_*` environment variables allow `frappe-mcp-server` to serve HTTPS directly with custom certificate/key files or automatic ephemeral self-signed certificates.
 - **Global Search Tool** — new `global_search` MCP tool backed by `POST /api/method/frappe.utils.global_search.search`
   - Full-text search across all indexed Frappe/ERPNext doctypes in a single call
   - Optional `doctype` param to restrict results to one doctype

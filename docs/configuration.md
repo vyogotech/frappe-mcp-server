@@ -11,6 +11,11 @@ server:
   host: "0.0.0.0"          # Server bind address
   port: 8080               # HTTP server port
   timeout: "30s"           # Read and write timeout for one request
+  tls:                     # Native TLS / HTTPS (optional)
+    enabled: true          # Enable HTTPS listener
+    cert_file: "/path/to/cert.pem" # Path to certificate PEM
+    key_file: "/path/to/key.pem"   # Path to private key PEM
+    auto_generate: true    # Use ephemeral self-signed cert if cert/key omitted
 
 logging:
   level: "info"            # debug, info, warn, error
@@ -47,6 +52,10 @@ Configuration can be overridden using environment variables:
 | `FRAPPE_SITE_URL_TEMPLATE` | Bench URL pattern with a `{site}` placeholder | `http://{site}.bench.local:8000` |
 | `SERVER_HOST` | Bind address | `0.0.0.0` |
 | `SERVER_PORT` | HTTP port | `8080` |
+| `SERVER_TLS_ENABLED` | Enable native HTTPS/TLS listener (`TLS_ENABLED` fallback) | `true` |
+| `SERVER_TLS_CERT_FILE` | Path to TLS certificate PEM (`TLS_CERT_FILE` fallback) | `/etc/tls/cert.pem` |
+| `SERVER_TLS_KEY_FILE` | Path to TLS private key PEM (`TLS_KEY_FILE` fallback) | `/etc/tls/key.pem` |
+| `SERVER_TLS_AUTO_GENERATE` | Generate ephemeral self-signed cert if cert/key omitted | `true` |
 | `LOG_LEVEL` | Logging level | `debug` |
 | `AUTH_ENABLED` | Turn authentication on or off | `true` |
 | `AUTH_REQUIRE_AUTH` | Refuse an unauthenticated request | `true` |

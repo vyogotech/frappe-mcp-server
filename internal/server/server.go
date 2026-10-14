@@ -2,9 +2,17 @@ package server
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"net"
 	"net/http"
 	"net/url"
@@ -121,6 +129,21 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 		IdleTimeout:       120 * time.Second,
 	}
 
+	if cfg.Server.TLS.Enabled {
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+		if cfg.Server.TLS.CertFile == "" && cfg.Server.TLS.KeyFile == "" {
+			cert, err := generateSelfSignedCert()
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate self-signed TLS cert: %w", err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+			slog.Info("Generated ephemeral self-signed TLS certificate for HTTPS")
+		}
+		mcpServer.httpServer.TLSConfig = tlsConfig
+	}
+
 	// Register all tools
 	if err := mcpServer.registerTools(mcpServer.catalog); err != nil {
 		return nil, fmt.Errorf("failed to register tools: %w", err)
@@ -130,16 +153,28 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 }
 
 func (s *MCPServer) Run(ctx context.Context) error {
+	scheme := "http"
+	if s.config.Server.TLS.Enabled {
+		scheme = "https"
+	}
 	slog.Info("Starting MCP server",
+		"scheme", scheme,
 		"host", s.config.Server.Host,
 		"port", s.config.Server.Port)
 
-	// Start HTTP server in a goroutine
+	// Start HTTP/HTTPS server in a goroutine
 	errChan := make(chan error, 1)
 	go func() {
-		slog.Info("Starting HTTP server", "address", s.httpServer.Addr)
-		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errChan <- err
+		if s.config.Server.TLS.Enabled {
+			slog.Info("Starting HTTPS server", "address", s.httpServer.Addr)
+			if err := s.httpServer.ListenAndServeTLS(s.config.Server.TLS.CertFile, s.config.Server.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
+				errChan <- err
+			}
+		} else {
+			slog.Info("Starting HTTP server", "address", s.httpServer.Addr)
+			if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				errChan <- err
+			}
 		}
 	}()
 
@@ -427,4 +462,46 @@ func (s *MCPServer) handleToolCall(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		slog.Error("Failed to encode tool response", "error", err)
 	}
+}
+
+func generateSelfSignedCert() (tls.Certificate, error) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"Frappe MCP Server"},
+			CommonName:   "frappe-mcp-server",
+		},
+		NotBefore:             time.Now().Add(-1 * time.Hour),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		DNSNames:              []string{"localhost", "frappe-mcp-server", "*.svc.cluster.local"},
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	privBytes, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes})
+
+	return tls.X509KeyPair(certPEM, keyPEM)
 }
