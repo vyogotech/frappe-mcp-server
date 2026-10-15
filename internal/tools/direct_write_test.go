@@ -39,6 +39,7 @@ type directSite struct {
 	reason     string
 	propose    bool             // answer "propose" for this caller, as frappe_ai does for Vyogo Forge AI
 	proposals  []map[string]any // what the propose method was sent
+	autonomous bool             // the site's Forge Autonomy approves the proposal itself
 	status     int              // non-zero: answer the method with this status, as a site without frappe_ai would
 	server     *httptest.Server
 }
@@ -55,6 +56,10 @@ func newDirectSite(t *testing.T, ok bool, reason string) *directSite {
 			var args map[string]any
 			_ = json.Unmarshal(body, &args)
 			site.proposals = append(site.proposals, args)
+			if site.autonomous {
+				_, _ = w.Write([]byte(`{"message":{"name":"VF-PR-00008","status":"Approved","auto_approved":1,"approve_url":"https://site.test/app/vyogo-forge-ai-proposed-release/VF-PR-00008"}}`))
+				return
+			}
 			_, _ = w.Write([]byte(`{"message":{"name":"VF-PR-00007","status":"Pending","approve_url":"https://site.test/app/vyogo-forge-ai-proposed-release/VF-PR-00007"}}`))
 			return
 		}
@@ -242,4 +247,20 @@ func TestVyogoForgeAIsWriteBecomesAProposal(t *testing.T) {
 			assert.Equal(t, c.want, site.proposals[0])
 		})
 	}
+}
+
+// With the site's Forge Autonomy on, a change its skills cover applies itself; Forge is told so, not that it waits.
+func TestAnAutonomousProposalSaysItIsBeingApplied(t *testing.T) {
+	site := newDirectSite(t, false, "Vyogo Forge AI's changes are proposed for a System Manager's approval.")
+	site.propose = true
+	site.autonomous = true
+	ctx := auth.WithUser(context.Background(), &types.User{Email: "forge-agent@vyogoforge.invalid", APIKey: testAPIKeyPair})
+	response, err := directRegistry(t, site).UpdateDocument(ctx, mcp.ToolRequest{
+		Params: json.RawMessage(`{"doctype":"Lead","name":"CRM-LEAD-0001","data":{"website":"https://examplia.test"}}`),
+	})
+	require.NoError(t, err)
+	text := response.Content[0].Text
+	assert.Contains(t, text, "VF-PR-00008")
+	assert.Contains(t, text, "without waiting")
+	assert.NotContains(t, text, "nothing on the site changes")
 }

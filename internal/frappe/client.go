@@ -398,11 +398,12 @@ func (c *Client) AuthorizeDirectWrite(ctx context.Context, method, tool, doctype
 	return response.Message, nil
 }
 
-// Proposal is a proposed release waiting for a System Manager on the site.
+// Proposal is a proposed release: waiting for a System Manager on the site, or approved by the site's Forge Autonomy.
 type Proposal struct {
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	ApproveURL string `json:"approve_url"`
+	Name         string `json:"name"`
+	Status       string `json:"status"`
+	ApproveURL   string `json:"approve_url"`
+	AutoApproved int    `json:"auto_approved"`
 }
 
 // ProposeChange files a write as a proposal on the site, as the caller: the write's tool, record and data.

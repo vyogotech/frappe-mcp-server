@@ -100,7 +100,12 @@ func (t *ToolRegistry) propose(ctx context.Context, u *types.User, tool, doctype
 		//nolint:staticcheck // ST1005: a sentence a person reads, as errNotConfirmed is
 		return "", fmt.Errorf("This change was not made, and could not be proposed: %w", err)
 	}
-	slog.Info("write proposed", "user", u.Email, "tool", tool, "doctype", doctype, "name", name, "proposal", proposal.Name)
+	slog.Info("write proposed", "user", u.Email, "tool", tool, "doctype", doctype, "name", name,
+		"proposal", proposal.Name, "auto_approved", proposal.AutoApproved == 1)
+	if proposal.AutoApproved == 1 {
+		return fmt.Sprintf("Filed as %s and approved by the site's Forge Autonomy: it is being applied without waiting "+
+			"for a person, logged, and can be rolled back. See it at %s.", proposal.Name, proposal.ApproveURL), nil
+	}
 	return fmt.Sprintf("Proposed as %s for a System Manager to approve; nothing on the site changes until then. "+
 		"Approve or reject it at %s.", proposal.Name, proposal.ApproveURL), nil
 }
