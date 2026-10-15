@@ -32,11 +32,23 @@ type Config struct {
 // switch that turns the gate off: a site without the method refuses every write, which is the fail-closed side.
 const DefaultConfirmationRedeemMethod = "frappe_ai.api.confirm.redeem"
 
+// DefaultDirectWriteMethod is the frappe_ai method asked about a write from a client signed in with OAuth, which has no
+// sidebar token: the site's setting for other MCP clients answers. A site without it refuses those writes.
+const DefaultDirectWriteMethod = "frappe_ai.api.direct_write.authorize"
+
+// DefaultProposeMethod is the frappe_ai method that files a write as a proposed release, when the direct write check
+// answers "propose" (Vyogo Forge AI's writes): a System Manager approves it, and it can be rolled back.
+const DefaultProposeMethod = "frappe_ai.api.frappeforge.propose_change"
+
 // ToolsConfig switches on tools that need more than Frappe itself
 type ToolsConfig struct {
 	KnowledgeBase bool `yaml:"knowledge_base"` // search_knowledge_base answers only where the rag app is installed
 	// ConfirmationRedeemMethod names the whitelisted Frappe method a write tool redeems its confirmation token against.
 	ConfirmationRedeemMethod string `yaml:"confirmation_redeem_method"`
+	// DirectWriteMethod names the whitelisted Frappe method that decides an OAuth client's write without a token.
+	DirectWriteMethod string `yaml:"direct_write_method"`
+	// ProposeMethod names the whitelisted Frappe method that files a write as a proposal for approval.
+	ProposeMethod string `yaml:"propose_method"`
 }
 
 type TLSConfig struct {
@@ -181,6 +193,12 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Tools.ConfirmationRedeemMethod == "" {
 		c.Tools.ConfirmationRedeemMethod = DefaultConfirmationRedeemMethod
+	}
+	if c.Tools.DirectWriteMethod == "" {
+		c.Tools.DirectWriteMethod = DefaultDirectWriteMethod
+	}
+	if c.Tools.ProposeMethod == "" {
+		c.Tools.ProposeMethod = DefaultProposeMethod
 	}
 	c.applyTLSDefaults()
 	// one site URL has to point the whole server at a site: Frappe serves its own OAuth2 introspection

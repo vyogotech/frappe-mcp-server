@@ -4,13 +4,14 @@ This document describes how to set up and use authentication with the Frappe MCP
 
 ## Overview
 
-The Frappe MCP Server supports **three authentication methods** with automatic priority-based fallback:
+The Frappe MCP Server supports **four authentication methods** with automatic priority-based fallback:
 
 | Priority | Method | Use Case | Permissions |
 | ---------- | -------- | ---------- | ------------- |
 | 1 | **Frappe `sid` cookie** | Frappe apps (Awesome Bar, desk widgets) | User-level — respects Frappe roles |
 | 2 | **OAuth2 Bearer token** | External apps (Open WebUI, VS Code, mobile) | User or system-level |
-| 3 | **API key/secret** | Server-to-server, fallback | System-level |
+| 3 | **A user's API key** (`Authorization: token key:secret`) | MCP clients and scripts without OAuth | User-level — respects Frappe roles |
+| 4 | **Server API key/secret** (`erpnext.api_key`) | Server-to-server, fallback | The key's user |
 
 Authentication is **optional by default** — set `require_auth: true` in production.
 
@@ -25,9 +26,11 @@ Incoming Request
      │
      ├─1─► sid cookie present?  → Validate with Frappe → ✅ User-level permissions
      │
-     ├─2─► Bearer token present? → Validate OAuth2 token → ✅ User/system permissions  
+     ├─2─► Bearer token present? → Validate OAuth2 token → ✅ User/system permissions
      │
-     └─3─► API key configured?  → Use token key:secret  → ✅ System-level permissions
+     ├─3─► token key:secret?     → Validate with Frappe → ✅ User-level permissions
+     │
+     └─4─► API key configured?  → Use token key:secret  → ✅ The configured key's user
 ```
 
 ### Request Flow (sid cookie)
@@ -201,6 +204,30 @@ erpnext:
 ```
 
 All tool calls run under the **API user's permissions** in this mode. For write operations (`POST`/`PUT`/`DELETE`), the server sets `X-Frappe-CSRF-Token: bypass` automatically since API key auth bypasses Frappe's CSRF checks.
+
+## Writes: who may change data
+
+Every write tool (`create_document`, `create_documents`, `update_document`, `delete_document`) passes one gate, and what
+it asks for depends on how the caller signed in:
+
+| Caller | Signs in with | A write needs |
+|---|---|---|
+| The frappe_ai sidebar agent | the user's `sid` cookie | a one-time `X-Frappe-Confirmation` token, minted when the user allows the change (redeemed at `tools.confirmation_redeem_method`) |
+| Other MCP clients (Claude Desktop, Claude Code, scripts) | an OAuth2 Bearer token, or a user's API key (`Authorization: token key:secret`) | the site's yes: `tools.direct_write_method` (default `frappe_ai.api.direct_write.authorize`) |
+| Vyogo Forge AI | its agent user's OAuth token or API key | nothing direct: the site answers "propose", and the write is filed as a proposed release at `tools.propose_method` (default `frappe_ai.api.frappeforge.propose_change`) |
+| Anything else (the server's own API key) | — | a confirmation token; without one, the write is refused |
+
+For these clients the site answers from **AI Assistant Settings → Writes from Other MCP Clients** (Read only, the
+default; Allow creates and updates; Allow all changes), within the user's own permissions. Users, roles, scripts,
+permissions and the assistant's own settings are changed in Desk only. Each answer is a row in **AI External Write
+Log**: the user, the OAuth client's name, the tool, the DocType and record name, and the outcome. The change's data
+and the credentials are never sent to the check or stored.
+
+Forge's writes change nothing until a System Manager approves the proposal in Desk. The site then applies it as the
+approver, logs the record's version before and after, and any applied change can be rolled back. The tool's answer
+tells Forge the proposal's name and where it waits. Records changed in Desk only stay refused here too.
+
+A site without frappe_ai refuses every write: both methods are absent, and the gate fails closed.
 
 ## Accessing User Context in Tools
 

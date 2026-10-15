@@ -16,6 +16,10 @@ type ToolRegistry struct {
 	frappeClient *frappe.Client
 	// ConfirmationRedeemMethod is the Frappe method a write's one-time token is redeemed against; empty means the default.
 	ConfirmationRedeemMethod string
+	// DirectWriteMethod is the Frappe method that decides an OAuth client's write without a token; empty means the default.
+	DirectWriteMethod string
+	// ProposeMethod is the Frappe method that files a write as a proposal; empty means the default.
+	ProposeMethod string
 }
 
 func NewRegistry(frappeClient *frappe.Client) *ToolRegistry {
@@ -125,8 +129,12 @@ func (t *ToolRegistry) CreateDocument(ctx context.Context, request mcp.ToolReque
 		return nil, fmt.Errorf("doctype and data are required")
 	}
 
-	if err := t.requireConfirmation(ctx, "create_document", params.DocType, ""); err != nil {
+	proposed, err := t.requireConfirmation(ctx, "create_document", params.DocType, "", params.Data)
+	if err != nil {
 		return nil, err
+	}
+	if proposed != "" {
+		return proposedResponse(request.ID, proposed), nil
 	}
 
 	doc, err := t.frappeClient.CreateDocument(ctx, params)
@@ -186,8 +194,12 @@ func (t *ToolRegistry) CreateDocuments(ctx context.Context, request mcp.ToolRequ
 		}
 	}
 
-	if err := t.requireConfirmation(ctx, "create_documents", params.DocType, BatchConfirmationName(len(params.Rows))); err != nil {
+	proposed, err := t.requireConfirmation(ctx, "create_documents", params.DocType, BatchConfirmationName(len(params.Rows)), params.Rows)
+	if err != nil {
 		return nil, err
+	}
+	if proposed != "" {
+		return proposedResponse(request.ID, proposed), nil
 	}
 
 	names, err := t.frappeClient.CreateDocuments(ctx, params)
@@ -222,8 +234,12 @@ func (t *ToolRegistry) UpdateDocument(ctx context.Context, request mcp.ToolReque
 		return nil, fmt.Errorf("doctype, name, and data are required")
 	}
 
-	if err := t.requireConfirmation(ctx, "update_document", params.DocType, params.Name); err != nil {
+	proposed, err := t.requireConfirmation(ctx, "update_document", params.DocType, params.Name, params.Data)
+	if err != nil {
 		return nil, err
+	}
+	if proposed != "" {
+		return proposedResponse(request.ID, proposed), nil
 	}
 
 	doc, err := t.frappeClient.UpdateDocument(ctx, params)
@@ -266,12 +282,15 @@ func (t *ToolRegistry) DeleteDocument(ctx context.Context, request mcp.ToolReque
 	}
 
 	// never a `confirm` argument again: the caller who asks for the delete cannot be the one who confirms it
-	if err := t.requireConfirmation(ctx, "delete_document", params.DocType, params.Name); err != nil {
+	proposed, err := t.requireConfirmation(ctx, "delete_document", params.DocType, params.Name, nil)
+	if err != nil {
 		return nil, err
 	}
+	if proposed != "" {
+		return proposedResponse(request.ID, proposed), nil
+	}
 
-	err := t.frappeClient.DeleteDocument(ctx, params.DocType, params.Name)
-	if err != nil {
+	if err := t.frappeClient.DeleteDocument(ctx, params.DocType, params.Name); err != nil {
 		return nil, fmt.Errorf("failed to delete document: %w", err)
 	}
 
@@ -1043,4 +1062,9 @@ func (t *ToolRegistry) GlobalSearch(ctx context.Context, request mcp.ToolRequest
 			},
 		},
 	}, nil
+}
+
+// proposedResponse is a write's answer when it was filed as a proposal instead of made.
+func proposedResponse(id, text string) *mcp.ToolResponse {
+	return &mcp.ToolResponse{ID: id, Content: []mcp.Content{{Type: "text", Text: text}}}
 }

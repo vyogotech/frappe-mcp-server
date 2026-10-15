@@ -65,7 +65,7 @@ func NewOAuth2Strategy(config OAuth2StrategyConfig) *OAuth2Strategy {
 	}
 }
 
-// Authenticate tries the sid cookie first, then the Bearer token.
+// Authenticate tries the sid cookie first, then the Bearer token, then a Frappe API key ("token key:secret").
 func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*types.User, error) {
 	// Strategy 1: Try sid cookie first (Frappe session - user-level permissions)
 	var sidErr error
@@ -81,6 +81,9 @@ func (s *OAuth2Strategy) Authenticate(ctx context.Context, r *http.Request) (*ty
 	// Strategy 2: Try Bearer token (OAuth2)
 	token := extractBearerToken(r)
 	if token == "" {
+		if key := extractAPIKey(r); key != "" {
+			return s.validateAPIKey(ctx, key, r)
+		}
 		if sidErr != nil {
 			// keep why the sid failed: Frappe down, a timeout and an expired session need different fixes
 			return nil, fmt.Errorf("missing or invalid Bearer token, and the sid was not accepted: %w", sidErr)
@@ -125,6 +128,70 @@ func extractBearerToken(r *http.Request) string {
 		return strings.TrimPrefix(auth, "Bearer ")
 	}
 	return ""
+}
+
+// extractAPIKey is the "key:secret" of an `Authorization: token key:secret` header, as Frappe reads it.
+func extractAPIKey(r *http.Request) string {
+	key, ok := strings.CutPrefix(r.Header.Get("Authorization"), "token ")
+	if !ok {
+		return ""
+	}
+	key = strings.TrimSpace(key)
+	if k, secret, pair := strings.Cut(key, ":"); !pair || k == "" || secret == "" {
+		return ""
+	}
+	return key
+}
+
+// validateAPIKey asks the site who the key belongs to. The cache key is a hash, so no secret is held in it, and is
+// apart from a Bearer token's: the same text sent as either is a different credential.
+func (s *OAuth2Strategy) validateAPIKey(ctx context.Context, key string, r *http.Request) (*types.User, error) {
+	cacheKey := tokenCacheKeyForSite("api-key\x00"+key, types.SiteFromContext(ctx), r)
+	if cached, found := s.cache.Get(cacheKey); found {
+		if user, ok := cached.(*types.User); ok {
+			return user, nil
+		}
+	}
+	if !s.validateRemote {
+		return &types.User{ID: "anonymous", Email: "anonymous@example.com", APIKey: key}, nil
+	}
+
+	baseURL := s.baseURL
+	if u := types.BaseURLFromContext(ctx); u != "" {
+		baseURL = u
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET",
+		strings.TrimSuffix(baseURL, "/")+"/api/method/frappe.auth.get_logged_user", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create API key validation request: %w", err)
+	}
+	req.Header.Set("Authorization", "token "+key)
+	if site := types.SiteFromContext(ctx); site != "" {
+		req.Header.Set("X-Frappe-Site-Name", site)
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("API key validation failed: %w: %w", ErrFrappeUnavailable, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode >= 500 {
+			return nil, fmt.Errorf("API key validation failed: status %d: %w", resp.StatusCode, ErrFrappeUnavailable)
+		}
+		return nil, fmt.Errorf("invalid API key: status %d", resp.StatusCode)
+	}
+	var result struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode API key user: %w", err)
+	}
+	if result.Message == "" || result.Message == "Guest" {
+		return nil, errors.New("invalid API key: no user")
+	}
+	user := &types.User{ID: result.Message, Email: result.Message, APIKey: key}
+	s.cache.Set(cacheKey, user, cache.DefaultExpiration)
+	return user, nil
 }
 
 // tokenCacheKey must hash the X-MCP-User-* headers with the token: a trusted client reusing one token for two users

@@ -374,6 +374,55 @@ func (c *Client) RedeemConfirmation(ctx context.Context, method, token, tool, do
 	return nil
 }
 
+// DirectWriteAnswer is the site's answer to a write without a confirmation token: go ahead, refuse with a reason for
+// the person, or file it as a proposal.
+type DirectWriteAnswer struct {
+	OK      bool   `json:"ok"`
+	Reason  string `json:"reason"`
+	Propose bool   `json:"propose"`
+}
+
+// AuthorizeDirectWrite asks the site whether the caller may make this write without a confirmation token, as the
+// caller. It sends which write it is, never its data.
+func (c *Client) AuthorizeDirectWrite(ctx context.Context, method, tool, doctype, name string) (DirectWriteAnswer, error) {
+	if method == "" {
+		return DirectWriteAnswer{}, fmt.Errorf("no direct write method is configured")
+	}
+	var response struct {
+		Message DirectWriteAnswer `json:"message"`
+	}
+	body := map[string]interface{}{"tool": tool, "doctype": doctype, "name": name}
+	if err := c.makeRequest(ctx, "POST", "/api/method/"+method, body, &response); err != nil {
+		return DirectWriteAnswer{}, fmt.Errorf("direct write check failed: %w", err)
+	}
+	return response.Message, nil
+}
+
+// Proposal is a proposed release waiting for a System Manager on the site.
+type Proposal struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	ApproveURL string `json:"approve_url"`
+}
+
+// ProposeChange files a write as a proposal on the site, as the caller: the write's tool, record and data.
+func (c *Client) ProposeChange(ctx context.Context, method, tool, doctype, name string, data any) (Proposal, error) {
+	if method == "" {
+		return Proposal{}, fmt.Errorf("no propose method is configured")
+	}
+	var response struct {
+		Message Proposal `json:"message"`
+	}
+	body := map[string]interface{}{"tool": tool, "doctype": doctype, "name": name, "data": data}
+	if err := c.makeRequest(ctx, "POST", "/api/method/"+method, body, &response); err != nil {
+		return Proposal{}, fmt.Errorf("proposing the change failed: %w", err)
+	}
+	if response.Message.Name == "" {
+		return Proposal{}, fmt.Errorf("the site filed no proposal")
+	}
+	return response.Message, nil
+}
+
 // GlobalSearch calls Frappe's global search, frappe.utils.global_search.search.
 func (c *Client) GlobalSearch(ctx context.Context, req GlobalSearchRequest) ([]GlobalSearchResult, error) {
 	if req.Text == "" {
@@ -533,6 +582,11 @@ func (c *Client) setCredentials(ctx context.Context, req *http.Request, method, 
 	case user != nil && user.Token != "":
 		req.Header.Set("Authorization", "Bearer "+user.Token)
 		slog.Debug("Using user OAuth2 token", "user", user.Email)
+	case user != nil && user.APIKey != "":
+		req.Header.Set("Authorization", "token "+user.APIKey)
+		// Frappe exempts API-key auth from CSRF, and reads this header as the opt out
+		req.Header.Set("X-Frappe-CSRF-Token", "bypass")
+		slog.Debug("Using the user's API key", "user", user.Email)
 	case c.apiKey != "" && c.apiSecret != "":
 		req.Header.Set("Authorization", fmt.Sprintf("token %s:%s", c.apiKey, c.apiSecret))
 		// Frappe exempts API-key auth from CSRF, and reads this header as the opt out

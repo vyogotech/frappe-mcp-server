@@ -105,6 +105,7 @@ type User struct {
 	ClientID  string                 `json:"client_id,omitempty"`
 	Token     string                 `json:"-"` // OAuth2 token (not serialized in JSON)
 	SessionID string                 `json:"-"` // Frappe session ID (sid cookie value)
+	APIKey    string                 `json:"-"` // Frappe API key and secret as "key:secret", for a client that signs in with one
 	CSRFToken string                 `json:"-"` // Frappe CSRF token (for POST/PUT/DELETE with session)
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }

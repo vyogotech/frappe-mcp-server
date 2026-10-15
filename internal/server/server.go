@@ -63,6 +63,8 @@ func NewMCPServer(cfg *config.Config, frappeClient *frappe.Client) (*MCPServer, 
 	// Create tool registry
 	toolRegistry := tools.NewRegistry(frappeClient)
 	toolRegistry.ConfirmationRedeemMethod = cfg.Tools.ConfirmationRedeemMethod
+	toolRegistry.DirectWriteMethod = cfg.Tools.DirectWriteMethod
+	toolRegistry.ProposeMethod = cfg.Tools.ProposeMethod
 
 	var siteResolver *frappe.SiteResolver
 	if cfg != nil {

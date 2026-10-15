@@ -5,6 +5,9 @@ All notable changes to ERPNext MCP Server.
 ## [Unreleased] - 2026-04-12
 
 ### Added
+- **API key sign-in** — a client may send `Authorization: token key:secret` with a Frappe user's API key. The server checks it with `frappe.auth.get_logged_user` and acts as that user on every call; the cache holds only a hash of it.
+- **Writes from other MCP clients** — a client signed in with OAuth or an API key (Claude Desktop, Claude Code) can now write without a sidebar confirmation token when the site allows it. The server asks `tools.direct_write_method` (default `frappe_ai.api.direct_write.authorize`) with the tool, DocType and record name only, and passes the site's reason back on a refusal. Browser sessions, which the frappe_ai sidebar agent uses, still need a token. See [Writes: who may change data](docs/authentication.md#writes-who-may-change-data).
+- **Writes filed as proposals** — when the site answers "propose" (it does for Vyogo Forge AI), a write tool files the change at `tools.propose_method` (default `frappe_ai.api.frappeforge.propose_change`) instead of saving it, and returns the proposal's name. A System Manager approves it in Desk; the change is logged and can be rolled back.
 - **Native TLS / HTTPS Support** — `server.tls` in `config.yaml` and `SERVER_TLS_*` environment variables allow `frappe-mcp-server` to serve HTTPS directly with custom certificate/key files or automatic ephemeral self-signed certificates.
 - **Global Search Tool** — new `global_search` MCP tool backed by `POST /api/method/frappe.utils.global_search.search`
   - Full-text search across all indexed Frappe/ERPNext doctypes in a single call
