@@ -211,7 +211,7 @@ Every write tool (`create_document`, `create_documents`, `update_document`, `del
 it asks for depends on how the caller signed in:
 
 | Caller | Signs in with | A write needs |
-|---|---|---|
+| --- | --- | --- |
 | The frappe_ai sidebar agent | the user's `sid` cookie | a one-time `X-Frappe-Confirmation` token, minted when the user allows the change (redeemed at `tools.confirmation_redeem_method`) |
 | Other MCP clients (Claude Desktop, Claude Code, scripts) | an OAuth2 Bearer token, or a user's API key (`Authorization: token key:secret`) | the site's yes: `tools.direct_write_method` (default `frappe_ai.api.direct_write.authorize`) |
 | Vyogo Forge AI | its agent user's OAuth token or API key | nothing direct: the site answers "propose", and the write is filed as a proposed release at `tools.propose_method` (default `frappe_ai.api.frappeforge.propose_change`) |
